@@ -239,7 +239,7 @@ export function LoginForm() {
           <p className="mt-1 text-xs text-amber-900/80">
             Fjalëkalimi për të gjithë: <code className="rounded bg-white/70 px-1">{DEMO_PASSWORD}</code>
             {" · "}
-            Kërkon <code className="rounded bg-white/70 px-1">npm run db:seed:demo</code>
+            Zgjidhni nivelin e duhur dhe shtypni Plotëso
           </p>
           <div className="mt-3 overflow-x-auto">
             <table className="w-full min-w-[28rem] text-left text-xs">
