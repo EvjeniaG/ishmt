@@ -1,6 +1,7 @@
 import { ApplicationStatus, ApplicationType } from "@prisma/client";
 import { ROLE_CODES, type RoleCode } from "@/lib/constants/roles";
 import type { RegistrationPhase } from "@/lib/registration/phase-router";
+import { isDemoModeEnabled } from "@/lib/demo/demo-mode";
 
 export type RegistrationDemoStep =
   | "owner-basic-data"
@@ -20,7 +21,7 @@ export const REGISTRATION_DEMO_STEP_LABELS: Record<RegistrationDemoStep, string>
 };
 
 export function isDemoToolsEnabled(): boolean {
-  return process.env.NODE_ENV !== "production";
+  return isDemoModeEnabled();
 }
 
 /** Which demo fill action is available for the current user on this application. */

@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { getDefaultRedirectForRole } from "@/lib/permissions/routes";
 import type { RoleCode } from "@/lib/constants/roles";
+import { DEMO_PASSWORD_DISPLAY, isDemoModeEnabled } from "@/lib/demo/demo-mode";
 
 type AccountLevel =
   | "OWNER"
@@ -52,8 +53,7 @@ const LEVEL_HINTS: Record<AccountLevel, string> = {
   DIRECTORATE: "Llogari institucionale e Drejtorisë së Politikave (regjistrim kompanish).",
 };
 
-/** Përkohësisht - vetëm dev/demo. Kërkon `npm run db:seed:demo` (jo vetëm db:seed). */
-const DEMO_PASSWORD = "Ishmt2026";
+/** Përkohësisht - dev/demo. Kërkon `npm run db:seed:demo` (jo vetëm db:seed). */
 
 const DEMO_CREDENTIALS: {
   role: string;
@@ -78,7 +78,7 @@ const DEMO_CREDENTIALS: {
   { role: "Drejtoria e Politikave", level: "DIRECTORATE", identifier: "I90303003C" },
 ];
 
-const SHOW_DEMO_CREDENTIALS = process.env.NODE_ENV !== "production";
+const SHOW_DEMO_CREDENTIALS = isDemoModeEnabled();
 
 export function LoginForm() {
   const router = useRouter();
@@ -94,7 +94,7 @@ export function LoginForm() {
 
   function applyDemoCredential(cred: (typeof DEMO_CREDENTIALS)[number]) {
     setIdentifier(cred.identifier);
-    setPassword(DEMO_PASSWORD);
+    setPassword(DEMO_PASSWORD_DISPLAY);
     setLevel(cred.level);
     setError(null);
   }
@@ -238,7 +238,7 @@ export function LoginForm() {
           <div className="mt-6 rounded-lg border border-amber-200 bg-amber-50/80 p-4 text-sm">
             <p className="font-semibold text-amber-950">Kredenciale demo (përkohësisht)</p>
             <p className="mt-1 text-xs text-amber-900/80">
-              Fjalëkalimi për të gjithë: <code className="rounded bg-white/70 px-1">{DEMO_PASSWORD}</code>
+              Fjalëkalimi për të gjithë: <code className="rounded bg-white/70 px-1">{DEMO_PASSWORD_DISPLAY}</code>
               {" · "}
               Kërkon <code className="rounded bg-white/70 px-1">npm run db:seed:demo</code>
             </p>

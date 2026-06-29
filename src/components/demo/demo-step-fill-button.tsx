@@ -8,8 +8,7 @@ import {
   APPLICATION_DEMO_STEP_LABELS,
   type ApplicationDemoStep,
 } from "@/lib/demo/application-demo-steps";
-
-const SHOW_DEMO = process.env.NODE_ENV !== "production";
+import { isDemoModeEnabled } from "@/lib/demo/demo-mode";
 
 function applyOrgPrefill(field: "installerOrgId" | "certifierOrgId", orgId: string) {
   const select = document.querySelector(`select[name="${field}"]`) as HTMLSelectElement | null;
@@ -33,7 +32,7 @@ export function DemoStepFillButton({
   const [error, setError] = useState<string | null>(null);
   const [hint, setHint] = useState<string | null>(null);
 
-  if (!SHOW_DEMO) return null;
+  if (!isDemoModeEnabled()) return null;
 
   async function onClick() {
     setLoading(true);
