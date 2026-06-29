@@ -36,9 +36,9 @@ function UserStatus({ user }: { user: UserRow }) {
     return <WorkflowStatusChip label="Jo aktiv" tone="neutral" />;
   }
   if (locked) {
-    return <WorkflowStatusChip label="I bllokuar" tone="danger" />;
+    return <WorkflowStatusChip label="I bllokuar" tone="warning" />;
   }
-  return <WorkflowStatusChip label="Aktiv" tone="done" />;
+  return <WorkflowStatusChip label="Aktiv" tone="success" />;
 }
 
 export function UserAdminTable({ users }: { users: UserRow[] }) {
@@ -140,7 +140,7 @@ export function UserAdminTable({ users }: { users: UserRow[] }) {
             <KeyRound className="h-4 w-4" />
           </div>
           <div className="min-w-0 flex-1">
-            <p className="portal-institutional-notice-title">Fjalëkalimi u rivendos - {passwordReset.email}</p>
+            <p className="portal-institutional-notice-title">Fjalëkalimi u rivendos — {passwordReset.email}</p>
             <p className="portal-institutional-notice-body mt-1 font-mono text-base">{passwordReset.temporaryPassword}</p>
             <p className="mt-2 text-xs text-muted-foreground">
               Jepeni përdoruesit në mënyrë të sigurt. Pas hyrjes, rekomandohet ta ndryshojë nga Profili.
@@ -158,7 +158,7 @@ export function UserAdminTable({ users }: { users: UserRow[] }) {
             <Link2 className="h-4 w-4" />
           </div>
           <div className="min-w-0 flex-1">
-            <p className="portal-institutional-notice-title">Link rivendosjeje - {resetLink.email}</p>
+            <p className="portal-institutional-notice-title">Link rivendosjeje — {resetLink.email}</p>
             <p className="portal-institutional-notice-body mt-1 break-all font-mono text-xs">{resetLink.resetUrl}</p>
             <p className="mt-2 text-xs text-muted-foreground">Skadon: {resetLink.expiresAt}</p>
             <div className="mt-3 flex flex-wrap gap-2">
@@ -206,20 +206,20 @@ export function UserAdminTable({ users }: { users: UserRow[] }) {
                     {u.firstName} {u.lastName}
                   </span>
                 </td>
-                <td className="portal-table-num whitespace-nowrap font-mono text-xs">{u.nid ?? "-"}</td>
+                <td className="portal-table-num whitespace-nowrap font-mono text-xs">{u.nid ?? "—"}</td>
                 <td className="max-w-[12rem] truncate text-muted-foreground">{u.email}</td>
                 <td>
                   {primaryMembership ? (
                     <span className="text-sm">{getRoleLabel(primaryMembership.role.code)}</span>
                   ) : (
-                    <span className="text-muted-foreground">-</span>
+                    <span className="text-muted-foreground">—</span>
                   )}
                   {u.memberships.length > 1 && (
                     <span className="ml-1 text-xs text-muted-foreground">+{u.memberships.length - 1}</span>
                   )}
                 </td>
                 <td className="max-w-[10rem] truncate text-muted-foreground">
-                  {primaryMembership?.organization.name ?? "-"}
+                  {primaryMembership?.organization.name ?? "—"}
                 </td>
                 <td>
                   <UserStatus user={u} />

@@ -62,7 +62,7 @@ export function HomePortalGuideSection() {
           <p className="portal-eyebrow">Dokumentacion · UX</p>
           <h2 className="portal-title mt-1">Udhëzim i përdorimit të platformës</h2>
           <p className="portal-subtitle mt-2 max-w-3xl">
-            Rrjedha e punës, rolet, llojet e aplikimeve dhe funksionalitetet e portalit - siç janë
+            Rrjedha e punës, rolet, llojet e aplikimeve dhe funksionalitetet e portalit — siç janë
             ndërtuar në sistem. Përdoreni si udhëzues për stafin, palët e interesuara dhe
             demonstrime.
           </p>
@@ -71,7 +71,7 @@ export function HomePortalGuideSection() {
         <div className="space-y-3">
           <GuideAccordion
             icon={GitBranch}
-            title="Regjistrimi fillestar - rrjedha e plotë"
+            title="Regjistrimi fillestar — rrjedha e plotë"
             subtitle="Nga aplikimi i personit përgjegjës deri te certifikata CR dhe QR"
             defaultOpen
           >
@@ -174,7 +174,7 @@ export function HomePortalGuideSection() {
 
           <GuideAccordion
             icon={Building2}
-            title="Dosja e ashensorit - skedat"
+            title="Dosja e ashensorit — skedat"
             subtitle="Çfarë gjen personi përgjegjës dhe stafi ISHMT pas regjistrimit"
           >
             <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
@@ -198,7 +198,7 @@ export function HomePortalGuideSection() {
 
           <GuideAccordion
             icon={BookOpen}
-            title="Përvoja e përdoruesit (UX) - çfarë ofron platforma"
+            title="Përvoja e përdoruesit (UX) — çfarë ofron platforma"
             subtitle="Veçoritë kryesore të ndërtuara në sistem"
           >
             <div className="grid gap-3 sm:grid-cols-2">

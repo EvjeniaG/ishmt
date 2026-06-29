@@ -11,8 +11,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { getDefaultRedirectForRole } from "@/lib/permissions/routes";
 import type { RoleCode } from "@/lib/constants/roles";
 
-const DEMO_PASSWORD = "Ishmt2026";
-
 type AccountLevel =
   | "OWNER"
   | "INSTALLER"
@@ -40,7 +38,8 @@ const ACCOUNT_LEVELS: { value: AccountLevel; label: string }[] = [
   { value: "DIRECTORATE", label: "Drejtoria e Politikave" },
 ];
 
-const LEVEL_HINTS: Partial<Record<AccountLevel, string>> = {
+const LEVEL_HINTS: Record<AccountLevel, string> = {
+  OWNER: "Personat përgjegjës të ashensorit regjistrohen vetë dhe krijojnë aplikime.",
   MAINTENANCE: "Kompanitë e mirëmbajtjes regjistrohen dhe presin validimin QKB para aktivizimit.",
   INSTALLER: "Kompanitë instaluese regjistrohen dhe presin validimin para aktivizimit.",
   CERTIFIER: "Trupat certifikues / OMI regjistrohen dhe presin validimin para aktivizimit.",
@@ -53,7 +52,8 @@ const LEVEL_HINTS: Partial<Record<AccountLevel, string>> = {
   DIRECTORATE: "Llogari institucionale e Drejtorisë së Politikave (regjistrim kompanish).",
 };
 
-/** Përkohësisht - dev/demo. Kërkon `npm run db:seed:demo` (jo vetëm db:seed). */
+/** Përkohësisht - vetëm dev/demo. Kërkon `npm run db:seed:demo` (jo vetëm db:seed). */
+const DEMO_PASSWORD = "Ishmt2026";
 
 const DEMO_CREDENTIALS: {
   role: string;
@@ -77,6 +77,8 @@ const DEMO_CREDENTIALS: {
   { role: "Inspektor terreni", level: "FIELD_INSPECTOR", identifier: "I90909009I" },
   { role: "Drejtoria e Politikave", level: "DIRECTORATE", identifier: "I90303003C" },
 ];
+
+const SHOW_DEMO_CREDENTIALS = process.env.NODE_ENV !== "production";
 
 export function LoginForm() {
   const router = useRouter();
@@ -138,7 +140,7 @@ export function LoginForm() {
   }
 
   return (
-    <Card className="mx-auto w-full max-w-2xl">
+    <Card className={`mx-auto w-full ${SHOW_DEMO_CREDENTIALS ? "max-w-2xl" : "max-w-md"}`}>
       <CardHeader>
         <CardTitle>Mirëseerdhët</CardTitle>
         <CardDescription>
@@ -206,9 +208,7 @@ export function LoginForm() {
                 </option>
               ))}
             </select>
-            {LEVEL_HINTS[level] && (
-              <p className="text-xs text-muted-foreground">{LEVEL_HINTS[level]}</p>
-            )}
+            <p className="text-xs text-muted-foreground">{LEVEL_HINTS[level]}</p>
           </div>
           <label className="flex items-start gap-2 text-sm">
             <input type="checkbox" required className="mt-1" />
@@ -234,44 +234,46 @@ export function LoginForm() {
           )}
         </form>
 
-        <div className="mt-6 rounded-lg border border-amber-200 bg-amber-50/80 p-4 text-sm">
-          <p className="font-semibold text-amber-950">Kredenciale demo (përkohësisht)</p>
-          <p className="mt-1 text-xs text-amber-900/80">
-            Fjalëkalimi për të gjithë: <code className="rounded bg-white/70 px-1">{DEMO_PASSWORD}</code>
-            {" · "}
-            Zgjidhni nivelin e duhur dhe shtypni Plotëso
-          </p>
-          <div className="mt-3 overflow-x-auto">
-            <table className="w-full min-w-[28rem] text-left text-xs">
-              <thead>
-                <tr className="border-b border-amber-200/80 text-amber-900/70">
-                  <th className="py-1.5 pr-2 font-medium">Roli</th>
-                  <th className="py-1.5 pr-2 font-medium">NID / NIPT</th>
-                  <th className="py-1.5 pr-2 font-medium">Niveli</th>
-                  <th className="py-1.5 font-medium"></th>
-                </tr>
-              </thead>
-              <tbody>
-                {DEMO_CREDENTIALS.map((cred) => (
-                  <tr key={cred.identifier} className="border-b border-amber-100/80 last:border-0">
-                    <td className="py-1.5 pr-2">{cred.role}</td>
-                    <td className="py-1.5 pr-2 font-mono">{cred.identifier}</td>
-                    <td className="py-1.5 pr-2 text-amber-900/80">{cred.level}</td>
-                    <td className="py-1.5 text-right">
-                      <button
-                        type="button"
-                        onClick={() => applyDemoCredential(cred)}
-                        className="text-primary hover:underline"
-                      >
-                        Plotëso
-                      </button>
-                    </td>
+        {SHOW_DEMO_CREDENTIALS && (
+          <div className="mt-6 rounded-lg border border-amber-200 bg-amber-50/80 p-4 text-sm">
+            <p className="font-semibold text-amber-950">Kredenciale demo (përkohësisht)</p>
+            <p className="mt-1 text-xs text-amber-900/80">
+              Fjalëkalimi për të gjithë: <code className="rounded bg-white/70 px-1">{DEMO_PASSWORD}</code>
+              {" · "}
+              Kërkon <code className="rounded bg-white/70 px-1">npm run db:seed:demo</code>
+            </p>
+            <div className="mt-3 overflow-x-auto">
+              <table className="w-full min-w-[28rem] text-left text-xs">
+                <thead>
+                  <tr className="border-b border-amber-200/80 text-amber-900/70">
+                    <th className="py-1.5 pr-2 font-medium">Roli</th>
+                    <th className="py-1.5 pr-2 font-medium">NID / NIPT</th>
+                    <th className="py-1.5 pr-2 font-medium">Niveli</th>
+                    <th className="py-1.5 font-medium"></th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {DEMO_CREDENTIALS.map((cred) => (
+                    <tr key={cred.identifier} className="border-b border-amber-100/80 last:border-0">
+                      <td className="py-1.5 pr-2">{cred.role}</td>
+                      <td className="py-1.5 pr-2 font-mono">{cred.identifier}</td>
+                      <td className="py-1.5 pr-2 text-amber-900/80">{cred.level}</td>
+                      <td className="py-1.5 text-right">
+                        <button
+                          type="button"
+                          onClick={() => applyDemoCredential(cred)}
+                          className="text-primary hover:underline"
+                        >
+                          Plotëso
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
-        </div>
+        )}
 
         <div className="mt-6 space-y-3 border-t pt-4 text-sm">
           <Link href="/auth/forgot-password" className="text-primary hover:underline">

@@ -1,6 +1,5 @@
 import { ApplicationType, DataUpdateType } from "@prisma/client";
 import type { RegistrationDemoStep } from "@/lib/demo/registration-demo-steps";
-import { isDemoModeEnabled } from "@/lib/demo/demo-mode";
 
 export type LifecycleDemoStep =
   | "modernization-data"
@@ -32,7 +31,7 @@ export const APPLICATION_DEMO_STEP_LABELS: Record<ApplicationDemoStep, string> =
 };
 
 export function isDemoToolsEnabled(): boolean {
-  return isDemoModeEnabled();
+  return process.env.NODE_ENV !== "production";
 }
 
 export function resolveApplicationDemoStep(input: {

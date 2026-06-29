@@ -66,7 +66,7 @@ export function extractLegacyPeriodicComments(
   return comments || null;
 }
 
-/** Për legacy: vetëm komente të lira (jo semestër/OM/muaj - shfaqen diku tjetër). */
+/** Për legacy: vetëm komente të lira (jo semestër/OM/muaj — shfaqen diku tjetër). */
 export function formatLegacyInspectionNotes(findings: string | null | undefined): string | null {
   return extractLegacyPeriodicComments(findings);
 }

@@ -1,4 +1,5 @@
 import type { RegistrationBasicDataInput } from "@/lib/validations/registration-basic-data";
+import { resolveLegacyDistrictCode } from "@/lib/registration/municipality-legacy-district";
 
 type MunicipalityOption = {
   id: string;
@@ -18,6 +19,7 @@ export function buildRegistrationBasicDataDummy(input: {
   const tirana =
     input.municipalities.find((m) => m.code === "TIA" || /tiran/i.test(m.nameSq)) ??
     input.municipalities[0];
+  const legacyDistrictCode = tirana ? resolveLegacyDistrictCode(tirana) : "TR";
 
   return {
     applicationDate: today,
@@ -37,6 +39,7 @@ export function buildRegistrationBasicDataDummy(input: {
     buildingAddress: "Rruga e Dibrës Nr. 15, Tiranë",
     municipalityId: tirana?.id ?? "",
     administrativeUnitId: "",
+    legacyDistrictCode,
     entrance: "A",
     specificPosition: "Kati 0 - hyrja kryesore",
     registrationBuildingType: "NDERTESA_NE_BASHKEPRONESI",

@@ -87,6 +87,7 @@ async function main() {
     buildingAddress: "Rr. Myslym Shyri, Pallati Dritan, Tiranë 1001",
     municipalityId: municipality.id,
     administrativeUnitId: "",
+    legacyDistrictCode: municipality.legacyRegistryCode ?? "TR",
     entrance: "A",
     specificPosition: "Ashensori nr. 1 - kati -1 deri kati 8",
     registrationBuildingType: "NDERTESA_NE_BASHKEPRONESI",
