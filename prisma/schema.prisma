@@ -1,0 +1,1843 @@
+// =============================================================================
+// ISHMT Digital Elevator Registry System - Prisma Schema
+// Version: 1.0 (Phase 1 Scaffolding)
+// Aligned with: docs/architecture/06-database-design.md + approved extensions
+// =============================================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// =============================================================================
+// ENUMS
+// =============================================================================
+
+enum OrgType {
+  ISHMT
+  DIRECTORATE
+  INSTALLER
+  CERTIFIER
+  MAINTENANCE
+  OWNER
+
+  @@map("org_type")
+}
+
+enum OrgStatus {
+  PENDING_VALIDATION
+  ACTIVE_AUTHORIZED
+  ACTIVE
+  REJECTED
+  SUSPENDED
+  REVOKED
+  EXPIRED
+  INACTIVE
+
+  @@map("org_status")
+}
+
+enum ApplicationType {
+  NEW_REGISTRATION
+  DEREGISTRATION
+  DATA_CORRECTION
+  DATA_UPDATE
+  MODERNIZATION
+
+  @@map("app_type")
+}
+
+enum ApplicationStatus {
+  DRAFT
+  BASIC_DATA_COMPLETED
+  PENDING_INSTALLER
+  INSTALLER_INVITED
+  INSTALLER_ACCEPTED
+  TECHNICAL_DATA_IN_PROGRESS
+  TECHNICAL_DATA_COMPLETED
+  INSTALLER_COMPLETED
+  PENDING_CERTIFIER
+  CERTIFIER_INVITED
+  CERTIFIER_ACCEPTED
+  CERTIFICATION_IN_PROGRESS
+  CERTIFICATION_COMPLETED
+  CERTIFICATION_COMPLETED_WITH_ISSUES
+  PENDING_OWNER_SUBMISSION
+  SUBMITTED
+  UNDER_REVIEW
+  PENDING_CHIEF_INSPECTOR
+  RETURNED
+  REJECTED
+  APPROVED
+  ELEVATOR_CREATED
+  ASSETS_GENERATED
+  CLOSED
+  CANCELLED
+  EXPIRED
+
+  @@map("app_status")
+}
+
+enum BuildingType {
+  CO_OWNERSHIP_BUILDING
+  WORKPLACE
+  RESIDENTIAL
+  PUBLIC_BUILDING
+  SHOPPING_CENTER
+  OTHER
+
+  @@map("building_type")
+}
+
+enum UsagePurpose {
+  ELECTRIC_PASSENGER
+  HYDRAULIC_PASSENGER
+  PASSENGER_AND_FREIGHT
+  PASSENGER_AND_BED
+  PASSENGER_AND_MOTOR_DEVICE
+  OTHER
+
+  @@map("usage_purpose")
+}
+
+enum OwnerBuildingRole {
+  ADMINISTRATOR
+  OWNERS_ASSEMBLY_REP
+  PHYSICAL_PERSON
+  LEGAL_PERSON
+  CONSTRUCTOR
+  CONSTRUCTION_COMPANY
+  OTHER
+
+  @@map("owner_building_role")
+}
+
+enum DeregistrationReason {
+  PERMANENTLY_DISMANTLED
+  REPLACED_BY_NEW_UNIT
+  STRUCTURAL_CHANGES
+  OTHER
+
+  @@map("deregistration_reason")
+}
+
+enum ModernizationType {
+  MOTOR_CHANGE
+  CONTROL_PANEL_CHANGE
+  CABIN_CHANGE
+  SAFETY_SYSTEM_CHANGE
+  ELECTRICAL_SYSTEM_CHANGE
+  OTHER
+
+  @@map("modernization_type")
+}
+
+enum DataUpdateType {
+  RESPONSIBLE_ENTITY_CHANGE
+  MAINTENANCE_COMPANY_CHANGE
+  ADDRESS_CHANGE
+  CONTACT_UPDATE
+  OWNERSHIP_TRANSFER
+  SERIAL_NUMBER_CHANGE
+
+  @@map("data_update_type")
+}
+
+enum ElevatorStatus {
+  PENDING_REGISTRATION
+  PENDING_CONFIRMATION
+  UNVERIFIED
+  REGISTERED
+  ACTIVE
+  SUSPENDED
+  UNDER_INSPECTION
+  EXPIRED_CERTIFICATION
+  MAINTENANCE_OVERDUE
+  OUT_OF_SERVICE
+  DEREGISTERED
+
+  @@map("elv_status")
+}
+
+enum ElevatorType {
+  PASSENGER
+  FREIGHT
+  SERVICE
+  HANDICAPPED
+  ESCALATOR
+  MOVING_WALK
+
+  @@map("elv_type")
+}
+
+enum CertificateType {
+  INSTALLATION
+  REGISTRATION
+  PERIODIC_INSPECTION
+  CONFORMITY
+
+  @@map("cert_type")
+}
+
+enum CertificateStatus {
+  ACTIVE
+  EXPIRED
+  REVOKED
+  SUPERSEDED
+
+  @@map("cert_status")
+}
+
+enum ConformityResult {
+  CONFORM
+  NON_CONFORM
+  CONDITIONAL
+
+  @@map("conformity_result")
+}
+
+enum ReturnTargetRole {
+  OWNER
+  INSTALLER
+  CERTIFIER
+
+  @@map("return_target_role")
+}
+
+enum InspectionType {
+  INITIAL
+  PERIODIC
+  EXTRAORDINARY
+  RE_INSPECTION
+
+  @@map("insp_type")
+}
+
+enum InspectionResult {
+  PASS
+  FAIL
+  CONDITIONAL
+  PENDING
+
+  @@map("insp_result")
+}
+
+enum FieldInspectionAssignmentStatus {
+  SCHEDULED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+
+  @@map("field_insp_assignment_status")
+}
+
+enum MaintenanceType {
+  ROUTINE
+  ANNUAL_SERVICE
+  EMERGENCY
+  MODERNIZATION
+
+  @@map("maint_type")
+}
+
+enum CitizenReportType {
+  NO_QR
+  SAFETY_ISSUE
+  COMPLAINT
+
+  @@map("cit_report_type")
+}
+
+enum CitizenReportStatus {
+  SUBMITTED
+  TRIAGED
+  ASSIGNED
+  INVESTIGATING
+  RESOLVED
+  DISMISSED
+
+  @@map("cit_report_status")
+}
+
+enum IncidentSource {
+  CITIZEN
+  OWNER
+  MAINTENANCE
+  ISHMT
+  INSPECTOR
+  OTHER
+
+  @@map("incident_source")
+}
+
+enum IncidentType {
+  TECHNICAL_DEFECT
+  ELEVATOR_STUCK
+  WORK_STOPPAGE
+  SAFETY_ISSUE
+  INCIDENT
+  ACCIDENT
+  PERSON_INJURY
+  PROPERTY_DAMAGE
+  OTHER
+
+  @@map("incident_type")
+}
+
+enum IncidentPriority {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+
+  @@map("incident_priority")
+}
+
+enum IncidentStatus {
+  OPEN
+  UNDER_REVIEW
+  ASSIGNED_TO_MAINTENANCE
+  ASSIGNED_TO_INSPECTOR
+  RESOLVED
+  CLOSED
+
+  @@map("incident_status")
+}
+
+enum DocumentClassification {
+  APPLICATION
+  TECHNICAL
+  CERTIFICATE
+  INSPECTION_REPORT
+  MAINTENANCE_LOG
+  INTERNAL_ISHMT
+  CITIZEN_REPORT
+  OTHER
+
+  @@map("doc_classification")
+}
+
+enum TemplateType {
+  CERTIFICATE
+  REPORT
+  OFFICIAL_LETTER
+
+  @@map("template_type")
+}
+
+enum NotificationChannel {
+  IN_APP
+  EMAIL
+  SMS
+
+  @@map("notif_channel")
+}
+
+enum NotificationStatus {
+  PENDING
+  SENT
+  FAILED
+  READ
+
+  @@map("notif_status")
+}
+
+enum AuditAction {
+  CREATE
+  UPDATE
+  DELETE
+  STATUS_CHANGE
+  DOCUMENT_UPLOAD
+  DOCUMENT_DOWNLOAD
+  VIEW_SENSITIVE_RECORD
+  DOWNLOAD_DOCUMENT
+  LOGIN
+  LOGOUT
+  WORKFLOW_TRANSITION
+  IMPORT
+  ROLLBACK
+  PERMISSION_DENIED
+
+  @@map("audit_action")
+}
+
+enum InvitationStatus {
+  PENDING
+  ACCEPTED
+  EXPIRED
+  REVOKED
+
+  @@map("invitation_status")
+}
+
+enum JobRunStatus {
+  STARTED
+  COMPLETED
+  FAILED
+
+  @@map("job_run_status")
+}
+
+enum DelegationType {
+  INSTALLER
+  CERTIFIER
+  MAINTENANCE
+  OWNERSHIP_RECIPIENT
+
+  @@map("delegation_type")
+}
+
+enum DelegationStatus {
+  PENDING
+  INVITED
+  ACCEPTED
+  REJECTED
+  REVOKED
+  EXPIRED
+
+  @@map("delegation_status")
+}
+
+enum SuspensionReason {
+  EXPIRED_INSPECTION
+  EXPIRED_CERTIFICATE
+  EXPIRED_MAINTENANCE
+  SAFETY_RISK
+  CITIZEN_REPORT
+  ADMINISTRATIVE_DECISION
+
+  @@map("suspension_reason")
+}
+
+enum ComplianceIndicator {
+  GREEN
+  YELLOW
+  RED
+
+  @@map("compliance_indicator")
+}
+
+enum ReminderEntityType {
+  INSPECTION
+  CERTIFICATE
+  MAINTENANCE_CONTRACT
+
+  @@map("reminder_entity_type")
+}
+
+enum QkbValidationStatus {
+  PENDING
+  VALID
+  INVALID
+  ERROR
+
+  @@map("qkb_validation_status")
+}
+
+enum DocumentAccessAction {
+  VIEW
+  DOWNLOAD
+
+  @@map("doc_access_action")
+}
+
+enum ReportPriority {
+  LOW
+  NORMAL
+  HIGH
+  URGENT
+
+  @@map("report_priority")
+}
+
+enum AssetGenerationStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  FAILED
+
+  @@map("asset_generation_status")
+}
+
+// =============================================================================
+// GEOGRAPHY - Municipality Registry (no free-text municipality names)
+// =============================================================================
+
+model GeoRegion {
+  id        String   @id @default(uuid()) @db.Uuid
+  code      String   @unique @db.VarChar(10)
+  nameSq    String   @map("name_sq") @db.VarChar(100)
+  nameEn    String?  @map("name_en") @db.VarChar(100)
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  municipalities GeoMunicipality[]
+
+  @@map("geo_regions")
+}
+
+model GeoMunicipality {
+  id                 String   @id @default(uuid()) @db.Uuid
+  regionId           String   @map("region_id") @db.Uuid
+  code               String   @unique @db.VarChar(10)
+  legacyRegistryCode String?  @map("legacy_registry_code") @db.VarChar(5)
+  nameSq             String   @map("name_sq") @db.VarChar(100)
+  nameEn             String?  @map("name_en") @db.VarChar(100)
+  isActive           Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  region              GeoRegion              @relation(fields: [regionId], references: [id])
+  administrativeUnits GeoAdministrativeUnit[]
+  organizations       Organization[]
+  applicationData     ApplicationData[]
+  elevators           Elevator[]
+  citizenReports      CitizenReport[]
+  registrySequences       RegistrySequence[]
+  legacyRegistrySequences LegacyRegistrySequence[]
+  buildings               Building[]
+
+  @@index([regionId], map: "idx_geo_municipality_region")
+  @@index([code], map: "idx_geo_municipality_code")
+  @@map("geo_municipalities")
+}
+
+model GeoAdministrativeUnit {
+  id             String   @id @default(uuid()) @db.Uuid
+  municipalityId String   @map("municipality_id") @db.Uuid
+  code           String   @db.VarChar(20)
+  nameSq         String   @map("name_sq") @db.VarChar(100)
+  nameEn         String?  @map("name_en") @db.VarChar(100)
+  unitType       String?  @map("unit_type") @db.VarChar(50)
+  isActive       Boolean  @default(true) @map("is_active")
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt      DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  municipality  GeoMunicipality @relation(fields: [municipalityId], references: [id])
+  applicationData ApplicationData[]
+  elevators     Elevator[]
+  buildings     Building[]
+
+  @@unique([municipalityId, code], map: "uq_admin_unit_municipality_code")
+  @@index([municipalityId], map: "idx_admin_unit_municipality")
+  @@map("geo_administrative_units")
+}
+
+model Building {
+  id                   String        @id @default(uuid()) @db.Uuid
+  buildingCode         String?       @unique @map("building_code") @db.VarChar(30)
+  name                 String?       @db.VarChar(255)
+  address              String        @db.Text
+  municipalityId       String        @map("municipality_id") @db.Uuid
+  administrativeUnitId String?       @map("administrative_unit_id") @db.Uuid
+  buildingType         BuildingType? @map("building_type")
+  entrance             String?       @db.VarChar(100)
+  floorsCount          Int?          @map("floors_count")
+  gpsLatitude          Decimal?      @map("gps_latitude") @db.Decimal(10, 7)
+  gpsLongitude         Decimal?      @map("gps_longitude") @db.Decimal(10, 7)
+  primaryOwnerOrgId    String?       @map("primary_owner_org_id") @db.Uuid
+  createdAt            DateTime      @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt            DateTime      @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt            DateTime?     @map("deleted_at") @db.Timestamptz
+
+  municipality       GeoMunicipality        @relation(fields: [municipalityId], references: [id])
+  administrativeUnit GeoAdministrativeUnit? @relation(fields: [administrativeUnitId], references: [id])
+  primaryOwnerOrg    Organization?          @relation("BuildingPrimaryOwner", fields: [primaryOwnerOrgId], references: [id])
+  elevators          Elevator[]
+
+  @@index([municipalityId], map: "idx_building_municipality")
+  @@index([address], map: "idx_building_address")
+  @@index([primaryOwnerOrgId], map: "idx_building_owner")
+  @@index([deletedAt], map: "idx_building_active")
+  @@map("geo_buildings")
+}
+
+// =============================================================================
+// AUTHENTICATION & AUTHORIZATION
+// =============================================================================
+
+model AuthUser {
+  id               String    @id @default(uuid()) @db.Uuid
+  email            String    @unique @db.VarChar(255)
+  passwordHash     String?   @map("password_hash") @db.VarChar(255)
+  firstName        String    @map("first_name") @db.VarChar(100)
+  lastName         String    @map("last_name") @db.VarChar(100)
+  phone            String?   @db.VarChar(20)
+  nid              String?   @unique @db.VarChar(20)
+  idCardNumber     String?   @map("id_card_number") @db.VarChar(20)
+  fatherName       String?   @map("father_name") @db.VarChar(100)
+  motherName       String?   @map("mother_name") @db.VarChar(100)
+  birthDate        DateTime? @map("birth_date") @db.Date
+  isActive         Boolean   @default(true) @map("is_active")
+  emailVerified    Boolean   @default(false) @map("email_verified")
+  pendingEmail     String?   @map("pending_email") @db.VarChar(255)
+  twoFactorEnabled Boolean   @default(false) @map("two_factor_enabled")
+  twoFactorSecret  String?   @map("two_factor_secret") @db.VarChar(64)
+  lastLoginAt      DateTime? @map("last_login_at") @db.Timestamptz
+  failedLoginCount Int       @default(0) @map("failed_login_count")
+  lockedUntil      DateTime? @map("locked_until") @db.Timestamptz
+  createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt        DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt        DateTime? @map("deleted_at") @db.Timestamptz
+
+  accounts              Account[]
+  sessions              Session[]
+  memberships           OrgMembership[]
+  createdOrganizations  Organization[]         @relation("OrgCreatedBy")
+  createdApplications   Application[]          @relation("ApplicationCreatedBy")
+  assignedApplications  Application[]          @relation("ApplicationInspector")
+  workflowHistory       ApplicationWorkflowHistory[]
+  confirmedElevators    Elevator[]               @relation("ElevatorConfirmedBy")
+  statusHistory         ElevatorStatusHistory[]
+  ownershipChanges      ElevatorOwnershipHistory[] @relation("OwnershipCreatedBy")
+  delegationsAssigned   ElevatorDelegationHistory[] @relation("DelegationAssignedBy")
+  technicalVersions     ElevatorTechnicalDataVersion[]
+  issuedCertificates    Certificate[]            @relation("CertificateIssuedByUser")
+  uploadedDocuments     Document[]
+  documentAccessLogs    DocumentAccessLog[]
+  maintenanceRecords    MaintenanceRecord[]
+  inspections           Inspection[]
+  fieldInspectionsAssigned FieldInspectionAssignment[] @relation("FieldInspectionAssignee")
+  fieldInspectionsCreated  FieldInspectionAssignment[] @relation("FieldInspectionAssignedBy")
+  citizenReports        CitizenReport[]          @relation("CitizenReporter")
+  assignedReports       CitizenReport[]          @relation("ReportInspector")
+  reportActions         CitizenReportAction[]
+  reportedIncidents     Incident[]               @relation("IncidentReporter")
+  assignedIncidents     Incident[]               @relation("IncidentAssignee")
+  notifications         Notification[]
+  notificationPrefs     NotificationPreference[]
+  auditLogs             AuditLog[]
+  configUpdates         SystemConfig[]
+  createdLicenses       OrganizationLicense[]
+  qkbValidations        QkbValidation[]
+  createdTemplates      DocumentTemplate[]
+  scheduledReminders    ScheduledReminder[]
+  sentInvitations       OrgInvitation[]          @relation("InvitationSentBy")
+  acceptedInvitations   OrgInvitation[]          @relation("InvitationAcceptedBy")
+  passwordResetTokens   PasswordResetToken[]
+  qrPlacementConfirmations QrCode[] @relation("QrPlacementConfirmedBy")
+  applicationDelegationsInvited ApplicationDelegation[] @relation("ApplicationDelegationInvitedBy")
+  applicationsReturned Application[] @relation("ApplicationReturnedBy")
+
+  @@index([email], map: "idx_auth_users_email")
+  @@index([nid], map: "idx_auth_users_nid")
+  @@index([deletedAt], map: "idx_auth_users_active")
+  @@map("auth_users")
+}
+
+model AuthRole {
+  id          String  @id @default(uuid()) @db.Uuid
+  code        String  @unique @db.VarChar(50)
+  name        String  @db.VarChar(100)
+  description String? @db.Text
+
+  memberships     OrgMembership[]
+  rolePermissions AuthRolePermission[]
+  invitations     OrgInvitation[]
+
+  @@map("auth_roles")
+}
+
+model AuthPermission {
+  id          String  @id @default(uuid()) @db.Uuid
+  code        String  @unique @db.VarChar(100)
+  module      String  @db.VarChar(50)
+  action      String  @db.VarChar(50)
+  description String? @db.Text
+
+  rolePermissions AuthRolePermission[]
+
+  @@map("auth_permissions")
+}
+
+model AuthRolePermission {
+  roleId       String @map("role_id") @db.Uuid
+  permissionId String @map("permission_id") @db.Uuid
+
+  role       AuthRole       @relation(fields: [roleId], references: [id])
+  permission AuthPermission @relation(fields: [permissionId], references: [id])
+
+  @@id([roleId, permissionId])
+  @@map("auth_role_permissions")
+}
+
+// NextAuth adapter models
+model Account {
+  id                String  @id @default(uuid()) @db.Uuid
+  userId            String  @map("user_id") @db.Uuid
+  type              String
+  provider          String
+  providerAccountId String  @map("provider_account_id")
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user AuthUser @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@map("auth_accounts")
+}
+
+model Session {
+  id           String   @id @default(uuid()) @db.Uuid
+  sessionToken String   @unique @map("session_token")
+  userId       String   @map("user_id") @db.Uuid
+  expires      DateTime @db.Timestamptz
+
+  user AuthUser @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("auth_sessions")
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime @db.Timestamptz
+
+  @@unique([identifier, token])
+  @@map("auth_verification_tokens")
+}
+
+model PasswordResetToken {
+  id        String    @id @default(uuid()) @db.Uuid
+  userId    String    @map("user_id") @db.Uuid
+  tokenHash String    @unique @map("token_hash") @db.VarChar(64)
+  expiresAt DateTime  @map("expires_at") @db.Timestamptz
+  usedAt    DateTime? @map("used_at") @db.Timestamptz
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz
+
+  user AuthUser @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId], map: "idx_password_reset_user")
+  @@index([expiresAt], map: "idx_password_reset_expires")
+  @@map("auth_password_reset_tokens")
+}
+
+// =============================================================================
+// ORGANIZATIONS
+// =============================================================================
+
+model Organization {
+  id                  String    @id @default(uuid()) @db.Uuid
+  type                OrgType
+  name                String    @db.VarChar(255)
+  nipt                String?   @unique @db.VarChar(20)
+  legalForm           String?   @map("legal_form") @db.VarChar(100)
+  address             String?   @db.Text
+  municipalityId      String?   @map("municipality_id") @db.Uuid
+  phone               String?   @db.VarChar(20)
+  email               String?   @db.VarChar(255)
+  representativeName  String?   @map("representative_name") @db.VarChar(255)
+  representativeNid   String?   @map("representative_nid") @db.VarChar(20)
+  representativePhone String?   @map("representative_phone") @db.VarChar(20)
+  representativeEmail String?   @map("representative_email") @db.VarChar(255)
+  ownerBuildingRole   OwnerBuildingRole? @map("owner_building_role")
+  status              OrgStatus @default(ACTIVE)
+  qkbValidated        Boolean   @default(false) @map("qkb_validated")
+  qkbValidatedAt      DateTime? @map("qkb_validated_at") @db.Timestamptz
+  qkbValidationData   Json?     @map("qkb_validation_data")
+  createdAt           DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt           DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt           DateTime? @map("deleted_at") @db.Timestamptz
+  createdById         String?   @map("created_by") @db.Uuid
+
+  municipality        GeoMunicipality? @relation(fields: [municipalityId], references: [id])
+  createdBy           AuthUser?        @relation("OrgCreatedBy", fields: [createdById], references: [id])
+  memberships         OrgMembership[]
+  licenses            OrganizationLicense[]
+  qkbValidations      QkbValidation[]
+
+  ownerApplications      Application[] @relation("ApplicationOwner")
+  installerApplications  Application[] @relation("ApplicationInstaller")
+  certifierApplications  Application[] @relation("ApplicationCertifier")
+  ownerElevators         Elevator[]    @relation("ElevatorOwner")
+  installerElevators     Elevator[]    @relation("ElevatorInstaller")
+  certifierElevators     Elevator[]    @relation("ElevatorCertifier")
+  maintenanceElevators   Elevator[]    @relation("ElevatorMaintenance")
+  responsibleEntities    ElevatorResponsibleEntity[]
+  issuedCertificates     Certificate[]
+  maintenanceContracts   MaintenanceContract[]
+  maintenanceRecords     MaintenanceRecord[]
+  delegations            ElevatorDelegationHistory[]
+  ownershipHistoryOld    ElevatorOwnershipHistory[] @relation("OwnershipOldOwner")
+  ownershipHistoryNew    ElevatorOwnershipHistory[] @relation("OwnershipNewOwner")
+  invitations            OrgInvitation[]
+  applicationDelegations ApplicationDelegation[]
+  ownedBuildings         Building[] @relation("BuildingPrimaryOwner")
+
+  @@index([type, status], map: "idx_org_type_status")
+  @@index([nipt], map: "idx_org_nipt")
+  @@index([municipalityId], map: "idx_org_municipality")
+  @@index([deletedAt], map: "idx_org_active")
+  @@map("org_organizations")
+}
+
+model OrgMembership {
+  id             String    @id @default(uuid()) @db.Uuid
+  userId         String    @map("user_id") @db.Uuid
+  organizationId String    @map("organization_id") @db.Uuid
+  roleId         String    @map("role_id") @db.Uuid
+  isPrimary      Boolean   @default(false) @map("is_primary")
+  joinedAt       DateTime  @default(now()) @map("joined_at") @db.Timestamptz
+  deactivatedAt  DateTime? @map("deactivated_at") @db.Timestamptz
+
+  user         AuthUser     @relation(fields: [userId], references: [id])
+  organization Organization @relation(fields: [organizationId], references: [id])
+  role         AuthRole     @relation(fields: [roleId], references: [id])
+
+  @@unique([userId, organizationId, roleId], map: "uq_user_org_role")
+  @@index([userId], map: "idx_membership_user")
+  @@index([organizationId], map: "idx_membership_org")
+  @@map("org_memberships")
+}
+
+model OrganizationLicense {
+  id             String    @id @default(uuid()) @db.Uuid
+  organizationId String    @map("organization_id") @db.Uuid
+  licenseNumber  String    @map("license_number") @db.VarChar(50)
+  licenseType    String    @map("license_type") @db.VarChar(50)
+  issuedDate     DateTime  @map("issued_date") @db.Date
+  expiryDate     DateTime  @map("expiry_date") @db.Date
+  scope          String?   @db.Text
+  status         OrgStatus @default(ACTIVE)
+  issuedBy       String?   @map("issued_by") @db.VarChar(255)
+  documentId     String?   @map("document_id") @db.Uuid
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt      DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+  createdById    String?   @map("created_by") @db.Uuid
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  document     Document?    @relation(fields: [documentId], references: [id])
+  createdBy    AuthUser?    @relation(fields: [createdById], references: [id])
+
+  @@index([organizationId], map: "idx_license_org")
+  @@index([expiryDate], map: "idx_license_expiry")
+  @@index([licenseNumber], map: "idx_license_number")
+  @@map("org_licenses")
+}
+
+model QkbValidation {
+  id             String              @id @default(uuid()) @db.Uuid
+  organizationId String              @map("organization_id") @db.Uuid
+  nipt           String              @db.VarChar(20)
+  requestData    Json?               @map("request_data")
+  responseData   Json?               @map("response_data")
+  status         QkbValidationStatus
+  validatedAt    DateTime?           @map("validated_at") @db.Timestamptz
+  createdAt      DateTime            @default(now()) @map("created_at") @db.Timestamptz
+  initiatedById  String              @map("initiated_by") @db.Uuid
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  initiatedBy  AuthUser     @relation(fields: [initiatedById], references: [id])
+
+  @@index([organizationId], map: "idx_qkb_validation_org")
+  @@map("org_qkb_validations")
+}
+
+model OrgInvitation {
+  id              String           @id @default(uuid()) @db.Uuid
+  organizationId  String           @map("organization_id") @db.Uuid
+  email           String           @db.VarChar(255)
+  firstName       String           @map("first_name") @db.VarChar(100)
+  lastName        String           @map("last_name") @db.VarChar(100)
+  roleId          String           @map("role_id") @db.Uuid
+  tokenHash       String           @unique @map("token_hash") @db.VarChar(64)
+  status          InvitationStatus @default(PENDING)
+  invitedById     String           @map("invited_by") @db.Uuid
+  expiresAt       DateTime         @map("expires_at") @db.Timestamptz
+  acceptedAt      DateTime?        @map("accepted_at") @db.Timestamptz
+  acceptedById    String?          @map("accepted_by") @db.Uuid
+  revokedAt       DateTime?        @map("revoked_at") @db.Timestamptz
+  createdAt       DateTime         @default(now()) @map("created_at") @db.Timestamptz
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  role         AuthRole     @relation(fields: [roleId], references: [id])
+  invitedBy    AuthUser     @relation("InvitationSentBy", fields: [invitedById], references: [id])
+  acceptedBy   AuthUser?    @relation("InvitationAcceptedBy", fields: [acceptedById], references: [id])
+
+  @@index([organizationId], map: "idx_invitation_org")
+  @@index([email], map: "idx_invitation_email")
+  @@index([status], map: "idx_invitation_status")
+  @@index([expiresAt], map: "idx_invitation_expires")
+  @@map("org_invitations")
+}
+
+// =============================================================================
+// APPLICATIONS
+// =============================================================================
+
+model Application {
+  id                   String            @id @default(uuid()) @db.Uuid
+  applicationNumber    String            @unique @map("application_number") @db.VarChar(30)
+  type                 ApplicationType
+  status               ApplicationStatus @default(DRAFT)
+  ownerOrgId           String            @map("owner_org_id") @db.Uuid
+  installerOrgId       String?           @map("installer_org_id") @db.Uuid
+  certifierOrgId       String?           @map("certifier_org_id") @db.Uuid
+  elevatorId           String?           @map("elevator_id") @db.Uuid
+  assignedInspectorId  String?           @map("assigned_inspector_id") @db.Uuid
+  submittedAt          DateTime?         @map("submitted_at") @db.Timestamptz
+  reviewedAt           DateTime?         @map("reviewed_at") @db.Timestamptz
+  approvedAt           DateTime?         @map("approved_at") @db.Timestamptz
+  rejectedAt           DateTime?         @map("rejected_at") @db.Timestamptz
+  rejectionReason      String?           @map("rejection_reason") @db.Text
+  returnReason         String?           @map("return_reason") @db.Text
+  returnToRole         ReturnTargetRole? @map("return_to_role")
+  returnToRoles        Json?             @map("return_to_roles")
+  requiredCorrection   String?           @map("required_correction") @db.Text
+  returnedAt           DateTime?         @map("returned_at") @db.Timestamptz
+  returnedById         String?           @map("returned_by") @db.Uuid
+  assetGenerationStatus AssetGenerationStatus @default(PENDING) @map("asset_generation_status")
+  assetGenerationError  String?           @map("asset_generation_error") @db.Text
+  assetGenerationCompletedAt DateTime?   @map("asset_generation_completed_at") @db.Timestamptz
+  expiresAt            DateTime?         @map("expires_at") @db.Timestamptz
+  createdAt            DateTime          @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt            DateTime          @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt            DateTime?         @map("deleted_at") @db.Timestamptz
+  createdById          String            @map("created_by") @db.Uuid
+
+  ownerOrg          Organization @relation("ApplicationOwner", fields: [ownerOrgId], references: [id])
+  installerOrg      Organization? @relation("ApplicationInstaller", fields: [installerOrgId], references: [id])
+  certifierOrg      Organization? @relation("ApplicationCertifier", fields: [certifierOrgId], references: [id])
+  targetElevator    Elevator?    @relation("ApplicationTarget", fields: [elevatorId], references: [id])
+  assignedInspector AuthUser?    @relation("ApplicationInspector", fields: [assignedInspectorId], references: [id])
+  createdBy         AuthUser     @relation("ApplicationCreatedBy", fields: [createdById], references: [id])
+  returnedBy        AuthUser?    @relation("ApplicationReturnedBy", fields: [returnedById], references: [id])
+
+  data              ApplicationData?
+  delegations       ApplicationDelegation[]
+  workflowHistory   ApplicationWorkflowHistory[]
+  originElevator    Elevator?                  @relation("ElevatorOrigin")
+  responsibleEntities ElevatorResponsibleEntity[]
+  statusHistory     ElevatorStatusHistory[]
+  ownershipHistory  ElevatorOwnershipHistory[]
+  technicalVersions ElevatorTechnicalDataVersion[]
+  certificates      Certificate[]
+  maintenanceContracts MaintenanceContract[]
+
+  @@index([status], map: "idx_app_status")
+  @@index([type], map: "idx_app_type")
+  @@index([ownerOrgId], map: "idx_app_owner")
+  @@index([installerOrgId], map: "idx_app_installer")
+  @@index([certifierOrgId], map: "idx_app_certifier")
+  @@index([assignedInspectorId], map: "idx_app_inspector")
+  @@index([applicationNumber], map: "idx_app_number")
+  @@index([deletedAt], map: "idx_app_active")
+  @@map("app_applications")
+}
+
+model ApplicationData {
+  id                    String       @id @default(uuid()) @db.Uuid
+  applicationId         String       @unique @map("application_id") @db.Uuid
+  buildingAddress       String?      @map("building_address") @db.Text
+  municipalityId        String?      @map("municipality_id") @db.Uuid
+  administrativeUnitId  String?      @map("administrative_unit_id") @db.Uuid
+  buildingName          String?      @map("building_name") @db.VarChar(255)
+  entrance              String?      @db.VarChar(100)
+  floorLocation         String?      @map("floor_location") @db.VarChar(100)
+  buildingType          BuildingType? @map("building_type")
+  usagePurpose          UsagePurpose? @map("usage_purpose")
+  responsibleEntityName String?      @map("responsible_entity_name") @db.VarChar(255)
+  responsibleEntityIdentifier String? @map("responsible_entity_identifier") @db.VarChar(30)
+  responsibleEntityEmail String?    @map("responsible_entity_email") @db.VarChar(255)
+  responsibleEntityPhone String?     @map("responsible_entity_phone") @db.VarChar(20)
+  notes                 String?      @db.Text
+  updateType            DataUpdateType? @map("update_type")
+  modernizationType     ModernizationType? @map("modernization_type")
+  deregistrationReasonType DeregistrationReason? @map("deregistration_reason_type")
+  gpsLatitude           Decimal?     @map("gps_latitude") @db.Decimal(10, 7)
+  gpsLongitude          Decimal?     @map("gps_longitude") @db.Decimal(10, 7)
+  elevatorType          ElevatorType? @map("elevator_type")
+  manufacturer          String?      @db.VarChar(255)
+  model                 String?      @db.VarChar(255)
+  serialNumber          String?      @map("serial_number") @db.VarChar(100)
+  manufacturingYear     Int?         @map("manufacturing_year")
+  capacityKg            Int?         @map("capacity_kg")
+  capacityPersons       Int?         @map("capacity_persons")
+  speedMs               Decimal?     @map("speed_ms") @db.Decimal(5, 2)
+  floorsServed          Int?         @map("floors_served")
+  stops                 Int?
+  driveType             String?      @map("drive_type") @db.VarChar(50)
+  additionalTechnical   Json?        @map("additional_technical")
+  correctionFields      Json?        @map("correction_fields")
+  updateFields          Json?        @map("update_fields")
+  deregistrationReason  String?      @map("deregistration_reason") @db.Text
+  modernizationNotes    String?      @map("modernization_notes") @db.Text
+  installationCertificateNumber String? @map("installation_certificate_number") @db.VarChar(50)
+  installationCertificateDate   DateTime? @map("installation_certificate_date") @db.Date
+  certifierNotes        String?      @map("certifier_notes") @db.Text
+  omiNumber             String?      @map("omi_number") @db.VarChar(50)
+  examinationType       String?      @map("examination_type") @db.VarChar(50)
+  examinationDate       DateTime?    @map("examination_date") @db.Date
+  conformityResult      ConformityResult? @map("conformity_result")
+  certificateReference  String?      @map("certificate_reference") @db.VarChar(50)
+  certifierTechnicalNotes String?    @map("certifier_technical_notes") @db.Text
+  applicationDate       DateTime?    @map("application_date") @db.Date
+  legacyDistrictCode    String?      @map("legacy_district_code") @db.VarChar(10)
+  specificPosition      String?      @map("specific_position") @db.VarChar(255)
+  registrationExtendedData Json?     @map("registration_extended_data")
+  updatedAt             DateTime     @updatedAt @map("updated_at") @db.Timestamptz
+
+  application        Application          @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  municipality       GeoMunicipality?     @relation(fields: [municipalityId], references: [id])
+  administrativeUnit GeoAdministrativeUnit? @relation(fields: [administrativeUnitId], references: [id])
+
+  @@map("app_application_data")
+}
+
+model ApplicationDelegation {
+  id             String           @id @default(uuid()) @db.Uuid
+  applicationId  String           @map("application_id") @db.Uuid
+  organizationId String           @map("organization_id") @db.Uuid
+  accessType     DelegationType   @map("access_type")
+  status         DelegationStatus @default(PENDING)
+  invitedById    String           @map("invited_by") @db.Uuid
+  invitedAt      DateTime         @default(now()) @map("invited_at") @db.Timestamptz
+  acceptedAt     DateTime?        @map("accepted_at") @db.Timestamptz
+  expiresAt      DateTime?        @map("expires_at") @db.Timestamptz
+
+  application  Application  @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  organization Organization @relation(fields: [organizationId], references: [id])
+  invitedBy    AuthUser     @relation("ApplicationDelegationInvitedBy", fields: [invitedById], references: [id])
+
+  @@unique([applicationId, organizationId, accessType], map: "uq_app_delegation")
+  @@index([applicationId], map: "idx_app_delegation_app")
+  @@map("app_delegations")
+}
+
+model ApplicationWorkflowHistory {
+  id            String             @id @default(uuid()) @db.Uuid
+  applicationId String             @map("application_id") @db.Uuid
+  fromStatus    ApplicationStatus? @map("from_status")
+  toStatus      ApplicationStatus  @map("to_status")
+  action        String             @db.VarChar(50)
+  actorId       String             @map("actor_id") @db.Uuid
+  comment       String?            @db.Text
+  metadata      Json?
+  createdAt     DateTime           @default(now()) @map("created_at") @db.Timestamptz
+
+  application Application @relation(fields: [applicationId], references: [id])
+  actor       AuthUser    @relation(fields: [actorId], references: [id])
+
+  @@index([applicationId], map: "idx_workflow_app")
+  @@index([actorId], map: "idx_workflow_actor")
+  @@map("app_workflow_history")
+}
+
+// =============================================================================
+// ELEVATORS
+// =============================================================================
+
+model Elevator {
+  id                   String         @id @default(uuid()) @db.Uuid
+  registryNumber       String         @unique @map("registry_number") @db.VarChar(30)
+  applicationId        String         @unique @map("application_id") @db.Uuid
+  status               ElevatorStatus @default(ACTIVE)
+  requiresAttention    Boolean        @default(false) @map("requires_attention")
+  ownerOrgId           String         @map("owner_org_id") @db.Uuid
+  installerOrgId       String         @map("installer_org_id") @db.Uuid
+  certifierOrgId       String         @map("certifier_org_id") @db.Uuid
+  maintenanceOrgId     String?        @map("maintenance_org_id") @db.Uuid
+  buildingId           String?        @map("building_id") @db.Uuid
+  buildingAddress      String         @map("building_address") @db.Text
+  municipalityId       String         @map("municipality_id") @db.Uuid
+  administrativeUnitId String?        @map("administrative_unit_id") @db.Uuid
+  buildingName         String?        @map("building_name") @db.VarChar(255)
+  gpsLatitude          Decimal?       @map("gps_latitude") @db.Decimal(10, 7)
+  gpsLongitude         Decimal?       @map("gps_longitude") @db.Decimal(10, 7)
+  registrationDate     DateTime       @map("registration_date") @db.Date
+  activationDate       DateTime?      @map("activation_date") @db.Date
+  deregistrationDate   DateTime?      @map("deregistration_date") @db.Date
+  deregistrationReason String?        @map("deregistration_reason") @db.Text
+  confirmedAt          DateTime?      @map("confirmed_at") @db.Timestamptz
+  confirmedById        String?        @map("confirmed_by") @db.Uuid
+  createdAt            DateTime       @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt            DateTime       @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt            DateTime?      @map("deleted_at") @db.Timestamptz
+
+  originatingApplication Application @relation("ElevatorOrigin", fields: [applicationId], references: [id])
+  ownerOrg               Organization @relation("ElevatorOwner", fields: [ownerOrgId], references: [id])
+  installerOrg           Organization @relation("ElevatorInstaller", fields: [installerOrgId], references: [id])
+  certifierOrg           Organization @relation("ElevatorCertifier", fields: [certifierOrgId], references: [id])
+  maintenanceOrg         Organization? @relation("ElevatorMaintenance", fields: [maintenanceOrgId], references: [id])
+  building               Building?     @relation(fields: [buildingId], references: [id])
+  municipality           GeoMunicipality @relation(fields: [municipalityId], references: [id])
+  administrativeUnit     GeoAdministrativeUnit? @relation(fields: [administrativeUnitId], references: [id])
+  confirmedBy            AuthUser? @relation("ElevatorConfirmedBy", fields: [confirmedById], references: [id])
+
+  targetApplications   Application[] @relation("ApplicationTarget")
+  technicalData        ElevatorTechnicalData?
+  technicalVersions    ElevatorTechnicalDataVersion[]
+  responsibleEntities  ElevatorResponsibleEntity[]
+  statusHistory        ElevatorStatusHistory[]
+  ownershipHistory     ElevatorOwnershipHistory[]
+  delegationHistory    ElevatorDelegationHistory[]
+  certificates         Certificate[]
+  qrCodes              QrCode[]
+  maintenanceContracts MaintenanceContract[]
+  maintenanceRecords   MaintenanceRecord[]
+  maintenanceCompliance MaintenanceComplianceStatus?
+  complianceIndicator  ElevatorComplianceStatus?
+  inspections          Inspection[]
+  fieldInspectionAssignments FieldInspectionAssignment[]
+  citizenReports       CitizenReport[]
+  incidents            Incident[]
+  scheduledReminders   ScheduledReminder[]
+
+  @@index([buildingId], map: "idx_elv_building")
+  @@index([registryNumber], map: "idx_elv_registry")
+  @@index([status], map: "idx_elv_status")
+  @@index([municipalityId], map: "idx_elv_municipality")
+  @@index([ownerOrgId], map: "idx_elv_owner")
+  @@index([maintenanceOrgId], map: "idx_elv_maintenance")
+  @@index([deletedAt], map: "idx_elv_active")
+  @@map("elv_elevators")
+}
+
+model ElevatorTechnicalData {
+  id                String       @id @default(uuid()) @db.Uuid
+  elevatorId        String       @unique @map("elevator_id") @db.Uuid
+  elevatorType      ElevatorType @map("elevator_type")
+  manufacturer      String       @db.VarChar(255)
+  model             String?      @db.VarChar(255)
+  serialNumber      String       @map("serial_number") @db.VarChar(100)
+  manufacturingYear Int?         @map("manufacturing_year")
+  capacityKg        Int?         @map("capacity_kg")
+  capacityPersons   Int?         @map("capacity_persons")
+  speedMs           Decimal?     @map("speed_ms") @db.Decimal(5, 2)
+  floorsServed      Int          @map("floors_served")
+  stops             Int?
+  driveType         String?      @map("drive_type") @db.VarChar(50)
+  doorType          String?      @map("door_type") @db.VarChar(50)
+  controlSystem     String?      @map("control_system") @db.VarChar(100)
+  additionalData    Json?        @map("additional_data")
+  currentVersionId  String?      @unique @map("current_version_id") @db.Uuid
+  updatedAt         DateTime     @updatedAt @map("updated_at") @db.Timestamptz
+
+  elevator       Elevator                    @relation(fields: [elevatorId], references: [id], onDelete: Cascade)
+  currentVersion ElevatorTechnicalDataVersion? @relation("CurrentTechnicalVersion", fields: [currentVersionId], references: [id])
+
+  @@map("elv_technical_data")
+}
+
+model ElevatorTechnicalDataVersion {
+  id                String       @id @default(uuid()) @db.Uuid
+  elevatorId        String       @map("elevator_id") @db.Uuid
+  applicationId     String?      @map("application_id") @db.Uuid
+  versionNumber     Int          @map("version_number")
+  isCurrent         Boolean      @default(false) @map("is_current")
+  elevatorType      ElevatorType @map("elevator_type")
+  manufacturer      String       @db.VarChar(255)
+  model             String?      @db.VarChar(255)
+  serialNumber      String       @map("serial_number") @db.VarChar(100)
+  manufacturingYear Int?         @map("manufacturing_year")
+  capacityKg        Int?         @map("capacity_kg")
+  capacityPersons   Int?         @map("capacity_persons")
+  speedMs           Decimal?     @map("speed_ms") @db.Decimal(5, 2)
+  floorsServed      Int          @map("floors_served")
+  stops             Int?
+  driveType         String?      @map("drive_type") @db.VarChar(50)
+  doorType          String?      @map("door_type") @db.VarChar(50)
+  controlSystem     String?      @map("control_system") @db.VarChar(100)
+  additionalData    Json?        @map("additional_data")
+  changeReason      String?      @map("change_reason") @db.Text
+  createdById       String       @map("created_by") @db.Uuid
+  createdAt         DateTime     @default(now()) @map("created_at") @db.Timestamptz
+
+  elevator          Elevator              @relation(fields: [elevatorId], references: [id])
+  application       Application?          @relation(fields: [applicationId], references: [id])
+  createdBy         AuthUser              @relation(fields: [createdById], references: [id])
+  currentForElevator ElevatorTechnicalData? @relation("CurrentTechnicalVersion")
+
+  @@unique([elevatorId, versionNumber], map: "uq_technical_version_elv_number")
+  @@index([elevatorId], map: "idx_technical_version_elv")
+  @@index([isCurrent], map: "idx_technical_version_current")
+  @@map("elv_technical_data_versions")
+}
+
+model ElevatorResponsibleEntity {
+  id             String   @id @default(uuid()) @db.Uuid
+  elevatorId     String   @map("elevator_id") @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  role           OrgType
+  validFrom      DateTime @map("valid_from") @db.Date
+  validTo        DateTime? @map("valid_to") @db.Date
+  applicationId  String?  @map("application_id") @db.Uuid
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  elevator     Elevator     @relation(fields: [elevatorId], references: [id])
+  organization Organization @relation(fields: [organizationId], references: [id])
+  application  Application? @relation(fields: [applicationId], references: [id])
+
+  @@index([elevatorId], map: "idx_resp_elv")
+  @@index([organizationId], map: "idx_resp_org")
+  @@map("elv_responsible_entities")
+}
+
+model ElevatorStatusHistory {
+  id               String          @id @default(uuid()) @db.Uuid
+  elevatorId       String          @map("elevator_id") @db.Uuid
+  fromStatus       ElevatorStatus? @map("from_status")
+  toStatus         ElevatorStatus  @map("to_status")
+  reason           String?         @db.Text
+  suspensionReason SuspensionReason? @map("suspension_reason")
+  applicationId    String?         @map("application_id") @db.Uuid
+  actorId          String          @map("actor_id") @db.Uuid
+  createdAt        DateTime        @default(now()) @map("created_at") @db.Timestamptz
+
+  elevator    Elevator     @relation(fields: [elevatorId], references: [id])
+  application Application? @relation(fields: [applicationId], references: [id])
+  actor       AuthUser     @relation(fields: [actorId], references: [id])
+
+  @@index([elevatorId], map: "idx_status_hist_elv")
+  @@map("elv_status_history")
+}
+
+model ElevatorOwnershipHistory {
+  id            String   @id @default(uuid()) @db.Uuid
+  elevatorId    String   @map("elevator_id") @db.Uuid
+  oldOwnerId    String   @map("old_owner_id") @db.Uuid
+  newOwnerId    String   @map("new_owner_id") @db.Uuid
+  changeDate    DateTime @map("change_date") @db.Date
+  applicationId String?  @map("application_id") @db.Uuid
+  reason        String?  @db.Text
+  createdById   String   @map("created_by") @db.Uuid
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  elevator    Elevator     @relation(fields: [elevatorId], references: [id])
+  oldOwner    Organization @relation("OwnershipOldOwner", fields: [oldOwnerId], references: [id])
+  newOwner    Organization @relation("OwnershipNewOwner", fields: [newOwnerId], references: [id])
+  application Application? @relation(fields: [applicationId], references: [id])
+  createdBy   AuthUser     @relation("OwnershipCreatedBy", fields: [createdById], references: [id])
+
+  @@index([elevatorId], map: "idx_ownership_hist_elv")
+  @@map("elv_ownership_history")
+}
+
+model ElevatorDelegationHistory {
+  id             String           @id @default(uuid()) @db.Uuid
+  elevatorId     String           @map("elevator_id") @db.Uuid
+  organizationId String           @map("organization_id") @db.Uuid
+  delegationType DelegationType   @map("delegation_type")
+  assignedById   String           @map("assigned_by") @db.Uuid
+  assignedAt     DateTime         @default(now()) @map("assigned_at") @db.Timestamptz
+  acceptedAt     DateTime?        @map("accepted_at") @db.Timestamptz
+  revokedAt      DateTime?        @map("revoked_at") @db.Timestamptz
+  status         DelegationStatus @default(PENDING)
+
+  elevator     Elevator     @relation(fields: [elevatorId], references: [id])
+  organization Organization @relation(fields: [organizationId], references: [id])
+  assignedBy   AuthUser     @relation("DelegationAssignedBy", fields: [assignedById], references: [id])
+
+  @@index([elevatorId], map: "idx_delegation_hist_elv")
+  @@index([organizationId], map: "idx_delegation_hist_org")
+  @@map("elv_delegation_history")
+}
+
+model ElevatorComplianceStatus {
+  id                  String              @id @default(uuid()) @db.Uuid
+  elevatorId          String              @unique @map("elevator_id") @db.Uuid
+  indicator           ComplianceIndicator @default(GREEN)
+  inspectionValid     Boolean             @default(true) @map("inspection_valid")
+  certificateValid    Boolean             @default(true) @map("certificate_valid")
+  maintenanceValid    Boolean             @default(true) @map("maintenance_valid")
+  inspectionExpiring  Boolean             @default(false) @map("inspection_expiring")
+  certificateExpiring Boolean             @default(false) @map("certificate_expiring")
+  maintenanceExpiring Boolean             @default(false) @map("maintenance_expiring")
+  isSuspended         Boolean             @default(false) @map("is_suspended")
+  lastCalculatedAt    DateTime            @default(now()) @map("last_calculated_at") @db.Timestamptz
+
+  elevator Elevator @relation(fields: [elevatorId], references: [id])
+
+  @@index([indicator], map: "idx_compliance_indicator")
+  @@map("elv_compliance_status")
+}
+
+// =============================================================================
+// CERTIFICATES
+// =============================================================================
+
+model Certificate {
+  id               String            @id @default(uuid()) @db.Uuid
+  certificateNumber String           @unique @map("certificate_number") @db.VarChar(30)
+  elevatorId       String            @map("elevator_id") @db.Uuid
+  type             CertificateType
+  status           CertificateStatus @default(ACTIVE)
+  issuedDate       DateTime          @map("issued_date") @db.Date
+  expiryDate       DateTime?         @map("expiry_date") @db.Date
+  issuedByOrgId    String?           @map("issued_by_org_id") @db.Uuid
+  issuedByUserId   String?           @map("issued_by_user_id") @db.Uuid
+  applicationId    String?           @map("application_id") @db.Uuid
+  inspectionId     String?           @map("inspection_id") @db.Uuid
+  documentId       String?           @map("document_id") @db.Uuid
+  supersededById   String?           @map("superseded_by_id") @db.Uuid
+  revokedAt        DateTime?         @map("revoked_at") @db.Timestamptz
+  revokedReason    String?           @map("revoked_reason") @db.Text
+  createdAt        DateTime          @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt        DateTime          @updatedAt @map("updated_at") @db.Timestamptz
+
+  elevator      Elevator      @relation(fields: [elevatorId], references: [id])
+  issuedByOrg   Organization? @relation(fields: [issuedByOrgId], references: [id])
+  issuedByUser  AuthUser?     @relation("CertificateIssuedByUser", fields: [issuedByUserId], references: [id])
+  application   Application?  @relation(fields: [applicationId], references: [id])
+  inspection    Inspection?   @relation(fields: [inspectionId], references: [id])
+  document      Document?     @relation(fields: [documentId], references: [id])
+  supersededBy  Certificate?  @relation("CertificateSuperseded", fields: [supersededById], references: [id])
+  supersedes    Certificate[] @relation("CertificateSuperseded")
+  inspectionLink Inspection?  @relation("InspectionCertificate")
+
+  @@index([elevatorId], map: "idx_cert_elv")
+  @@index([type], map: "idx_cert_type")
+  @@index([status], map: "idx_cert_status")
+  @@index([expiryDate], map: "idx_cert_expiry")
+  @@index([certificateNumber], map: "idx_cert_number")
+  @@map("cert_certificates")
+}
+
+// =============================================================================
+// QR CODES
+// =============================================================================
+
+model QrCode {
+  id                       String    @id @default(uuid()) @db.Uuid
+  elevatorId               String    @map("elevator_id") @db.Uuid
+  code                     String    @unique @db.VarChar(12)
+  isActive                 Boolean   @default(true) @map("is_active")
+  imageDocumentId          String?   @map("image_document_id") @db.Uuid
+  placementPhotoDocumentId String?   @map("placement_photo_document_id") @db.Uuid
+  placementConfirmedAt     DateTime? @map("placement_confirmed_at") @db.Timestamptz
+  placementConfirmedById   String?   @map("placement_confirmed_by") @db.Uuid
+  generatedAt              DateTime  @default(now()) @map("generated_at") @db.Timestamptz
+  deactivatedAt            DateTime? @map("deactivated_at") @db.Timestamptz
+  scanCount                Int       @default(0) @map("scan_count")
+
+  elevator               Elevator  @relation(fields: [elevatorId], references: [id])
+  imageDocument          Document? @relation("QrImageDocument", fields: [imageDocumentId], references: [id])
+  placementPhotoDocument Document? @relation("QrPlacementPhoto", fields: [placementPhotoDocumentId], references: [id])
+  placementConfirmedBy   AuthUser? @relation("QrPlacementConfirmedBy", fields: [placementConfirmedById], references: [id])
+  scanLogs               QrScanLog[]
+
+  @@index([code], map: "idx_qr_code")
+  @@index([elevatorId], map: "idx_qr_elv")
+  @@index([isActive], map: "idx_qr_active")
+  @@map("qr_codes")
+}
+
+model QrScanLog {
+  id         String   @id @default(uuid()) @db.Uuid
+  qrCodeId   String   @map("qr_code_id") @db.Uuid
+  scannedAt  DateTime @default(now()) @map("scanned_at") @db.Timestamptz
+  ipAddress  String?  @map("ip_address") @db.VarChar(45)
+  userAgent  String?  @map("user_agent") @db.Text
+
+  qrCode QrCode @relation(fields: [qrCodeId], references: [id])
+
+  @@index([qrCodeId], map: "idx_scan_qr")
+  @@index([scannedAt], map: "idx_scan_date")
+  @@map("qr_scan_logs")
+}
+
+// =============================================================================
+// DOCUMENTS & TEMPLATES
+// =============================================================================
+
+model Document {
+  id               String                 @id @default(uuid()) @db.Uuid
+  filename         String                 @db.VarChar(255)
+  originalFilename String                 @map("original_filename") @db.VarChar(255)
+  mimeType         String                 @map("mime_type") @db.VarChar(100)
+  fileSize         BigInt                 @map("file_size")
+  storagePath      String                 @map("storage_path") @db.VarChar(500)
+  checksumSha256   String                 @map("checksum_sha256") @db.VarChar(64)
+  classification   DocumentClassification
+  uploadedById     String                 @map("uploaded_by") @db.Uuid
+  createdAt        DateTime               @default(now()) @map("created_at") @db.Timestamptz
+  deletedAt        DateTime?              @map("deleted_at") @db.Timestamptz
+
+  uploadedBy       AuthUser              @relation(fields: [uploadedById], references: [id])
+  links            DocumentLink[]
+  accessLogs       DocumentAccessLog[]
+  licenses         OrganizationLicense[]
+  certificates     Certificate[]
+  maintenanceContracts MaintenanceContract[]
+  maintenanceRecords   MaintenanceRecord[]
+  inspections          Inspection[]      @relation("InspectionReport")
+  qrImages             QrCode[]          @relation("QrImageDocument")
+  qrPlacementPhotos    QrCode[]          @relation("QrPlacementPhoto")
+
+  @@index([classification], map: "idx_doc_classification")
+  @@index([uploadedById], map: "idx_doc_uploaded_by")
+  @@map("doc_documents")
+}
+
+model DocumentLink {
+  id         String   @id @default(uuid()) @db.Uuid
+  documentId String   @map("document_id") @db.Uuid
+  entityType String   @map("entity_type") @db.VarChar(50)
+  entityId   String   @map("entity_id") @db.Uuid
+  purpose    String?  @db.VarChar(50)
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  document Document @relation(fields: [documentId], references: [id])
+
+  @@index([entityType, entityId], map: "idx_doclink_entity")
+  @@index([documentId], map: "idx_doclink_doc")
+  @@map("doc_document_links")
+}
+
+model DocumentAccessLog {
+  id         String               @id @default(uuid()) @db.Uuid
+  documentId String               @map("document_id") @db.Uuid
+  userId     String               @map("user_id") @db.Uuid
+  action     DocumentAccessAction
+  ipAddress  String?              @map("ip_address") @db.VarChar(45)
+  createdAt  DateTime             @default(now()) @map("created_at") @db.Timestamptz
+
+  document Document @relation(fields: [documentId], references: [id])
+  user     AuthUser @relation(fields: [userId], references: [id])
+
+  @@index([documentId], map: "idx_doc_access_document")
+  @@map("doc_access_log")
+}
+
+model DocumentTemplate {
+  id          String       @id @default(uuid()) @db.Uuid
+  name        String       @db.VarChar(255)
+  type        TemplateType
+  version     Int          @default(1)
+  description String?      @db.Text
+  content     String?      @db.Text
+  storagePath String?      @map("storage_path") @db.VarChar(500)
+  variables   Json?
+  isActive    Boolean      @default(true) @map("is_active")
+  createdById String       @map("created_by") @db.Uuid
+  createdAt   DateTime     @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime     @updatedAt @map("updated_at") @db.Timestamptz
+
+  createdBy AuthUser @relation(fields: [createdById], references: [id])
+
+  @@unique([name, version], map: "uq_template_name_version")
+  @@index([type, isActive], map: "idx_template_type_active")
+  @@map("doc_templates")
+}
+
+// =============================================================================
+// MAINTENANCE
+// =============================================================================
+
+enum MaintenanceContractStatus {
+  PENDING
+  ACTIVE
+  REJECTED
+  EXPIRED
+  TERMINATED
+
+  @@map("maint_contract_status")
+}
+
+model MaintenanceContract {
+  id                String   @id @default(uuid()) @db.Uuid
+  elevatorId        String   @map("elevator_id") @db.Uuid
+  maintenanceOrgId  String   @map("maintenance_org_id") @db.Uuid
+  serviceType       String   @default("MAINTENANCE") @map("service_type") @db.VarChar(30)
+  contractNumber    String?  @map("contract_number") @db.VarChar(50)
+  startDate         DateTime @map("start_date") @db.Date
+  endDate           DateTime? @map("end_date") @db.Date
+  applicationId     String?  @map("application_id") @db.Uuid
+  documentId        String?  @map("document_id") @db.Uuid
+  status            MaintenanceContractStatus @default(PENDING)
+  isActive          Boolean  @default(true) @map("is_active")
+  rejectionReason   String?  @map("rejection_reason") @db.Text
+  respondedAt       DateTime? @map("responded_at") @db.Timestamptz
+  createdAt         DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  elevator        Elevator     @relation(fields: [elevatorId], references: [id])
+  maintenanceOrg  Organization @relation(fields: [maintenanceOrgId], references: [id])
+  application     Application? @relation(fields: [applicationId], references: [id])
+  document        Document?    @relation(fields: [documentId], references: [id])
+
+  @@index([elevatorId], map: "idx_maint_contract_elv")
+  @@index([maintenanceOrgId], map: "idx_maint_contract_org")
+  @@index([status], map: "idx_maint_contract_status")
+  @@map("maint_contracts")
+}
+
+model MaintenanceRecord {
+  id               String          @id @default(uuid()) @db.Uuid
+  elevatorId       String          @map("elevator_id") @db.Uuid
+  maintenanceOrgId String          @map("maintenance_org_id") @db.Uuid
+  type             MaintenanceType
+  interventionType String?         @map("intervention_type") @db.VarChar(40)
+  performedDate    DateTime        @map("performed_date") @db.Date
+  startTime        String?         @map("start_time") @db.VarChar(5)
+  endTime          String?         @map("end_time") @db.VarChar(5)
+  durationMinutes  Int?            @map("duration_minutes")
+  technicianName   String?         @map("technician_name") @db.VarChar(100)
+  description      String?         @db.Text
+  partsReplaced    String?         @map("parts_replaced") @db.Text
+  findings         String?         @db.Text
+  nextDueDate      DateTime?       @map("next_due_date") @db.Date
+  documentId       String?         @map("document_id") @db.Uuid
+  createdById      String          @map("created_by") @db.Uuid
+  createdAt        DateTime        @default(now()) @map("created_at") @db.Timestamptz
+
+  elevator       Elevator     @relation(fields: [elevatorId], references: [id])
+  maintenanceOrg Organization @relation(fields: [maintenanceOrgId], references: [id])
+  document       Document?    @relation(fields: [documentId], references: [id])
+  createdBy      AuthUser     @relation(fields: [createdById], references: [id])
+
+  @@index([elevatorId], map: "idx_maint_record_elv")
+  @@index([performedDate], map: "idx_maint_record_date")
+  @@index([maintenanceOrgId], map: "idx_maint_record_org")
+  @@map("maint_records")
+}
+
+model MaintenanceComplianceStatus {
+  id                  String   @id @default(uuid()) @db.Uuid
+  elevatorId          String   @unique @map("elevator_id") @db.Uuid
+  lastMaintenanceDate DateTime? @map("last_maintenance_date") @db.Date
+  nextDueDate         DateTime? @map("next_due_date") @db.Date
+  isCompliant         Boolean  @default(true) @map("is_compliant")
+  daysOverdue         Int      @default(0) @map("days_overdue")
+  lastCalculatedAt    DateTime @default(now()) @map("last_calculated_at") @db.Timestamptz
+
+  elevator Elevator @relation(fields: [elevatorId], references: [id])
+
+  @@map("maint_compliance_status")
+}
+
+// =============================================================================
+// INSPECTIONS
+// =============================================================================
+
+model Inspection {
+  id                  String           @id @default(uuid()) @db.Uuid
+  elevatorId          String           @map("elevator_id") @db.Uuid
+  inspectorId         String           @map("inspector_id") @db.Uuid
+  type                InspectionType
+  status              InspectionResult @default(PENDING)
+  scheduledDate       DateTime         @map("scheduled_date") @db.Date
+  conductedDate       DateTime?        @map("conducted_date") @db.Date
+  result              InspectionResult?
+  findings            String?          @db.Text
+  conditions          String?          @db.Text
+  approvedBodyNumber  String?          @map("approved_body_number") @db.VarChar(50)
+  examinationType     String?          @map("examination_type") @db.VarChar(50)
+  nextInspectionDate  DateTime?        @map("next_inspection_date") @db.Date
+  reportDocumentId    String?          @map("report_document_id") @db.Uuid
+  certificateId       String?          @unique @map("certificate_id") @db.Uuid
+  createdAt           DateTime         @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt           DateTime         @updatedAt @map("updated_at") @db.Timestamptz
+
+  elevator        Elevator     @relation(fields: [elevatorId], references: [id])
+  inspector       AuthUser     @relation(fields: [inspectorId], references: [id])
+  reportDocument  Document?    @relation("InspectionReport", fields: [reportDocumentId], references: [id])
+  certificate     Certificate? @relation("InspectionCertificate", fields: [certificateId], references: [id])
+  certificates    Certificate[]
+  fieldAssignment FieldInspectionAssignment?
+
+  @@index([elevatorId], map: "idx_insp_elv")
+  @@index([inspectorId], map: "idx_insp_inspector")
+  @@index([scheduledDate], map: "idx_insp_scheduled")
+  @@index([status], map: "idx_insp_status")
+  @@map("insp_inspections")
+}
+
+model FieldInspectionAssignment {
+  id            String                          @id @default(uuid()) @db.Uuid
+  elevatorId    String                          @map("elevator_id") @db.Uuid
+  assigneeId    String                          @map("assignee_id") @db.Uuid
+  assignedById  String                          @map("assigned_by_id") @db.Uuid
+  scheduledDate DateTime                        @map("scheduled_date") @db.Date
+  status        FieldInspectionAssignmentStatus @default(SCHEDULED)
+  instructions  String?                         @db.Text
+  inspectionId  String?                         @unique @map("inspection_id") @db.Uuid
+  cancelledAt   DateTime?                       @map("cancelled_at") @db.Timestamptz
+  cancelReason  String?                         @map("cancel_reason") @db.Text
+  createdAt     DateTime                        @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt     DateTime                        @updatedAt @map("updated_at") @db.Timestamptz
+
+  elevator   Elevator    @relation(fields: [elevatorId], references: [id])
+  assignee   AuthUser    @relation("FieldInspectionAssignee", fields: [assigneeId], references: [id])
+  assignedBy AuthUser    @relation("FieldInspectionAssignedBy", fields: [assignedById], references: [id])
+  inspection Inspection? @relation(fields: [inspectionId], references: [id])
+
+  @@index([assigneeId, status], map: "idx_field_insp_assignee")
+  @@index([elevatorId], map: "idx_field_insp_elevator")
+  @@index([scheduledDate], map: "idx_field_insp_scheduled")
+  @@map("insp_field_assignments")
+}
+
+// =============================================================================
+// CITIZEN REPORTS
+// =============================================================================
+
+model CitizenReport {
+  id                   String              @id @default(uuid()) @db.Uuid
+  reportNumber         String              @unique @map("report_number") @db.VarChar(20)
+  type                 CitizenReportType
+  status               CitizenReportStatus @default(SUBMITTED)
+  reporterUserId       String?             @map("reporter_user_id") @db.Uuid
+  reporterName         String?             @map("reporter_name") @db.VarChar(100)
+  reporterEmail        String?             @map("reporter_email") @db.VarChar(255)
+  reporterPhone        String?             @map("reporter_phone") @db.VarChar(20)
+  elevatorId           String?             @map("elevator_id") @db.Uuid
+  locationAddress      String?             @map("location_address") @db.Text
+  municipalityId       String?             @map("municipality_id") @db.Uuid
+  gpsLatitude          Decimal?            @map("gps_latitude") @db.Decimal(10, 7)
+  gpsLongitude         Decimal?            @map("gps_longitude") @db.Decimal(10, 7)
+  description          String              @db.Text
+  priority             ReportPriority      @default(NORMAL)
+  assignedInspectorId  String?             @map("assigned_inspector_id") @db.Uuid
+  resolvedAt           DateTime?           @map("resolved_at") @db.Timestamptz
+  resolutionNotes      String?             @map("resolution_notes") @db.Text
+  createdAt            DateTime            @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt            DateTime            @updatedAt @map("updated_at") @db.Timestamptz
+
+  reporterUser      AuthUser?        @relation("CitizenReporter", fields: [reporterUserId], references: [id])
+  elevator          Elevator?        @relation(fields: [elevatorId], references: [id])
+  municipality      GeoMunicipality? @relation(fields: [municipalityId], references: [id])
+  assignedInspector AuthUser?        @relation("ReportInspector", fields: [assignedInspectorId], references: [id])
+  actions           CitizenReportAction[]
+
+  @@index([status], map: "idx_cit_status")
+  @@index([type], map: "idx_cit_type")
+  @@index([priority], map: "idx_cit_priority")
+  @@index([assignedInspectorId], map: "idx_cit_inspector")
+  @@index([elevatorId], map: "idx_cit_elv")
+  @@map("cit_reports")
+}
+
+model CitizenReportAction {
+  id        String   @id @default(uuid()) @db.Uuid
+  reportId  String   @map("report_id") @db.Uuid
+  action    String   @db.VarChar(50)
+  actorId   String   @map("actor_id") @db.Uuid
+  comment   String?  @db.Text
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  report CitizenReport @relation(fields: [reportId], references: [id])
+  actor  AuthUser      @relation(fields: [actorId], references: [id])
+
+  @@map("cit_report_actions")
+}
+
+model Incident {
+  id              String           @id @default(uuid()) @db.Uuid
+  incidentNumber  String           @unique @map("incident_number") @db.VarChar(20)
+  elevatorId      String           @map("elevator_id") @db.Uuid
+  source          IncidentSource
+  type            IncidentType
+  description     String           @db.Text
+  priority        IncidentPriority @default(MEDIUM)
+  status          IncidentStatus   @default(OPEN)
+  occurredAt      DateTime         @map("occurred_at") @db.Timestamptz
+  reportedById    String?          @map("reported_by_id") @db.Uuid
+  reporterName    String?          @map("reporter_name") @db.VarChar(100)
+  reporterContact String?          @map("reporter_contact") @db.VarChar(255)
+  assignedToId    String?          @map("assigned_to_id") @db.Uuid
+  photos          Json?
+  resolutionNotes String?          @map("resolution_notes") @db.Text
+  closedAt        DateTime?        @map("closed_at") @db.Timestamptz
+  createdAt       DateTime         @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt       DateTime         @updatedAt @map("updated_at") @db.Timestamptz
+
+  elevator   Elevator  @relation(fields: [elevatorId], references: [id])
+  reportedBy AuthUser? @relation("IncidentReporter", fields: [reportedById], references: [id])
+  assignedTo AuthUser? @relation("IncidentAssignee", fields: [assignedToId], references: [id])
+
+  @@index([elevatorId], map: "idx_incident_elv")
+  @@index([status], map: "idx_incident_status")
+  @@index([priority], map: "idx_incident_priority")
+  @@map("incidents")
+}
+
+// =============================================================================
+// SYSTEM - Notifications, Config, Reminders, Registry Sequences
+// =============================================================================
+
+model Notification {
+  id         String              @id @default(uuid()) @db.Uuid
+  userId     String              @map("user_id") @db.Uuid
+  channel    NotificationChannel
+  status     NotificationStatus  @default(PENDING)
+  title      String              @db.VarChar(255)
+  body       String              @db.Text
+  entityType String?             @map("entity_type") @db.VarChar(50)
+  entityId   String?             @map("entity_id") @db.Uuid
+  readAt     DateTime?           @map("read_at") @db.Timestamptz
+  sentAt     DateTime?           @map("sent_at") @db.Timestamptz
+  createdAt  DateTime            @default(now()) @map("created_at") @db.Timestamptz
+
+  user AuthUser @relation(fields: [userId], references: [id])
+
+  @@index([userId], map: "idx_notif_user")
+  @@index([status], map: "idx_notif_status")
+  @@map("sys_notifications")
+}
+
+model NotificationPreference {
+  id        String              @id @default(uuid()) @db.Uuid
+  userId    String              @map("user_id") @db.Uuid
+  channel   NotificationChannel
+  enabled   Boolean             @default(true)
+  createdAt DateTime            @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime            @updatedAt @map("updated_at") @db.Timestamptz
+
+  user AuthUser @relation(fields: [userId], references: [id])
+
+  @@unique([userId, channel], map: "uq_notif_pref_user_channel")
+  @@map("sys_notification_preferences")
+}
+
+model NotificationTemplate {
+  id        String   @id @default(uuid()) @db.Uuid
+  code      String   @unique @db.VarChar(100)
+  channel   NotificationChannel
+  subject   String?  @db.VarChar(255)
+  body      String   @db.Text
+  variables Json?
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  @@map("sys_notification_templates")
+}
+
+model SystemConfig {
+  key         String   @id @db.VarChar(100)
+  value       Json
+  description String?  @db.Text
+  updatedById String?  @map("updated_by") @db.Uuid
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  updatedBy AuthUser? @relation(fields: [updatedById], references: [id])
+
+  @@map("sys_config")
+}
+
+model RegistrySequence {
+  id             String @id @default(uuid()) @db.Uuid
+  municipalityId String @map("municipality_id") @db.Uuid
+  year           Int
+  lastSequence   Int    @default(0) @map("last_sequence")
+
+  municipality GeoMunicipality @relation(fields: [municipalityId], references: [id])
+
+  @@unique([municipalityId, year], map: "uq_registry_seq_mun_year")
+  @@map("sys_registry_sequences")
+}
+
+model ApplicationSequence {
+  id           String @id @default(uuid()) @db.Uuid
+  year         Int
+  typeCode     String @map("type_code") @db.VarChar(10)
+  lastSequence Int    @default(0) @map("last_sequence")
+
+  @@unique([year, typeCode], map: "uq_app_seq_year_type")
+  @@map("sys_application_sequences")
+}
+
+model CertificateSequence {
+  id           String @id @default(uuid()) @db.Uuid
+  year         Int
+  typeCode     String @map("type_code") @db.VarChar(10)
+  lastSequence Int    @default(0) @map("last_sequence")
+
+  @@unique([year, typeCode], map: "uq_cert_seq_year_type")
+  @@map("sys_certificate_sequences")
+}
+
+model LegacyRegistrySequence {
+  id             String @id @default(uuid()) @db.Uuid
+  municipalityId String @map("municipality_id") @db.Uuid
+  lastSequence   Int    @default(0) @map("last_sequence")
+
+  municipality GeoMunicipality @relation(fields: [municipalityId], references: [id])
+
+  @@unique([municipalityId], map: "uq_legacy_registry_seq_mun")
+  @@map("sys_legacy_registry_sequences")
+}
+
+model SysJobRun {
+  id          String       @id @default(uuid()) @db.Uuid
+  jobType     String       @map("job_type") @db.VarChar(50)
+  status      JobRunStatus
+  startedAt   DateTime     @default(now()) @map("started_at") @db.Timestamptz
+  completedAt DateTime?    @map("completed_at") @db.Timestamptz
+  metadata    Json?
+  errorLog    Json?        @map("error_log")
+
+  @@index([jobType, startedAt], map: "idx_job_run_type_started")
+  @@map("sys_job_runs")
+}
+
+model ReminderRule {
+  id           String             @id @default(uuid()) @db.Uuid
+  entityType   ReminderEntityType @map("entity_type")
+  daysBefore   Int                @map("days_before")
+  channel      NotificationChannel
+  isActive     Boolean            @default(true) @map("is_active")
+  createdAt    DateTime           @default(now()) @map("created_at") @db.Timestamptz
+
+  @@unique([entityType, daysBefore, channel], map: "uq_reminder_rule")
+  @@map("sys_reminder_rules")
+}
+
+model ScheduledReminder {
+  id           String             @id @default(uuid()) @db.Uuid
+  entityType   ReminderEntityType @map("entity_type")
+  entityId     String             @map("entity_id") @db.Uuid
+  elevatorId   String?            @map("elevator_id") @db.Uuid
+  userId       String             @map("user_id") @db.Uuid
+  channel      NotificationChannel
+  daysBefore   Int                @map("days_before")
+  targetDate   DateTime           @map("target_date") @db.Date
+  scheduledFor DateTime           @map("scheduled_for") @db.Timestamptz
+  sentAt       DateTime?          @map("sent_at") @db.Timestamptz
+  createdAt    DateTime           @default(now()) @map("created_at") @db.Timestamptz
+
+  elevator Elevator? @relation(fields: [elevatorId], references: [id])
+  user     AuthUser  @relation(fields: [userId], references: [id])
+
+  @@index([scheduledFor, sentAt], map: "idx_scheduled_reminder_due")
+  @@index([entityType, entityId], map: "idx_scheduled_reminder_entity")
+  @@map("sys_scheduled_reminders")
+}
+
+// =============================================================================
+// AUDIT
+// =============================================================================
+
+model AuditLog {
+  id            String      @id @default(uuid()) @db.Uuid
+  actorId       String?     @map("actor_id") @db.Uuid
+  action        AuditAction
+  entityType    String      @map("entity_type") @db.VarChar(50)
+  entityId      String      @map("entity_id") @db.Uuid
+  beforeState   Json?       @map("before_state")
+  afterState    Json?       @map("after_state")
+  metadata      Json?
+  ipAddress     String?     @map("ip_address") @db.VarChar(45)
+  userAgent     String?     @map("user_agent") @db.Text
+  correlationId String?     @map("correlation_id") @db.Uuid
+  createdAt     DateTime    @default(now()) @map("created_at") @db.Timestamptz
+
+  actor AuthUser? @relation(fields: [actorId], references: [id])
+
+  @@index([entityType, entityId], map: "idx_audit_entity")
+  @@index([actorId], map: "idx_audit_actor")
+  @@index([action], map: "idx_audit_action")
+  @@index([createdAt], map: "idx_audit_created")
+  @@index([correlationId], map: "idx_audit_correlation")
+  @@map("audit_logs")
+}

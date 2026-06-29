@@ -1,0 +1,798 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 216 33% 97%;
+    --foreground: 210 82% 15%;
+    --card: 0 0% 100%;
+    --card-foreground: 210 82% 15%;
+    --primary: 209 82% 24%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 210 66% 36%;
+    --secondary-foreground: 0 0% 100%;
+    --muted: 216 33% 94%;
+    --muted-foreground: 215 16% 40%;
+    --accent: 216 33% 94%;
+    --accent-foreground: 209 82% 24%;
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+    --success: 142 71% 45%;
+    --warning: 38 92% 50%;
+    --border: 214 24% 90%;
+    --input: 214 24% 90%;
+    --ring: 209 82% 24%;
+    --radius: 0.625rem;
+  }
+
+  .dark {
+    --background: 222.2 84% 4.9%;
+    --foreground: 210 40% 98%;
+    --card: 222.2 84% 4.9%;
+    --card-foreground: 210 40% 98%;
+    --primary: 217.2 91.2% 59.8%;
+    --primary-foreground: 222.2 47.4% 11.2%;
+    --secondary: 217.2 32.6% 17.5%;
+    --secondary-foreground: 210 40% 98%;
+    --muted: 217.2 32.6% 17.5%;
+    --muted-foreground: 215 20.2% 65.1%;
+    --accent: 217.2 32.6% 17.5%;
+    --accent-foreground: 210 40% 98%;
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 217.2 32.6% 17.5%;
+    --input: 217.2 32.6% 17.5%;
+    --ring: 224.3 76.3% 48%;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  }
+}
+
+@layer components {
+  .portal-canvas {
+    @apply relative min-h-full bg-gov-background bg-portal-mesh;
+  }
+
+  .portal-canvas-inner {
+    @apply relative mx-auto max-w-7xl p-4 lg:p-8;
+  }
+
+  .portal-tab-scroll {
+    @apply -mx-4 overflow-x-auto px-4 pb-0.5 sm:mx-0 sm:overflow-visible sm:px-0;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+
+  .portal-tab-scroll::-webkit-scrollbar {
+    display: none;
+  }
+
+  .portal-tab-scroll-inner {
+    @apply flex w-max min-w-full gap-1 sm:w-auto sm:min-w-0 sm:flex-wrap;
+  }
+
+  .portal-surface {
+    @apply rounded-2xl border border-border/80 bg-card shadow-portal ring-1 ring-black/[0.03];
+  }
+
+  .portal-surface-interactive {
+    @apply portal-surface transition-all duration-200 hover:border-gov-primary/20 hover:shadow-portal-lg;
+  }
+
+  .portal-page-header {
+    @apply relative mb-8 pl-5;
+  }
+
+  .portal-page-header::before {
+    content: "";
+    @apply absolute bottom-0 left-0 top-0 w-1 rounded-full bg-gradient-to-b from-gov-accent via-gov-primary to-gov-header;
+  }
+
+  .portal-eyebrow {
+    @apply text-[11px] font-bold uppercase tracking-[0.14em] text-gov-secondary;
+  }
+
+  .portal-title {
+    @apply text-2xl font-bold tracking-tight text-gov-primary md:text-[1.75rem];
+  }
+
+  .portal-subtitle {
+    @apply max-w-2xl text-sm leading-relaxed text-muted-foreground;
+  }
+
+  .portal-table-wrap {
+    @apply overflow-x-auto;
+  }
+
+  .portal-table {
+    @apply w-full min-w-[640px] text-sm;
+  }
+
+  .portal-table thead tr {
+    @apply border-b border-border bg-gradient-to-b from-gov-surface to-gov-background/60;
+  }
+
+  .portal-table thead th {
+    @apply whitespace-nowrap px-5 py-3.5 text-left text-[11px] font-bold uppercase tracking-wider text-muted-foreground;
+  }
+
+  .portal-table tbody tr {
+    @apply border-b border-border/60 transition-colors duration-150 last:border-b-0;
+  }
+
+  .portal-table tbody tr:hover {
+    @apply bg-gov-primary/[0.03];
+  }
+
+  .portal-table tbody td {
+    @apply px-5 py-4 align-middle text-foreground/85;
+  }
+
+  .portal-table tbody td:first-child {
+    @apply font-semibold text-foreground;
+  }
+
+  .portal-table tfoot tr {
+    @apply border-t-2 border-border/90 bg-gov-surface/70;
+  }
+
+  .portal-table tfoot td {
+    @apply px-5 py-3.5 align-middle text-sm font-semibold tabular-nums text-foreground;
+  }
+
+  .portal-table tfoot td.portal-table-total-label {
+    @apply text-left text-xs font-bold uppercase tracking-wider text-muted-foreground;
+  }
+
+  .portal-table thead th.portal-table-num,
+  .portal-table tbody td.portal-table-num,
+  .portal-table tfoot td.portal-table-num {
+    @apply text-right;
+  }
+
+  .portal-table-link {
+    @apply font-medium text-gov-primary underline-offset-4 transition-colors hover:text-gov-accent hover:underline;
+  }
+
+  .portal-list {
+    @apply space-y-2.5;
+  }
+
+  .portal-list-item {
+    @apply flex flex-wrap items-center justify-between gap-4 rounded-xl border border-border/80 bg-gradient-to-r from-card to-gov-surface/50 px-4 py-4 text-sm shadow-sm transition-all duration-150 hover:border-gov-primary/[0.15] hover:shadow-portal;
+  }
+
+  .portal-empty {
+    @apply flex flex-col items-center justify-center gap-3 px-6 py-14 text-center;
+  }
+
+  .portal-empty-icon {
+    @apply flex h-12 w-12 items-center justify-center rounded-2xl bg-gov-primary/[0.08] text-gov-primary;
+  }
+
+  .portal-empty-text {
+    @apply max-w-xs text-sm leading-relaxed text-muted-foreground;
+  }
+
+  .portal-card-table .portal-table-wrap {
+    @apply rounded-none;
+  }
+
+  .portal-card-table-header {
+    @apply border-b border-border/80 bg-gradient-to-r from-gov-surface/80 to-transparent px-6 py-4;
+  }
+
+  .portal-kpi-grid {
+    @apply grid gap-4 sm:grid-cols-2 xl:grid-cols-4;
+  }
+
+  .portal-badge {
+    @apply inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide;
+  }
+
+  .portal-badge-danger {
+    @apply portal-badge bg-red-50 text-red-700 ring-1 ring-red-200/80;
+  }
+
+  .portal-badge-warning {
+    @apply portal-badge bg-amber-50 text-amber-800 ring-1 ring-amber-200/80;
+  }
+
+  .portal-badge-info {
+    @apply portal-badge bg-sky-50 text-sky-800 ring-1 ring-sky-200/80;
+  }
+
+  .portal-badge-success {
+    @apply portal-badge bg-emerald-50 text-emerald-800 ring-1 ring-emerald-200/80;
+  }
+
+  .portal-badge-neutral {
+    @apply portal-badge bg-muted text-muted-foreground ring-1 ring-border/80;
+  }
+
+  .compliance-indicator-green {
+    @apply inline-flex items-start gap-2 rounded-md border border-emerald-200/80 bg-gradient-to-r from-emerald-50 to-white px-2.5 py-1.5 text-left text-[11px] font-semibold leading-snug text-emerald-900 shadow-sm ring-1 ring-emerald-100/80;
+  }
+
+  .compliance-indicator-yellow {
+    @apply inline-flex items-start gap-2 rounded-md border border-amber-200/80 bg-gradient-to-r from-amber-50 to-white px-2.5 py-1.5 text-left text-[11px] font-semibold leading-snug text-amber-950 shadow-sm ring-1 ring-amber-100/80;
+  }
+
+  .compliance-indicator-red {
+    @apply inline-flex items-start gap-2 rounded-md border border-red-200/80 bg-gradient-to-r from-red-50 to-white px-2.5 py-1.5 text-left text-[11px] font-semibold leading-snug text-red-900 shadow-sm ring-1 ring-red-100/80;
+  }
+
+  .compliance-indicator-dot-green {
+    @apply mt-0.5 h-2.5 w-2.5 shrink-0 rounded-full bg-[#16A34A] ring-2 ring-white;
+  }
+
+  .compliance-indicator-dot-yellow {
+    @apply mt-0.5 h-2.5 w-2.5 shrink-0 rounded-full bg-[#F59E0B] ring-2 ring-white;
+  }
+
+  .compliance-indicator-dot-red {
+    @apply mt-0.5 h-2.5 w-2.5 shrink-0 rounded-full bg-[#DC2626] ring-2 ring-white;
+  }
+
+  .compliance-indicator-header {
+    @apply items-center gap-2.5 rounded-lg px-3.5 py-2 text-sm;
+  }
+
+  .compliance-indicator-header .compliance-indicator-dot-green,
+  .compliance-indicator-header .compliance-indicator-dot-yellow,
+  .compliance-indicator-header .compliance-indicator-dot-red {
+    @apply mt-0 h-3 w-3;
+  }
+
+  .portal-institutional-banner {
+    @apply portal-surface flex flex-col gap-4 overflow-hidden bg-gradient-to-br from-gov-primary/[0.07] via-card to-gov-surface/40 p-5 sm:flex-row sm:items-center sm:p-6;
+  }
+
+  .portal-institutional-banner-seal {
+    @apply flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-gov-primary to-gov-secondary text-white shadow-portal;
+  }
+
+  .portal-institutional-banner-module {
+    @apply text-[11px] font-bold uppercase tracking-[0.16em] text-gov-secondary;
+  }
+
+  .portal-institutional-banner-title {
+    @apply mt-0.5 text-base font-semibold text-gov-primary sm:text-lg;
+  }
+
+  .portal-institutional-banner-ref {
+    @apply mt-1 font-mono text-xs text-muted-foreground;
+  }
+
+  .portal-institutional-banner-mark {
+    @apply flex shrink-0 items-center gap-2 rounded-xl border border-gov-primary/15 bg-gov-primary/[0.06] px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-gov-primary;
+  }
+
+  .portal-institutional-notice {
+    @apply flex gap-4 rounded-2xl border p-4 sm:p-5;
+  }
+
+  .portal-institutional-notice-icon {
+    @apply flex h-10 w-10 shrink-0 items-center justify-center rounded-xl;
+  }
+
+  .portal-institutional-notice-title {
+    @apply text-sm font-semibold text-foreground;
+  }
+
+  .portal-institutional-notice-body {
+    @apply mt-1 text-sm leading-relaxed text-muted-foreground;
+  }
+
+  .portal-institutional-notice-info {
+    @apply border-gov-primary/20 bg-gov-primary/[0.04];
+  }
+
+  .portal-institutional-notice-info .portal-institutional-notice-icon {
+    @apply bg-gov-primary/10 text-gov-primary;
+  }
+
+  .portal-institutional-notice-legal {
+    @apply border-border/80 bg-gov-surface/60;
+  }
+
+  .portal-institutional-notice-legal .portal-institutional-notice-icon {
+    @apply bg-muted text-gov-primary;
+  }
+
+  .portal-institutional-notice-warning {
+    @apply border-amber-200/80 bg-amber-50/50;
+  }
+
+  .portal-institutional-notice-warning .portal-institutional-notice-icon {
+    @apply bg-amber-100 text-amber-800;
+  }
+
+  .portal-institutional-notice-success {
+    @apply border-emerald-200/80 bg-emerald-50/50;
+  }
+
+  .portal-institutional-notice-success .portal-institutional-notice-icon {
+    @apply bg-emerald-100 text-emerald-800;
+  }
+
+  .portal-section-card-header {
+    @apply flex flex-wrap items-start justify-between gap-3 border-b border-border/80 bg-gradient-to-r from-gov-surface/90 via-gov-surface/40 to-transparent px-5 py-4 sm:px-6;
+  }
+
+  .portal-section-card-title {
+    @apply text-sm font-bold uppercase tracking-wide text-gov-primary;
+  }
+
+  .portal-section-card-subtitle {
+    @apply mt-1 text-xs leading-relaxed text-muted-foreground;
+  }
+
+  .portal-data-sheet {
+    @apply grid gap-3;
+  }
+
+  .portal-data-sheet-cell {
+    @apply rounded-xl border border-border/70 bg-gov-surface/40 px-4 py-3.5;
+  }
+
+  .portal-data-sheet-label {
+    @apply text-[11px] font-bold uppercase tracking-wider text-muted-foreground;
+  }
+
+  .portal-data-sheet-value {
+    @apply mt-1.5 text-sm font-medium text-foreground;
+  }
+
+  .portal-registry-num {
+    @apply font-mono text-sm font-semibold tracking-tight text-gov-primary;
+  }
+
+  .portal-tab-pill {
+    @apply inline-flex items-center gap-2 rounded-xl border border-transparent px-4 py-2 text-sm font-medium text-muted-foreground transition-all duration-150 hover:bg-muted/60 hover:text-foreground;
+  }
+
+  .portal-tab-pill-active {
+    @apply border-gov-primary/20 bg-gov-primary text-white shadow-md shadow-gov-primary/20 hover:bg-gov-primary hover:text-white;
+  }
+
+  .portal-tab-pill-count {
+    @apply inline-flex min-w-[1.25rem] items-center justify-center rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-bold tabular-nums text-muted-foreground;
+  }
+
+  .portal-tab-pill-count-active {
+    @apply bg-white/20 text-white;
+  }
+
+  .portal-form-step {
+    @apply flex gap-4 sm:gap-5;
+  }
+
+  .portal-form-step-divider {
+    @apply border-b border-border/60 pb-6;
+  }
+
+  .portal-form-step-marker {
+    @apply flex shrink-0 flex-col items-center;
+  }
+
+  .portal-form-step-num {
+    @apply flex h-8 w-8 items-center justify-center rounded-full bg-gov-primary text-xs font-bold text-white shadow-sm;
+  }
+
+  .portal-form-step-title {
+    @apply text-sm font-semibold text-foreground;
+  }
+
+  .portal-form-step-desc {
+    @apply mt-0.5 text-xs leading-relaxed text-muted-foreground;
+  }
+
+  .portal-official-table-footer {
+    @apply flex flex-wrap items-center justify-between gap-2 border-t border-border/80 bg-gov-surface/50 px-5 py-3 text-xs text-muted-foreground sm:px-6;
+  }
+
+  .portal-identity-card {
+    @apply portal-surface overflow-hidden;
+  }
+
+  .portal-identity-card-header {
+    @apply flex flex-col items-start gap-4 border-b border-border/80 bg-gradient-to-r from-gov-primary/[0.06] via-transparent to-transparent px-4 py-4 sm:flex-row sm:items-center sm:px-6 sm:py-5;
+  }
+
+  .portal-avatar {
+    @apply flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-gov-primary to-gov-secondary text-lg font-bold text-white shadow-portal;
+  }
+
+  .portal-stat-pill {
+    @apply rounded-xl border border-border/70 bg-gov-surface/80 px-4 py-3;
+  }
+
+  .portal-stat-pill-label {
+    @apply text-[11px] font-semibold uppercase tracking-wide text-muted-foreground;
+  }
+
+  .portal-stat-pill-value {
+    @apply mt-1 text-sm font-medium text-foreground;
+  }
+
+  .portal-nav-item {
+    @apply flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-150;
+  }
+
+  .portal-nav-item-active {
+    @apply bg-gradient-to-r from-gov-primary to-gov-secondary text-white shadow-md shadow-gov-primary/25;
+  }
+
+  .portal-nav-item-idle {
+    @apply text-foreground/70 hover:bg-gov-primary/[0.06] hover:text-gov-primary;
+  }
+
+  .portal-nav-icon-wrap {
+    @apply flex h-8 w-8 shrink-0 items-center justify-center rounded-lg transition-colors;
+  }
+
+  .portal-nav-icon-wrap-active {
+    @apply bg-white/20;
+  }
+
+  .portal-nav-icon-wrap-idle {
+    @apply bg-gov-primary/[0.08] text-gov-primary;
+  }
+
+  .portal-header-logo {
+    @apply relative flex h-10 w-10 items-center justify-center overflow-hidden rounded-xl bg-gradient-to-br from-white/20 to-white/5 text-[10px] font-extrabold tracking-tight text-white ring-1 ring-white/20;
+  }
+
+  .portal-header-chip {
+    @apply flex items-center gap-2 rounded-xl bg-white/10 px-3 py-1.5 text-sm ring-1 ring-white/10 transition-colors hover:bg-white/15;
+  }
+
+  .portal-map-host .leaflet-container,
+  .portal-map-host .leaflet-pane,
+  .portal-map-host .leaflet-top,
+  .portal-map-host .leaflet-bottom {
+    z-index: 1 !important;
+  }
+
+  /* -- Workflow / aplikime (modern, i qartë për aplikuesit) -- */
+  .workflow-panel {
+    @apply overflow-hidden rounded-xl border border-border/70 bg-card shadow-sm;
+  }
+
+  .workflow-panel-header {
+    @apply flex flex-col gap-3 border-b border-border/60 bg-muted/30 px-4 py-3.5 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between sm:px-5;
+  }
+
+  .workflow-eyebrow {
+    @apply text-xs font-semibold text-muted-foreground;
+  }
+
+  .workflow-hero {
+    @apply overflow-hidden rounded-xl border border-border/70 bg-gradient-to-br from-card via-card to-gov-primary/[0.04] shadow-sm;
+  }
+
+  .workflow-hero-body {
+    @apply flex flex-col gap-4 px-5 py-5 sm:flex-row sm:items-start sm:justify-between;
+  }
+
+  .workflow-hero-headline {
+    @apply text-lg font-semibold leading-snug tracking-tight text-foreground sm:text-xl;
+  }
+
+  .workflow-hero-ref {
+    @apply mt-2 text-sm text-muted-foreground;
+  }
+
+  .workflow-hero-ref-num {
+    @apply font-mono font-medium text-foreground;
+  }
+
+  .workflow-type-pill {
+    @apply inline-flex items-center rounded-full bg-gov-primary/[0.08] px-2.5 py-0.5 text-xs font-medium text-gov-primary;
+  }
+
+  .workflow-section {
+    @apply workflow-panel;
+  }
+
+  .workflow-section-header {
+    @apply border-b border-border/60 bg-muted/20 px-4 py-4 sm:px-6;
+  }
+
+  .workflow-section-title {
+    @apply text-base font-semibold tracking-tight text-foreground;
+  }
+
+  .workflow-section-desc {
+    @apply mt-1 text-sm leading-relaxed text-muted-foreground;
+  }
+
+  .workflow-section-body {
+    @apply p-4 sm:p-6;
+  }
+
+  .workflow-footer {
+    @apply workflow-panel border-gov-primary/20 bg-gradient-to-br from-gov-primary/[0.03] to-card;
+  }
+
+  .workflow-footer-body {
+    @apply p-5 sm:p-6;
+  }
+
+  .workflow-data-grid {
+    @apply grid gap-3 sm:grid-cols-2;
+  }
+
+  .workflow-data-cell {
+    @apply rounded-xl border border-border/60 bg-muted/20 px-4 py-3.5;
+  }
+
+  .workflow-data-label {
+    @apply text-xs font-medium text-muted-foreground;
+  }
+
+  .workflow-data-value {
+    @apply mt-1 text-sm font-medium text-foreground;
+  }
+
+  .workflow-status-action {
+    @apply inline-flex items-center rounded-full bg-gov-primary px-2.5 py-1 text-xs font-semibold text-white;
+  }
+
+  .workflow-status-waiting {
+    @apply inline-flex items-center rounded-full bg-amber-100 px-2.5 py-1 text-xs font-semibold text-amber-900;
+  }
+
+  .workflow-status-done {
+    @apply inline-flex items-center rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-semibold text-emerald-800;
+  }
+
+  .workflow-status-danger {
+    @apply inline-flex items-center rounded-full bg-red-100 px-2.5 py-1 text-xs font-semibold text-red-800;
+  }
+
+  .workflow-status-neutral {
+    @apply inline-flex items-center rounded-full bg-muted px-2.5 py-1 text-xs font-semibold text-muted-foreground;
+  }
+
+  .workflow-status-outline {
+    @apply inline-flex items-center rounded-full border border-border bg-background px-2.5 py-1 text-xs font-medium text-muted-foreground;
+  }
+
+  .workflow-alert {
+    @apply flex gap-3 rounded-xl border border-border/70 bg-card p-4 text-sm shadow-sm;
+  }
+
+  .workflow-alert-warning {
+    @apply workflow-alert border-amber-200/80 bg-amber-50/50;
+  }
+
+  .workflow-alert-danger {
+    @apply workflow-alert border-red-200/80 bg-red-50/40;
+  }
+
+  .workflow-alert-success {
+    @apply workflow-alert border-emerald-200/80 bg-emerald-50/40;
+  }
+
+  .workflow-alert-info {
+    @apply workflow-alert border-gov-primary/20 bg-gov-primary/[0.04];
+  }
+
+  .workflow-phase-header {
+    @apply border-b border-border/60 bg-muted/20 px-4 py-4 sm:px-5 sm:py-5 md:px-6;
+  }
+
+  .workflow-step-badge {
+    @apply mb-2 inline-flex items-center rounded-full bg-gov-primary/10 px-2.5 py-0.5 text-xs font-semibold text-gov-primary;
+  }
+
+  .workflow-demo-btn {
+    @apply inline-flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-border/80 bg-muted/30 px-4 py-2.5 text-xs font-medium text-muted-foreground transition-all hover:border-gov-primary/30 hover:bg-gov-primary/[0.04] hover:text-gov-primary disabled:opacity-50;
+  }
+
+  .workflow-notice {
+    @apply rounded-xl border border-border/70 bg-muted/30 px-4 py-3.5 text-sm leading-relaxed text-foreground/90;
+  }
+
+  .workflow-notice-waiting {
+    @apply workflow-notice bg-amber-50/60 border-amber-200/60;
+  }
+
+  .workflow-notice-done {
+    @apply workflow-notice bg-emerald-50/60 border-emerald-200/60;
+  }
+
+  .workflow-help-text {
+    @apply text-sm leading-relaxed text-muted-foreground;
+  }
+
+  .workflow-hero-glow {
+    @apply pointer-events-none absolute -right-20 -top-20 h-56 w-56 rounded-full bg-gov-primary/[0.07] blur-3xl;
+  }
+
+  .workflow-hero-glow-secondary {
+    @apply pointer-events-none absolute -bottom-12 left-1/4 h-40 w-40 rounded-full bg-gov-secondary/[0.06] blur-3xl;
+  }
+
+  .workflow-hero-progress {
+    @apply border-t border-border/50 bg-muted/20 px-4 py-3.5 sm:px-5 md:px-6;
+  }
+
+  .workflow-progress-track {
+    @apply h-2 overflow-hidden rounded-full bg-muted/80;
+  }
+
+  .workflow-progress-fill {
+    @apply h-full rounded-full bg-gradient-to-r from-gov-secondary to-gov-primary transition-all duration-500 ease-out;
+  }
+
+  .workflow-action-pill {
+    @apply inline-flex w-full items-center justify-center gap-2 rounded-xl border border-border/70 bg-background px-3.5 py-2.5 text-sm font-medium text-gov-primary shadow-sm transition-all hover:border-gov-primary/30 hover:bg-gov-primary/[0.04] hover:shadow-md sm:w-auto sm:justify-start;
+  }
+
+  .workflow-doc-panel {
+    @apply rounded-xl border border-border/60 bg-muted/20 p-4;
+  }
+
+  .workflow-doc-item {
+    @apply flex items-start gap-3 rounded-xl border border-border/60 bg-background p-3 transition-colors;
+  }
+
+  .workflow-doc-item-done {
+    @apply border-emerald-200/80 bg-emerald-50/40;
+  }
+
+  .workflow-doc-item-missing {
+    @apply border-amber-200/70 bg-amber-50/30;
+  }
+
+  .workflow-upload-zone {
+    @apply flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-border/80 bg-muted/20 px-4 py-8 text-center transition-all hover:border-gov-primary/40 hover:bg-gov-primary/[0.03];
+  }
+
+  .workflow-upload-zone-active {
+    @apply border-gov-primary/50 bg-gov-primary/[0.05];
+  }
+
+  .workflow-link-card {
+    @apply flex items-center justify-between gap-4 rounded-xl border border-border/70 bg-card p-4 shadow-sm transition-all hover:border-gov-primary/25 hover:shadow-md;
+  }
+
+  .workflow-timeline {
+    @apply relative space-y-0;
+  }
+
+  .workflow-timeline-item {
+    @apply relative flex gap-3 pb-5 last:pb-0 sm:gap-4 sm:pb-6;
+  }
+
+  .workflow-timeline-dot {
+    @apply relative z-10 mt-1 flex h-3 w-3 shrink-0 rounded-full bg-gov-primary ring-4 ring-gov-primary/15;
+  }
+
+  .workflow-timeline-line {
+    @apply absolute left-[5px] top-3 bottom-0 w-px bg-border;
+  }
+
+  .workflow-step-counter {
+    @apply inline-flex items-center rounded-full bg-gov-primary/10 px-2.5 py-0.5 text-xs font-semibold text-gov-primary;
+  }
+
+  /* -- Wizard regjistrimi (pronari) - i thjeshtë, një kolonë -- */
+  .reg-wizard-stepper-head {
+    @apply border-b border-border/60 bg-muted/20 px-4 py-4 sm:px-5;
+  }
+
+  .reg-wizard-stepper-title {
+    @apply mt-1 text-lg font-semibold tracking-tight text-foreground;
+  }
+
+  .reg-wizard-stepper-desc {
+    @apply mt-1.5 max-w-2xl text-sm leading-relaxed text-muted-foreground;
+  }
+
+  .reg-wizard-stepper-track {
+    @apply bg-card;
+  }
+
+  .reg-wizard-panel {
+    @apply workflow-panel;
+  }
+
+  .reg-wizard-body {
+    @apply px-4 py-5 sm:px-6 sm:py-6;
+  }
+
+  .reg-wizard-fields {
+    @apply grid gap-4;
+  }
+
+  .reg-wizard-fields-2 {
+    @apply md:grid-cols-2;
+  }
+
+  .reg-wizard-select {
+    @apply flex h-10 w-full rounded-lg border border-input bg-background px-3 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gov-primary/30;
+  }
+
+  .reg-wizard-actions {
+    @apply mt-6 border-t border-border/60 pt-5;
+  }
+
+  .reg-wizard-actions-hint {
+    @apply mb-3 text-xs text-muted-foreground;
+  }
+
+  .reg-wizard-waiting {
+    @apply flex flex-col items-center gap-3 rounded-xl border border-dashed border-amber-300/80 bg-amber-50/40 px-5 py-8 text-center;
+  }
+
+  .reg-wizard-waiting-title {
+    @apply text-sm font-semibold text-foreground;
+  }
+
+  .reg-wizard-waiting-desc {
+    @apply max-w-md text-sm text-muted-foreground;
+  }
+
+  .reg-wizard-subsection {
+    @apply space-y-4 border-b border-border/50 pb-6 last:border-0 last:pb-0;
+  }
+
+  .reg-wizard-subsection-title {
+    @apply text-sm font-semibold text-foreground;
+  }
+
+  .reg-dossier-block {
+    @apply divide-y divide-border/60 rounded-xl border border-border/70 bg-card;
+  }
+
+  .reg-dossier-section {
+    @apply px-4 py-4 sm:px-5;
+  }
+
+  .reg-dossier-section-head {
+    @apply mb-3 flex flex-wrap items-center justify-between gap-2;
+  }
+
+  .reg-dossier-section-title {
+    @apply text-sm font-semibold text-gov-primary;
+  }
+
+  .reg-checklist-compact {
+    @apply grid gap-2 sm:grid-cols-2;
+  }
+
+  .reg-checklist-item {
+    @apply flex items-center gap-2 rounded-lg border px-3 py-2.5 text-sm;
+  }
+
+  .reg-checklist-item-ok {
+    @apply border-emerald-200/80 bg-emerald-50/50 text-foreground;
+  }
+
+  .reg-checklist-item-fail {
+    @apply border-red-200/80 bg-red-50/40 font-medium text-gov-danger;
+  }
+}
+
+@media print {
+  img[data-print-qr="true"] {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .portal-canvas-inner {
+    padding: 0 !important;
+  }
+}

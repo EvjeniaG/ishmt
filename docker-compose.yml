@@ -1,0 +1,84 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: ishmtt-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ishmtt
+      POSTGRES_PASSWORD: ishmtt_secret
+      POSTGRES_DB: ishmtt_registry
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ishmtt -d ishmtt_registry"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  minio:
+    image: minio/minio:latest
+    container_name: ishmtt-minio
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ishmtt_minio
+      MINIO_ROOT_PASSWORD: ishmtt_minio_secret
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+
+  minio-init:
+    image: minio/mc:latest
+    container_name: ishmtt-minio-init
+    depends_on:
+      minio:
+        condition: service_started
+    entrypoint: >
+      /bin/sh -c "
+      sleep 3;
+      mc alias set ishmtt http://minio:9000 ishmtt_minio ishmtt_minio_secret;
+      mc mb ishmtt/ishmtt-documents --ignore-existing;
+      mc anonymous set none ishmtt/ishmtt-documents;
+      exit 0;
+      "
+
+  # Application container (production-like; dev uses local `npm run dev`)
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ishmtt-app
+    restart: unless-stopped
+    profiles:
+      - production
+    depends_on:
+      db:
+        condition: service_healthy
+      minio:
+        condition: service_started
+    environment:
+      DATABASE_URL: postgresql://ishmtt:ishmtt_secret@db:5432/ishmtt_registry?schema=public
+      NEXTAUTH_URL: http://localhost:3000
+      NEXTAUTH_SECRET: ${NEXTAUTH_SECRET:-change-me-in-production}
+      STORAGE_PROVIDER: minio
+      STORAGE_ENDPOINT: http://minio:9000
+      STORAGE_ACCESS_KEY: ishmtt_minio
+      STORAGE_SECRET_KEY: ishmtt_minio_secret
+      STORAGE_BUCKET: ishmtt-documents
+      STORAGE_REGION: us-east-1
+      STORAGE_USE_SSL: "false"
+    ports:
+      - "3000:3000"
+
+volumes:
+  postgres_data:
+  minio_data:
