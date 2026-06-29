@@ -57,7 +57,7 @@ function syntheticNipt(prefix: string, key: string): string {
   return `${prefix[0] ?? "L"}${digits}${(prefix.slice(-1) || "X")}`.slice(0, 20);
 }
 
-/** NIPT nga Excel mund të përmbajë dy vlera në një qelizë — merr të parën e vlefshme. */
+/** NIPT nga Excel mund të përmbajë dy vlera në një qelizë - merr të parën e vlefshme. */
 function sanitizeNipt(value: string | null | undefined): string | null {
   if (!value) return null;
   const raw = value.trim().toUpperCase();
@@ -289,8 +289,8 @@ async function importRegistryRow(
 
   const appNumber = `MIG-${registryKey.replace(/\s+/g, "-")}`.slice(0, 30);
   const registrationDate = row.registrationDate ?? new Date();
-  const buildingAddress = row.vendodhja?.trim() || "—";
-  const manufacturer = row.marka?.trim() || "—";
+  const buildingAddress = row.vendodhja?.trim() || "-";
+  const manufacturer = row.marka?.trim() || "-";
   const serialNumber = row.serialNumber?.trim() || `LEGACY-${registryKey.replace(/\s+/g, "-")}`;
   const status = isAnnulled(row.nenshkrimi) ? ElevatorStatus.DEREGISTERED : ElevatorStatus.ACTIVE;
 
@@ -566,7 +566,7 @@ async function main() {
         registryNumber: row.registryNumber,
       });
       console.log(
-        `${row.registryNumber} | QYTETI: ${row.qyteti ?? "—"} → ${m.municipality?.nameSq ?? "?"} (${m.method})`,
+        `${row.registryNumber} | QYTETI: ${row.qyteti ?? "-"} → ${m.municipality?.nameSq ?? "?"} (${m.method})`,
       );
     }
     console.log(`\n... dhe ${Math.max(0, unique.length - 20)} rreshta të tjerë`);

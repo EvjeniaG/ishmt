@@ -38,14 +38,14 @@ export const NEW_REGISTRATION_FULL_FLOW: GuideStep[] = [
   })),
   {
     step: 7,
-    actor: "ISHMT — Specialist sektori",
+    actor: "ISHMT - Specialist sektori",
     title: "Shqyrtim administrativ",
     description:
       "Marrja e aplikimit në shqyrtim, verifikimi i dokumenteve dhe dërgesa te kryeinspektori ose kthim për korrigjim.",
   },
   {
     step: 8,
-    actor: "ISHMT — Kryeinspektor",
+    actor: "ISHMT - Kryeinspektor",
     title: "Miratim final",
     description:
       "Miratim, refuzim ose kthim te personi përgjegjës, instaluesi ose certifikuesi. Pas miratimit krijohet ashensori në regjistër.",
@@ -187,7 +187,7 @@ export const ROLE_PLAYBOOK = [
   {
     code: ROLE_CODES.CHIEF_INSPECTOR,
     label: ROLE_LABELS[ROLE_CODES.CHIEF_INSPECTOR],
-    portal: "Portali ISHMT — Kryeinspektor",
+    portal: "Portali ISHMT - Kryeinspektor",
     summary: "Vendimi final për regjistrimin dhe aplikimet.",
     actions: [
       "Miratim / refuzim / kthim aplikimesh",
@@ -198,14 +198,14 @@ export const ROLE_PLAYBOOK = [
   {
     code: ROLE_CODES.ISHMT_DIRECTOR,
     label: ROLE_LABELS[ROLE_CODES.ISHMT_DIRECTOR],
-    portal: "Portali ISHMT — Drejtor Teknik",
+    portal: "Portali ISHMT - Drejtor Teknik",
     summary: "Mbikëqyrje operacionale.",
     actions: ["Miratime, caktim inspektimesh terreni, dashboard"],
   },
   {
     code: ROLE_CODES.FIELD_INSPECTOR,
     label: ROLE_LABELS[ROLE_CODES.FIELD_INSPECTOR],
-    portal: "Portali ISHMT — Terren",
+    portal: "Portali ISHMT - Terren",
     summary: "Verifikim fizik në objekt.",
     actions: ["Inspektime terreni të caktuara", "Regjistrim rezultati verifikimi"],
   },
@@ -267,7 +267,7 @@ export const UX_HIGHLIGHTS = [
   },
   {
     title: "Delegim i palëve",
-    text: "Instaluesi dhe certifikuesi marrin ftesë, pranojnë dhe plotësojnë vetëm pjesën e tyre — pa hyrë në të dhënat e palës tjetër.",
+    text: "Instaluesi dhe certifikuesi marrin ftesë, pranojnë dhe plotësojnë vetëm pjesën e tyre - pa hyrë në të dhënat e palës tjetër.",
   },
   {
     title: "Checklist dokumentesh",

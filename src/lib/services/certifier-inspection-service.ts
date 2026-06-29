@@ -433,7 +433,7 @@ export class CertifierInspectionService {
     return elevator;
   }
 
-  /** Plotëson inspektimin periodik legacy / pa dokument — ngarkim raporti nga OMI. */
+  /** Plotëson inspektimin periodik legacy / pa dokument - ngarkim raporti nga OMI. */
   static async enrichPeriodicInspection(
     ctx: AuthContext,
     input: {
