@@ -5,6 +5,7 @@ import {
 import { executeLicenseExpiryJobWithLogging, LICENSE_EXPIRY_JOB_TYPE } from "@/lib/jobs/license-expiry-job";
 import { ComplianceService } from "@/lib/services/compliance-service";
 import { InvitationService } from "@/lib/services/invitation-service";
+import { OwnerDashboardService } from "@/lib/services/owner-dashboard-service";
 import { ReminderSchedulerService } from "@/lib/services/reminder-scheduler-service";
 
 export const CRON_JOB_TYPES = [
@@ -13,6 +14,7 @@ export const CRON_JOB_TYPES = [
   "INVITATION_EXPIRY",
   "COMPLIANCE_RECALC",
   "REMINDERS",
+  "OWNER_COMPLIANCE_NOTIFICATIONS",
 ] as const;
 
 export type CronJobType = (typeof CRON_JOB_TYPES)[number];
@@ -44,6 +46,11 @@ export async function runScheduledJobs(jobTypes?: string[]) {
     const scheduled = await ReminderSchedulerService.scheduleUpcomingDeadlines();
     const sent = await ReminderSchedulerService.runDueReminders();
     results.REMINDERS = { scheduled, sent };
+  }
+
+  if (shouldRun("OWNER_COMPLIANCE_NOTIFICATIONS")) {
+    results.OWNER_COMPLIANCE_NOTIFICATIONS =
+      await OwnerDashboardService.syncAllComplianceNotifications();
   }
 
   return results;

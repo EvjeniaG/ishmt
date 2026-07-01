@@ -8,6 +8,7 @@ import {
 } from "@prisma/client";
 import { db } from "@/lib/db";
 import { AuditService } from "@/lib/audit/audit-service";
+import { ROLE_CODES } from "@/lib/constants/roles";
 import { NotificationService } from "@/lib/services/notification-service";
 import type { AuthContext } from "@/lib/permissions/guards";
 
@@ -111,16 +112,29 @@ export class CitizenReportService {
 
   static async listForReview(filters?: {
     status?: CitizenReportStatus;
+    statuses?: CitizenReportStatus[];
     type?: CitizenReportType;
     assignedToMe?: boolean;
     inspectorId?: string;
   }) {
     const where: Prisma.CitizenReportWhereInput = {};
-    if (filters?.status) where.status = filters.status;
+    if (filters?.statuses?.length) {
+      where.status = { in: filters.statuses };
+    } else if (filters?.status) {
+      where.status = filters.status;
+    }
     if (filters?.type) where.type = filters.type;
     if (filters?.assignedToMe && filters.inspectorId) {
       where.assignedInspectorId = filters.inspectorId;
     }
+
+    const closedStatuses: CitizenReportStatus[] = [
+      CitizenReportStatus.RESOLVED,
+      CitizenReportStatus.DISMISSED,
+    ];
+    const isClosedRegistry =
+      Boolean(filters?.statuses?.length) &&
+      filters!.statuses!.every((status) => closedStatuses.includes(status));
 
     return db.citizenReport.findMany({
       where,
@@ -129,7 +143,9 @@ export class CitizenReportService {
         municipality: { select: { nameSq: true } },
         assignedInspector: { select: { id: true, firstName: true, lastName: true } },
       },
-      orderBy: [{ priority: "desc" }, { createdAt: "desc" }],
+      orderBy: isClosedRegistry
+        ? [{ resolvedAt: "desc" }, { createdAt: "desc" }]
+        : [{ priority: "desc" }, { createdAt: "desc" }],
     });
   }
 
@@ -151,6 +167,10 @@ export class CitizenReportService {
   }
 
   static async assignToSelf(ctx: AuthContext, reportId: string) {
+    if (ctx.roleCode !== ROLE_CODES.FIELD_INSPECTOR) {
+      throw new Error("Vetëm inspektorët e terrenit mund të merren raportin në ngarkim.");
+    }
+
     const report = await db.citizenReport.findFirst({ where: { id: reportId } });
     if (!report) throw new Error("Raporti nuk u gjet.");
 

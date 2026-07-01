@@ -6,10 +6,10 @@ import { useRouter } from "next/navigation";
 import { Fragment, useMemo, useState } from "react";
 import { FieldInspectionAssignmentStatus } from "@prisma/client";
 import {
-  AlertTriangle,
   Ban,
   CheckCircle2,
-  ClipboardCheck,
+  Download,
+  FileText,
   Search,
 } from "lucide-react";
 import {
@@ -22,7 +22,6 @@ import {
 import { PortalEmptyState, PortalTableWrap } from "@/components/shared/portal-table";
 import { MetricCard } from "@/components/shared/metric-card";
 import {
-  DataSheet,
   OfficialTableFooter,
   PortalTabBar,
   RegistryNumber,
@@ -38,6 +37,7 @@ import {
 } from "@/lib/ishmt/field-inspection-labels";
 import { WorkflowStatusChip } from "@/components/applications/application-status-badge";
 import type { FieldInspectorOption } from "@/lib/services/ishmt-field-inspection-service";
+import type { StatusTone } from "@/lib/registration/status-presentation";
 import { cn } from "@/lib/utils";
 import { uploadElevatorDocumentClient } from "@/lib/documents/upload-elevator-document-client";
 import { COMPLIANCE_DOCUMENT_ACCEPT, COMPLIANCE_DOCUMENT_HINT } from "@/lib/constants/document-upload";
@@ -55,7 +55,14 @@ export type FieldInspectionAssignmentRow = {
   };
   assignee: { id: string; firstName: string; lastName: string };
   assignedBy: { firstName: string; lastName: string };
-  inspection: { id: string; result: string | null; conductedDate: Date | null } | null;
+  inspection: {
+    id: string;
+    result: string | null;
+    conductedDate: Date | null;
+    findings: string | null;
+    reportDocumentId: string | null;
+    reportDocument: { id: string; originalFilename: string } | null;
+  } | null;
 };
 
 function FormError({ error }: { error: string | null }) {
@@ -91,6 +98,73 @@ function FormDivider() {
 
 function selectClassName() {
   return "flex h-10 w-full rounded-lg border border-border/80 bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gov-primary/30";
+}
+
+function inspectionResultTone(result: string | null | undefined): StatusTone {
+  if (result === "PASS") return "done";
+  if (result === "FAIL") return "danger";
+  if (result === "CONDITIONAL") return "waiting";
+  return "neutral";
+}
+
+function AssignmentStatusCell({ assignment }: { assignment: FieldInspectionAssignmentRow }) {
+  if (
+    assignment.status === FieldInspectionAssignmentStatus.COMPLETED &&
+    assignment.inspection?.result
+  ) {
+    const resultLabel =
+      INSPECTION_RESULT_LABELS[assignment.inspection.result] ?? assignment.inspection.result;
+    return (
+      <WorkflowStatusChip label={resultLabel} tone={inspectionResultTone(assignment.inspection.result)} />
+    );
+  }
+  return <StatusBadge status={assignment.status} />;
+}
+
+function assignmentDisplayDate(assignment: FieldInspectionAssignmentRow) {
+  if (
+    assignment.status === FieldInspectionAssignmentStatus.COMPLETED &&
+    assignment.inspection?.conductedDate
+  ) {
+    return formatDateSq(assignment.inspection.conductedDate);
+  }
+  return formatDateSq(assignment.scheduledDate);
+}
+
+function CompletedInspectionSummary({
+  inspection,
+}: {
+  inspection: NonNullable<FieldInspectionAssignmentRow["inspection"]>;
+}) {
+  return (
+    <div className="overflow-hidden rounded-xl border border-border/70 bg-card divide-y divide-border/60">
+      {inspection.findings && (
+        <div className="px-4 py-3.5 sm:px-5">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">Vërejtje</p>
+          <p className="mt-1.5 text-sm leading-relaxed text-foreground">{inspection.findings}</p>
+        </div>
+      )}
+
+      <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3.5 sm:px-5">
+        <div className="flex min-w-0 items-center gap-3">
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-border/60 bg-muted/30 text-muted-foreground">
+            <FileText className="h-4 w-4" aria-hidden />
+          </span>
+          <p className="truncate text-sm font-medium text-foreground">
+            {inspection.reportDocument?.originalFilename ?? "Pa raport"}
+          </p>
+        </div>
+        {inspection.reportDocumentId && (
+          <Button asChild size="sm" variant="outline" className="h-9 shrink-0 rounded-lg px-3 text-xs">
+            <a href={`/api/documents/${inspection.reportDocumentId}/download`}>
+              <Download className="mr-1.5 h-3.5 w-3.5" aria-hidden />
+              Shkarko
+            </a>
+          </Button>
+        )}
+      </div>
+    </div>
+  );
 }
 
 export function FieldInspectionSummaryCards({
@@ -385,9 +459,20 @@ export function FieldInspectionAssignmentsTable({
               </td>
               <td>
                 {a.inspection?.result ? (
-                  <span className="text-sm font-semibold">
-                    {INSPECTION_RESULT_LABELS[a.inspection.result] ?? a.inspection.result}
-                  </span>
+                  <div className="space-y-1">
+                    <span className="text-sm font-semibold">
+                      {INSPECTION_RESULT_LABELS[a.inspection.result] ?? a.inspection.result}
+                    </span>
+                    {a.inspection.reportDocumentId && (
+                      <a
+                        href={`/api/documents/${a.inspection.reportDocumentId}/download`}
+                        className="inline-flex items-center gap-1 text-xs font-medium text-gov-primary hover:underline"
+                      >
+                        <Download className="h-3 w-3 shrink-0" aria-hidden />
+                        Raporti
+                      </a>
+                    )}
+                  </div>
                 ) : (
                   <span className="text-muted-foreground">-</span>
                 )}
@@ -489,85 +574,46 @@ function ConductInspectionPanel({
     assignment.status === FieldInspectionAssignmentStatus.IN_PROGRESS;
 
   return (
-    <div className="space-y-5 border-t border-border/80 bg-gradient-to-b from-gov-surface/40 to-card p-5 sm:p-6">
-      <DataSheet
-        columns={4}
-        items={[
-          {
-            label: "Numri i regjistrit",
-            value: assignment.elevator.registryNumber,
-            mono: true,
-          },
-          { label: "Adresa e objektit", value: assignment.elevator.buildingAddress ?? "-" },
-          { label: "Bashkia", value: assignment.elevator.municipality?.nameSq ?? "-" },
-          {
-            label: "Data e planifikuar",
-            value: formatDateSq(assignment.scheduledDate),
-          },
-        ]}
-      />
-
-      {assignment.instructions && (
-        <div className="portal-institutional-notice portal-institutional-notice-info">
-          <div className="portal-institutional-notice-icon">
-            <AlertTriangle className="h-4 w-4" />
-          </div>
-          <div>
-            <p className="portal-institutional-notice-title">Udhëzime operative</p>
-            <p className="portal-institutional-notice-body">{assignment.instructions}</p>
-          </div>
+    <div className="space-y-4 border-t border-border/70 bg-muted/10 p-4 sm:p-5">
+      {assignment.instructions && canConduct && (
+        <div className="rounded-xl border border-sky-200/70 bg-sky-50/50 px-4 py-3">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-sky-800/70">Udhëzime</p>
+          <p className="mt-1 text-sm leading-relaxed text-foreground">{assignment.instructions}</p>
         </div>
       )}
 
       {assignment.status === FieldInspectionAssignmentStatus.COMPLETED && assignment.inspection && (
-        <div className="portal-institutional-notice portal-institutional-notice-success">
-          <div className="portal-institutional-notice-icon">
-            <CheckCircle2 className="h-4 w-4" />
-          </div>
-          <div>
-            <p className="portal-institutional-notice-title">Inspektimi u regjistrua</p>
-            <p className="portal-institutional-notice-body">
-              Rezultati:{" "}
-              <strong>{INSPECTION_RESULT_LABELS[assignment.inspection.result ?? ""] ?? assignment.inspection.result}</strong>
-              {assignment.inspection.conductedDate && (
-                <> · Data: {formatDateSq(assignment.inspection.conductedDate)}</>
-              )}
-            </p>
-          </div>
-        </div>
+        <CompletedInspectionSummary inspection={assignment.inspection} />
       )}
 
       {canConduct && (
-        <SectionCard title="Regjistrimi i rezultatit" subtitle="Faza 3: dokumentimi i verifikimit fizik" padded>
-          <div className="space-y-5">
+        <div className="overflow-hidden rounded-xl border border-border/70 bg-card">
+          <div className="border-b border-border/60 px-4 py-3 sm:px-5">
+            <h3 className="text-sm font-semibold text-foreground">Verifikimi</h3>
+          </div>
+
+          <div className="space-y-4 p-4 sm:p-5">
             {assignment.status === FieldInspectionAssignmentStatus.SCHEDULED && (
-              <div className="portal-institutional-notice portal-institutional-notice-warning">
-                <div className="portal-institutional-notice-icon">
-                  <ClipboardCheck className="h-4 w-4" />
-                </div>
-                <div className="flex flex-1 flex-wrap items-center justify-between gap-3">
-                  <p className="portal-institutional-notice-body !mt-0 text-foreground">
-                    Konfirmoni nisjen e detyrës para se të shkoni në objekt.
-                  </p>
-                  <Button type="button" size="sm" variant="outline" className="rounded-xl" onClick={() => void start()}>
-                    Konfirmo nisjen në terren
-                  </Button>
-                </div>
+              <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-amber-200/70 bg-amber-50/40 px-3.5 py-3">
+                <p className="text-sm text-foreground">Konfirmoni nisjen para shkimit në objekt.</p>
+                <Button type="button" size="sm" variant="outline" className="h-8 rounded-lg text-xs" onClick={() => void start()}>
+                  Nis në terren
+                </Button>
               </div>
             )}
 
             <div className="grid gap-4 sm:grid-cols-2">
-              <div className="space-y-2">
-                <Label>Data e inspektimit në objekt</Label>
+              <div className="space-y-1.5">
+                <Label className="text-xs text-muted-foreground">Data</Label>
                 <Input
                   type="date"
                   value={conductedDate}
                   onChange={(e) => setConductedDate(e.target.value)}
-                  className="rounded-xl"
+                  className="h-10 rounded-lg"
                 />
               </div>
-              <div className="space-y-2">
-                <Label>Rezultati i verifikimit</Label>
+              <div className="space-y-1.5">
+                <Label className="text-xs text-muted-foreground">Rezultati</Label>
                 <select
                   className={selectClassName()}
                   value={result}
@@ -580,51 +626,62 @@ function ConductInspectionPanel({
               </div>
             </div>
 
-            <div className="space-y-2">
-              <Label>Gjetjet dhe vërejtimet</Label>
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground">Vërejtje</Label>
               <textarea
                 value={findings}
                 onChange={(e) => setFindings(e.target.value)}
-                rows={4}
-                className="w-full rounded-xl border border-border/80 bg-background px-3 py-2.5 text-sm"
-                placeholder="Përshkrim i gjendjes në objekt, mosputhje, kushte ose rekomandime…"
+                rows={3}
+                className="w-full rounded-lg border border-border/80 bg-background px-3 py-2.5 text-sm"
+                placeholder="Gjendja në objekt, mosputhje, rekomandime…"
               />
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor={`report-${assignment.id}`}>Raporti i inspektimit *</Label>
+            <div className="space-y-1.5">
+              <Label htmlFor={`report-${assignment.id}`} className="text-xs text-muted-foreground">
+                Raporti <span className="text-red-600">*</span>
+              </Label>
               <Input
                 id={`report-${assignment.id}`}
                 type="file"
                 accept={COMPLIANCE_DOCUMENT_ACCEPT}
                 onChange={(event) => setReportFile(event.target.files?.[0] ?? null)}
-                className="rounded-xl"
+                className="h-10 rounded-lg text-sm"
               />
               <p className="text-[11px] text-muted-foreground">{COMPLIANCE_DOCUMENT_HINT}</p>
               {reportFile && (
-                <p className="text-xs text-muted-foreground">Skedari: {reportFile.name}</p>
+                <p className="flex items-center gap-1.5 text-xs text-foreground">
+                  <FileText className="h-3.5 w-3.5 text-muted-foreground" aria-hidden />
+                  {reportFile.name}
+                </p>
               )}
             </div>
 
-            <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-border/70 bg-muted/20 px-4 py-3 text-sm">
-              <input type="checkbox" checked={confirmed} onChange={(e) => setConfirmed(e.target.checked)} className="mt-1" />
-              <span>
-                Konfirmoj se të dhënat e regjistruara pasqyrojnë gjendjen reale të verifikuar në terren dhe mbaj
-                përgjegjësi për regjistrimin.
+            <label className="flex cursor-pointer items-start gap-2.5 rounded-lg border border-border/60 bg-muted/15 px-3.5 py-3 text-sm">
+              <input
+                type="checkbox"
+                checked={confirmed}
+                onChange={(e) => setConfirmed(e.target.checked)}
+                className="mt-0.5"
+              />
+              <span className="text-muted-foreground">
+                Konfirmoj saktësinë e të dhënave dhe mbaj përgjegjësi për regjistrimin.
               </span>
             </label>
 
             <FormError error={error} />
-            <Button
-              type="button"
-              disabled={submitting}
-              className="rounded-xl font-semibold shadow-md shadow-gov-primary/15"
-              onClick={() => void complete()}
-            >
-              {submitting ? "Duke ruajtur…" : "Ruaj rezultatin e inspektimit"}
-            </Button>
+            <div className="flex justify-end border-t border-border/60 pt-4">
+              <Button
+                type="button"
+                disabled={submitting}
+                className="h-10 rounded-lg px-5 text-sm font-semibold"
+                onClick={() => void complete()}
+              >
+                {submitting ? "Duke ruajtur…" : "Ruaj rezultatin"}
+              </Button>
+            </div>
           </div>
-        </SectionCard>
+        </div>
       )}
     </div>
   );
@@ -677,7 +734,7 @@ export function MyFieldInspectionsList({ assignments }: { assignments: FieldInsp
 
   const tabs = [
     { id: "active" as const, label: "Aktive" },
-    { id: "completed" as const, label: "Përfunduar / anuluar" },
+    { id: "completed" as const, label: "Përfunduar" },
     { id: "all" as const, label: "Të gjitha" },
   ];
 
@@ -715,11 +772,9 @@ export function MyFieldInspectionsList({ assignments }: { assignments: FieldInsp
                         {a.elevator.buildingAddress ?? "-"} · {a.elevator.municipality?.nameSq ?? "-"}
                       </span>
                     </td>
-                    <td className="whitespace-nowrap tabular-nums">
-                      {formatDateSq(a.scheduledDate)}
-                    </td>
+                    <td className="whitespace-nowrap tabular-nums">{assignmentDisplayDate(a)}</td>
                     <td>
-                      <StatusBadge status={a.status} />
+                      <AssignmentStatusCell assignment={a} />
                     </td>
                     <td className="text-right">
                       <Button
@@ -729,7 +784,7 @@ export function MyFieldInspectionsList({ assignments }: { assignments: FieldInsp
                         className={cn("rounded-lg text-xs", expandedId === a.id && "shadow-sm")}
                         onClick={() => setExpandedId(expandedId === a.id ? null : a.id)}
                       >
-                        {expandedId === a.id ? "Mbyll dosjen" : "Hap dosjen"}
+                        {expandedId === a.id ? "Mbyll" : "Dosja"}
                       </Button>
                     </td>
                   </tr>

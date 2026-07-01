@@ -10,6 +10,7 @@ import { NotificationService } from "@/lib/services/notification-service";
 import type { AuthContext } from "@/lib/permissions/guards";
 import { hasPermission } from "@/lib/permissions/guards";
 import { PERMISSIONS } from "@/lib/permissions/codes";
+import { INSPECTION_RESULT_LABELS } from "@/lib/ishmt/field-inspection-labels";
 import {
   ISHMT_FIELD_INSPECTOR_ROLES,
   canAssignFieldInspections,
@@ -27,7 +28,16 @@ const assignmentInclude = {
   },
   assignee: { select: { id: true, firstName: true, lastName: true, email: true } },
   assignedBy: { select: { id: true, firstName: true, lastName: true } },
-  inspection: { select: { id: true, result: true, conductedDate: true } },
+  inspection: {
+    select: {
+      id: true,
+      result: true,
+      conductedDate: true,
+      findings: true,
+      reportDocumentId: true,
+      reportDocument: { select: { id: true, originalFilename: true } },
+    },
+  },
 } as const;
 
 export type FieldInspectorOption = {
@@ -215,7 +225,9 @@ export class IshmtFieldInspectionService {
           in: [FieldInspectionAssignmentStatus.SCHEDULED, FieldInspectionAssignmentStatus.IN_PROGRESS],
         },
       },
-      include: { elevator: { select: { id: true, registryNumber: true } } },
+      include: {
+        elevator: { select: { id: true, registryNumber: true } },
+      },
     });
     if (!assignment) throw new Error("Caktimi nuk u gjet ose është përfunduar.");
 
@@ -233,23 +245,24 @@ export class IshmtFieldInspectionService {
       FAIL: InspectionResult.FAIL,
       CONDITIONAL: InspectionResult.CONDITIONAL,
     };
+    const mappedResult = resultMap[input.result];
 
-    return db.$transaction(async (tx) => {
+    const updated = await db.$transaction(async (tx) => {
       const inspection = await tx.inspection.create({
         data: {
           elevatorId: assignment.elevatorId,
           inspectorId: ctx.userId,
           type: InspectionType.EXTRAORDINARY,
-          status: InspectionResult.PENDING,
+          status: mappedResult,
           scheduledDate: assignment.scheduledDate,
           conductedDate: input.conductedDate,
-          result: resultMap[input.result],
+          result: mappedResult,
           findings: input.findings?.trim() || null,
           reportDocumentId: input.reportDocumentId ?? null,
         },
       });
 
-      const updated = await tx.fieldInspectionAssignment.update({
+      const updatedAssignment = await tx.fieldInspectionAssignment.update({
         where: { id: assignmentId },
         data: {
           status: FieldInspectionAssignmentStatus.COMPLETED,
@@ -273,8 +286,19 @@ export class IshmtFieldInspectionService {
         tx,
       );
 
-      return updated;
+      return updatedAssignment;
     });
+
+    const resultLabel = INSPECTION_RESULT_LABELS[input.result] ?? input.result;
+    await NotificationService.create({
+      userId: assignment.assignedById,
+      title: "Inspektim terreni u përfundua",
+      body: `Ashensori ${assignment.elevator.registryNumber}: ${resultLabel}.`,
+      entityType: "field_inspection_assignment",
+      entityId: assignmentId,
+    });
+
+    return updated;
   }
 
   static async cancel(ctx: AuthContext, assignmentId: string, reason: string) {

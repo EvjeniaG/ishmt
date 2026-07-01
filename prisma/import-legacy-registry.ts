@@ -31,6 +31,7 @@ import {
 } from "../src/lib/elevators/format-inspection-findings";
 import { displayOmBody, normalizeOmBodyOrganizationName } from "../src/lib/elevators/format-om-body";
 import { resolveLegacyDistrictCode as districtFromMun } from "../src/lib/registration/municipality-legacy-district";
+import { QrService } from "../src/lib/services/qr-service";
 
 const prisma = new PrismaClient();
 
@@ -57,7 +58,7 @@ function syntheticNipt(prefix: string, key: string): string {
   return `${prefix[0] ?? "L"}${digits}${(prefix.slice(-1) || "X")}`.slice(0, 20);
 }
 
-/** NIPT nga Excel mund të përmbajë dy vlera në një qelizë — merr të parën e vlefshme. */
+/** NIPT nga Excel mund të përmbajë dy vlera në një qelizë - merr të parën e vlefshme. */
 function sanitizeNipt(value: string | null | undefined): string | null {
   if (!value) return null;
   const raw = value.trim().toUpperCase();
@@ -289,8 +290,8 @@ async function importRegistryRow(
 
   const appNumber = `MIG-${registryKey.replace(/\s+/g, "-")}`.slice(0, 30);
   const registrationDate = row.registrationDate ?? new Date();
-  const buildingAddress = row.vendodhja?.trim() || "—";
-  const manufacturer = row.marka?.trim() || "—";
+  const buildingAddress = row.vendodhja?.trim() || "-";
+  const manufacturer = row.marka?.trim() || "-";
   const serialNumber = row.serialNumber?.trim() || `LEGACY-${registryKey.replace(/\s+/g, "-")}`;
   const status = isAnnulled(row.nenshkrimi) ? ElevatorStatus.DEREGISTERED : ElevatorStatus.ACTIVE;
 
@@ -424,6 +425,7 @@ async function importRegistryRow(
           inspectorId: ctx.inspectorId,
           type: InspectionType.INITIAL,
           status: InspectionResult.PASS,
+          result: InspectionResult.PASS,
           scheduledDate: row.examinationDate ?? registrationDate,
           conductedDate: row.examinationDate,
           examinationType: row.llojiEkzaminimit,
@@ -437,6 +439,13 @@ async function importRegistryRow(
   });
 
   ctx.stats.imported++;
+  try {
+    await QrService.ensureQrForElevator(elevatorId, ctx.actorId);
+  } catch (err) {
+    ctx.stats.errors.push(
+      `QR ${row.registryNumber}: ${err instanceof Error ? err.message : String(err)}`,
+    );
+  }
   return elevatorId;
 }
 
@@ -476,6 +485,7 @@ async function importPeriodicEntry(
       inspectorId: ctx.inspectorId,
       type: InspectionType.PERIODIC,
       status: InspectionResult.PASS,
+      result: InspectionResult.PASS,
       scheduledDate: conducted ?? new Date(),
       conductedDate: conducted,
       approvedBodyNumber: entry.trupa,
@@ -566,7 +576,7 @@ async function main() {
         registryNumber: row.registryNumber,
       });
       console.log(
-        `${row.registryNumber} | QYTETI: ${row.qyteti ?? "—"} → ${m.municipality?.nameSq ?? "?"} (${m.method})`,
+        `${row.registryNumber} | QYTETI: ${row.qyteti ?? "-"} → ${m.municipality?.nameSq ?? "?"} (${m.method})`,
       );
     }
     console.log(`\n... dhe ${Math.max(0, unique.length - 20)} rreshta të tjerë`);

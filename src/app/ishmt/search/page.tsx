@@ -8,12 +8,21 @@ import { OfficialTableFooter, SectionCard } from "@/components/shared/institutio
 import { ComplianceService } from "@/lib/services/compliance-service";
 import { getAuthSession } from "@/lib/auth";
 import { requireAuthForPage } from "@/lib/auth/page-guards";
-import { IshmtSearchService } from "@/lib/services/ishmt-search-service";
+import {
+  IshmtSearchService,
+  type ComplianceGapFilter,
+} from "@/lib/services/ishmt-search-service";
 import { db } from "@/lib/db";
 import { canApproveApplications } from "@/lib/permissions/ishmt-roles";
 import { ROLE_CODES } from "@/lib/constants/roles";
 import { isIshmtStaffRole } from "@/lib/permissions/routes";
 import { labelElevatorStatus } from "@/lib/constants/display-labels";
+
+const COMPLIANCE_GAP_LABELS: Record<ComplianceGapFilter, string> = {
+  "missing-inspection": "Mungesë inspektimi të regjistruar",
+  "missing-maintenance-company": "Mungesë kompanie mirëmbajtjeje",
+  "missing-maintenance-record": "Mungesë regjistrimi mirëmbajtjeje",
+};
 
 export default async function NationalSearchPage({
   searchParams,
@@ -22,7 +31,9 @@ export default async function NationalSearchPage({
     q?: string;
     status?: string;
     compliance?: string;
+    complianceGap?: string;
     municipalityId?: string;
+    missingQrPlacement?: string;
     page?: string;
   }>;
 }) {
@@ -34,6 +45,12 @@ export default async function NationalSearchPage({
   const ctx = await requireAuthForPage();
   const page = parseInt(params.page ?? "1", 10) || 1;
   const isChief = canApproveApplications(session.user.roleCode);
+  const missingQrPlacement = params.missingQrPlacement === "1";
+  const complianceGap = params.complianceGap as ComplianceGapFilter | undefined;
+  const complianceGapLabel =
+    complianceGap && complianceGap in COMPLIANCE_GAP_LABELS
+      ? COMPLIANCE_GAP_LABELS[complianceGap as ComplianceGapFilter]
+      : null;
 
   const municipalities = await db.geoMunicipality.findMany({
     where: { isActive: true },
@@ -45,11 +62,25 @@ export default async function NationalSearchPage({
     query: params.q,
     status: params.status as ElevatorStatus | undefined,
     compliance: params.compliance as ComplianceIndicator | undefined,
+    complianceGap:
+      complianceGap && complianceGap in COMPLIANCE_GAP_LABELS
+        ? (complianceGap as ComplianceGapFilter)
+        : undefined,
     municipalityId: params.municipalityId,
+    missingQrPlacement,
     page,
   });
 
   const pageTitle = isChief ? "Regjistri i ashensorëve" : "Kërkim kombëtar i regjistrit";
+
+  const exportQuery = new URLSearchParams();
+  if (params.q) exportQuery.set("q", params.q);
+  if (params.status) exportQuery.set("status", params.status);
+  if (params.compliance) exportQuery.set("compliance", params.compliance);
+  if (params.complianceGap) exportQuery.set("complianceGap", params.complianceGap);
+  if (params.municipalityId) exportQuery.set("municipalityId", params.municipalityId);
+  if (missingQrPlacement) exportQuery.set("missingQrPlacement", "1");
+  const exportHref = `/api/ishmt/registry-export?${exportQuery.toString()}`;
 
   return (
     <AppShell title={pageTitle}>
@@ -58,14 +89,22 @@ export default async function NationalSearchPage({
         title={pageTitle}
         description="Kërko sipas numrit të regjistrit, serialit, adresës, personit përgjegjës të ashensorit ose certifikatës. Hap dosjen e plotë digjitale për çdo ashensor."
         actions={
-          session.user.roleCode === ROLE_CODES.ADMIN ? (
+          <div className="flex flex-wrap gap-2">
             <a
-              href="/api/admin/register-export"
-              className="inline-flex h-10 items-center rounded-md border border-gov-primary px-4 text-sm font-medium text-gov-primary hover:bg-gov-primary/5"
+              href={exportHref}
+              className="inline-flex h-10 items-center rounded-md bg-gov-primary px-4 text-sm font-medium text-white hover:opacity-90"
             >
-              Eksporto regjistrin (Excel)
+              Shkarko Excel ({result.total} regjistrime)
             </a>
-          ) : undefined
+            {session.user.roleCode === ROLE_CODES.ADMIN && (
+              <a
+                href="/api/admin/register-export"
+                className="inline-flex h-10 items-center rounded-md border border-gov-primary px-4 text-sm font-medium text-gov-primary hover:bg-gov-primary/5"
+              >
+                Eksport i plotë (Aneks 1)
+              </a>
+            )}
+          </div>
         }
       >
         <SectionCard title="Filtro" subtitle="Kriteret e kërkimit në regjistër" padded>
@@ -94,6 +133,19 @@ export default async function NationalSearchPage({
                 <option key={m.id} value={m.id}>{m.nameSq}</option>
               ))}
             </select>
+            {params.complianceGap && (
+              <input type="hidden" name="complianceGap" value={params.complianceGap} />
+            )}
+            <label className="flex items-center gap-2 text-sm md:col-span-2">
+              <input
+                type="checkbox"
+                name="missingQrPlacement"
+                value="1"
+                defaultChecked={missingQrPlacement}
+                className="rounded border"
+              />
+              Pa foto vendosjeje QR (personi përgjegjës nuk e ka dokumentuar)
+            </label>
             <button type="submit" className="rounded-md bg-gov-primary px-4 py-2 text-sm font-medium text-white hover:opacity-90">
               Kërko
             </button>
@@ -102,7 +154,15 @@ export default async function NationalSearchPage({
 
         <SectionCard
           title="Rezultatet"
-          subtitle="Ashensorët që përputhen me kriteret e kërkimit"
+          subtitle={
+            complianceGapLabel
+              ? `Lista e ashensorëve: ${complianceGapLabel}`
+              : missingQrPlacement
+                ? "Ashensorë pa foto vendosjeje QR ose pa kod QR"
+                : params.compliance
+                  ? `Indikatori: ${ComplianceService.getLabel(params.compliance as ComplianceIndicator)}`
+                  : "Ashensorët që përputhen me kriteret e kërkimit"
+          }
           meta={
             <span className="portal-badge-neutral tabular-nums">{result.total} regjistrime</span>
           }

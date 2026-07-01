@@ -190,7 +190,8 @@ export class ComplianceService {
       where: {
         elevatorId,
         type: InspectionType.PERIODIC,
-        result: InspectionResult.PASS,
+        conductedDate: { not: null },
+        OR: [{ result: InspectionResult.PASS }, { status: InspectionResult.PASS }],
       },
       orderBy: { conductedDate: "desc" },
     });

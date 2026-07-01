@@ -1,10 +1,17 @@
 import type { ReactNode } from "react";
 import { Inbox } from "lucide-react";
+import { cn } from "@/lib/utils";
 
-export function PortalTableWrap({ children }: { children: ReactNode }) {
+export function PortalTableWrap({
+  children,
+  compact = false,
+}: {
+  children: ReactNode;
+  compact?: boolean;
+}) {
   return (
-    <div className="portal-table-wrap">
-      <table className="portal-table">{children}</table>
+    <div className={cn("portal-table-wrap", compact && "portal-table-wrap-compact")}>
+      <table className={cn("portal-table", compact && "portal-table-compact")}>{children}</table>
     </div>
   );
 }

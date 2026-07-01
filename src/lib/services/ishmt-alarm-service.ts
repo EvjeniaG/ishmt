@@ -12,6 +12,7 @@ import {
   canReviewApplications,
   isFieldInspectorRole,
 } from "@/lib/permissions/ishmt-roles";
+import { IshmtContractMonitorService } from "@/lib/services/ishmt-contract-monitor-service";
 import { CITIZEN_REPORT_TRIAGE_STATUSES } from "@/lib/ishmt/citizen-report-queue";
 import { ROLE_CODES } from "@/lib/constants/roles";
 
@@ -34,6 +35,11 @@ type AlarmSnapshot = {
   myFieldScheduled: number;
   myFieldInProgress: number;
   recommendedRejection: number;
+  noMaintenanceContract: number;
+  noInspectionContract: number;
+  maintenanceContractExpiring7: number;
+  inspectionContractExpiring7: number;
+  maintenanceContractExpired: number;
 };
 
 export class IshmtAlarmService {
@@ -67,6 +73,7 @@ export class IshmtAlarmService {
       myFieldInProgress,
       recommendedRejection,
       pipelineApps,
+      contractStats,
     ] = await Promise.all([
       db.application.count({
         where: { status: ApplicationStatus.SUBMITTED, deletedAt: null },
@@ -107,6 +114,7 @@ export class IshmtAlarmService {
         },
         select: { id: true, applicationNumber: true, submittedAt: true },
       }),
+      IshmtContractMonitorService.getNationalStats(),
     ]);
 
     const procedure = DeadlineService.summarizeProcedureQueue(pipelineApps);
@@ -124,11 +132,62 @@ export class IshmtAlarmService {
       myFieldScheduled,
       myFieldInProgress,
       recommendedRejection,
+      noMaintenanceContract: contractStats.noMaintenanceContract,
+      noInspectionContract: contractStats.noInspectionContract,
+      maintenanceContractExpiring7: contractStats.maintenanceContractExpiring7,
+      inspectionContractExpiring7: contractStats.inspectionContractExpiring7,
+      maintenanceContractExpired: contractStats.maintenanceContractExpired,
     };
+  }
+
+  private static contractAlarms(s: AlarmSnapshot): IshmtAlarm[] {
+    return [
+      {
+        id: "no-maintenance-contract",
+        priority: "critical",
+        label: "Pa kontratë mirëmbajtjeje",
+        hint: "Ashensorë aktivë pa kontratë aktive me kompaninë e mirëmbajtjes",
+        count: s.noMaintenanceContract,
+        href: "/ishmt/contracts?issue=no-maintenance-contract",
+      },
+      {
+        id: "no-inspection-contract",
+        priority: "critical",
+        label: "Pa kontratë inspektimi (OMI)",
+        hint: "Ashensorë aktivë pa kontratë periodike me trupin certifikues",
+        count: s.noInspectionContract,
+        href: "/ishmt/contracts?issue=no-inspection-contract",
+      },
+      {
+        id: "maintenance-contract-expired",
+        priority: "critical",
+        label: "Kontrata mirëmbajtjes skaduar",
+        hint: "Kontrata aktive me datë mbarimi të kaluar",
+        count: s.maintenanceContractExpired,
+        href: "/ishmt/contracts?issue=maintenance-contract-expired",
+      },
+      {
+        id: "maintenance-contract-expiring",
+        priority: "urgent",
+        label: "Kontrata mirëmbajtjes skadon (7 ditë)",
+        hint: "Kërkon rinovim ose caktim të kompanisë së re",
+        count: s.maintenanceContractExpiring7,
+        href: "/ishmt/contracts?issue=maintenance-contract-expiring",
+      },
+      {
+        id: "inspection-contract-expiring",
+        priority: "urgent",
+        label: "Kontrata inspektimit skadon (7 ditë)",
+        hint: "Kërkon rinovim kontrate me OMI-n",
+        count: s.inspectionContractExpiring7,
+        href: "/ishmt/contracts?issue=inspection-contract-expiring",
+      },
+    ];
   }
 
   private static buildChiefAlarms(s: AlarmSnapshot): IshmtAlarm[] {
     return [
+      ...this.contractAlarms(s),
       {
         id: "chief-approval",
         priority: "critical",
@@ -187,6 +246,7 @@ export class IshmtAlarmService {
     const canReview = canReviewApplications(role);
 
     const alarms: IshmtAlarm[] = [
+      ...this.contractAlarms(s),
       {
         id: "procedure-overdue",
         priority: "critical",

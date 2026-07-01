@@ -128,7 +128,7 @@ Always pair Neon with an ORM such as **Drizzle** for easy schema management and 
 - **Long-running or shared-runtime environments → node-postgres (`pg`).** Neon Functions, and any host where the function runtime is shared across requests / runs on fluid compute (e.g. **Vercel** with Fluid compute), keep a module-scope process alive across many requests. Open a `pg` pool **once at module scope** and reuse it across requests.
 - **Fully isolated serverless (Lambda-style) → Neon's serverless driver (`@neondatabase/serverless`).** Hosts like **Netlify** spin up a fresh, isolated instance per request, so a persistent TCP pool can't be reused; the serverless driver queries over HTTP and is built for this.
 
-**Neon Functions / Vercel / fluid compute — Drizzle + node-postgres:**
+**Neon Functions / Vercel / fluid compute - Drizzle + node-postgres:**
 
 ```typescript
 import { drizzle } from "drizzle-orm/node-postgres";
@@ -153,7 +153,7 @@ attachDatabasePool(pool); // let the Vercel runtime manage the pooled connection
 const db = drizzle({ client: pool, schema });
 ```
 
-**Netlify and other fully-isolated serverless — Drizzle + Neon serverless driver:**
+**Netlify and other fully-isolated serverless - Drizzle + Neon serverless driver:**
 
 ```typescript
 import { drizzle } from "drizzle-orm/neon-http";
@@ -224,7 +224,7 @@ Neon Auth is also embedded in the Neon JS SDK. Depending on your use case, you m
 
 ## Neon Infrastructure as Code (`neon.ts`)
 
-`neon.ts` is Neon's branch config and infrastructure-as-code file: declare which services your branches have, get type-safe env vars, and program per-branch compute — all in TypeScript (see the `neon` skill for the full reference). Postgres always exists on every branch, so you never declare the database itself; what you codify here is the Postgres-adjacent surface — Neon Auth, the Data API, and per-branch compute settings (autoscaling and scale-to-zero).
+`neon.ts` is Neon's branch config and infrastructure-as-code file: declare which services your branches have, get type-safe env vars, and program per-branch compute - all in TypeScript (see the `neon` skill for the full reference). Postgres always exists on every branch, so you never declare the database itself; what you codify here is the Postgres-adjacent surface - Neon Auth, the Data API, and per-branch compute settings (autoscaling and scale-to-zero).
 
 Add it with `@neondatabase/config`:
 
@@ -257,7 +257,7 @@ export default defineConfig({
 });
 ```
 
-Reconcile the declaration from the CLI — the Neon equivalent of `terraform plan` / `apply`:
+Reconcile the declaration from the CLI - the Neon equivalent of `terraform plan` / `apply`:
 
 ```bash
 neonctl config status   # print the branch's live config
@@ -266,9 +266,9 @@ neonctl config apply    # provision the declared services / settings
 neonctl deploy          # alias for `neonctl config apply`
 ```
 
-Because `neonctl checkout` applies the policy as it **creates** a branch, a fresh branch comes up with these compute settings (and Auth / Data API) already in place. Checking out an _existing_ branch never reconciles it — run `neonctl deploy` to apply changes.
+Because `neonctl checkout` applies the policy as it **creates** a branch, a fresh branch comes up with these compute settings (and Auth / Data API) already in place. Checking out an _existing_ branch never reconciles it - run `neonctl deploy` to apply changes.
 
-Since `neon.ts` is TypeScript, invalid combinations fail to compile with an actionable message: the Data API verifies requests with Neon Auth by default, so `dataApi: true` without `auth: true` is a type error (the fix — `auth: true`, or `authProvider: 'external'` with a `jwksUrl` — is in the message). See the `neon` skill's type-safe config note.
+Since `neon.ts` is TypeScript, invalid combinations fail to compile with an actionable message: the Data API verifies requests with Neon Auth by default, so `dataApi: true` without `auth: true` is a type error (the fix - `auth: true`, or `authProvider: 'external'` with a `jwksUrl` - is in the message). See the `neon` skill's type-safe config note.
 
 Read the resulting env back, typed and validated against the policy, with `parseEnv` from `@neondatabase/env`:
 

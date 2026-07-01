@@ -21,10 +21,12 @@ export function ReportTriageActions({
   reportId,
   status,
   assignedToMe,
+  canSelfAssign,
 }: {
   reportId: string;
   status: CitizenReportStatus;
   assignedToMe: boolean;
+  canSelfAssign: boolean;
 }) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
@@ -53,7 +55,7 @@ export function ReportTriageActions({
 
   return (
     <div className="space-y-4">
-      {!assignedToMe && !isClosed && (
+      {canSelfAssign && !assignedToMe && !isClosed && (
         <Button onClick={assign} disabled={busy}>
           Merre në ngarkim
         </Button>

@@ -149,10 +149,25 @@ export class ElevatorTimelineService {
     }
 
     for (const i of inspections) {
+      const typeLabel =
+        i.type === "EXTRAORDINARY"
+          ? "jashtëzakonshme"
+          : i.type === "PERIODIC"
+            ? "periodik"
+            : i.type.toLowerCase();
+      const resultLabel =
+        i.result === "PASS"
+          ? "Konform"
+          : i.result === "FAIL"
+            ? "Jo konform"
+            : i.result === "CONDITIONAL"
+              ? "Me kushte"
+              : i.result ?? "—";
+
       events.push({
         id: `inspection-${i.id}`,
         category: "inspection",
-        title: `Inspektim ${i.type}: ${i.result}`,
+        title: `Inspektim ${typeLabel}: ${resultLabel}`,
         description: formatInspectionFindings(i.findings) ?? undefined,
         occurredAt: i.conductedDate ?? i.scheduledDate,
         actorName:

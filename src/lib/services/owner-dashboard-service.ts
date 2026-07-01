@@ -9,6 +9,7 @@ import {
 import { db } from "@/lib/db";
 import { computeElevatorComplianceIndicator } from "@/lib/elevators/elevator-compliance-stats";
 import { NotificationService } from "@/lib/services/notification-service";
+import { OwnerComplianceNotificationService } from "@/lib/services/owner-compliance-notification-service";
 import { ApplicationService } from "@/lib/services/application-service";
 import { DeadlineService } from "@/lib/deadlines/deadline-service";
 import { resolveElevatorComplianceView } from "@/lib/elevators/resolve-elevator-compliance";
@@ -300,6 +301,11 @@ export class OwnerDashboardService {
       incomingOwnershipTransfers,
     });
 
+    void OwnerComplianceNotificationService.syncForOrganization(
+      orgId,
+      OwnerComplianceNotificationService.alertsFromDeadlineItems(deadlineItems),
+    );
+
     const procedureSummary = DeadlineService.summarizeProcedureQueue(
       submittedProcedureApps.map((a) => ({
         id: a.id,
@@ -366,6 +372,14 @@ export class OwnerDashboardService {
         noMaintenanceRecords,
         qrUnconfirmed,
         redCompliance,
+      },
+      alarmSummary: {
+        noMaintenanceContract: deadlineItems.filter((i) => i.type === "missing-maintenance-contract").length,
+        noInspectionContract: deadlineItems.filter((i) => i.type === "missing-inspection-contract").length,
+        contractExpiring: deadlineItems.filter((i) => i.type.includes("contract-expiring")).length,
+        contractExpired: deadlineItems.filter((i) => i.type.includes("contract-expired")).length,
+        pendingContracts: deadlineItems.filter((i) => i.type.includes("pending-")).length,
+        complianceGaps: deadlineItems.filter((i) => !i.type.includes("contract") && i.type !== "qr_placement").length,
       },
       requiredActions,
       procedureSummary,
@@ -475,22 +489,39 @@ export class OwnerDashboardService {
       const href =
         item.type === "qr_placement"
           ? `/portal/elevators/${item.elevatorId}?tab=qr`
-          : item.type.includes("maintenance") || item.type === "missing-maintenance-company"
-            ? `/portal/elevators/${item.elevatorId}/maintenance/change`
-            : item.type.includes("inspection") || item.type === "missing-inspection"
+          : item.type === "missing-maintenance-company" ||
+              item.type === "missing-maintenance-contract" ||
+              item.type === "pending-maintenance-contract" ||
+              item.type === "maintenance-contract-expiring" ||
+              item.type === "maintenance-contract-expired"
+            ? `/portal/maintenance`
+            : item.type === "missing-inspection-contract" ||
+                item.type === "pending-inspection-contract" ||
+                item.type === "inspection-contract-expiring" ||
+                item.type === "inspection-contract-expired"
               ? `/portal/elevators/${item.elevatorId}?tab=inspections`
-              : `/portal/elevators/${item.elevatorId}`;
+              : item.type.includes("maintenance") || item.type === "missing-maintenance-company"
+                ? `/portal/elevators/${item.elevatorId}/maintenance/change`
+                : item.type.includes("inspection") || item.type === "missing-inspection"
+                  ? `/portal/elevators/${item.elevatorId}?tab=inspections`
+                  : `/portal/elevators/${item.elevatorId}`;
 
       const actionLabel =
         item.type === "qr_placement"
           ? "Ngarko foton QR"
-          : item.type === "missing-maintenance-company"
+          : item.type === "missing-maintenance-company" || item.type === "missing-maintenance-contract"
             ? "Cakto mirëmbajtës"
-            : item.type === "missing-inspection"
-              ? "Shiko inspektimet"
-              : item.type.includes("maintenance")
-                ? "Menaxho mirëmbajtjen"
-                : "Shiko ashensorin";
+            : item.type === "missing-inspection-contract"
+              ? "Cakto OMI"
+              : item.type === "pending-maintenance-contract" || item.type === "pending-inspection-contract"
+                ? "Shiko kontratën"
+                : item.type.includes("contract-expiring") || item.type.includes("contract-expired")
+                  ? "Rinovo kontratën"
+                  : item.type === "missing-inspection"
+                    ? "Shiko inspektimet"
+                    : item.type.includes("maintenance")
+                      ? "Menaxho mirëmbajtjen"
+                      : "Shiko ashensorin";
 
       actions.push({
         id: `deadline-${item.elevatorId}-${item.type}`,
@@ -511,7 +542,7 @@ export class OwnerDashboardService {
       where: { ownerOrgId: orgId, deletedAt: null, status: ElevatorStatus.ACTIVE },
       include: {
         certificates: { where: { status: "ACTIVE" } },
-        maintenanceContracts: { where: { isActive: true }, orderBy: { endDate: "desc" }, take: 1 },
+        maintenanceContracts: { where: { isActive: true }, orderBy: { endDate: "desc" } },
         qrCodes: { where: { isActive: true }, take: 1 },
         inspections: { orderBy: { conductedDate: "desc" }, take: 1 },
         maintenanceRecords: { orderBy: { performedDate: "desc" }, take: 1 },
@@ -567,17 +598,122 @@ export class OwnerDashboardService {
         }
       }
 
-      const contract = elv.maintenanceContracts[0];
+      const maintActive = elv.maintenanceContracts.find(
+        (c) => c.serviceType === "MAINTENANCE" && c.status === "ACTIVE",
+      );
+      const inspActive = elv.maintenanceContracts.find(
+        (c) => c.serviceType === "PERIODIC_INSPECTION" && c.status === "ACTIVE",
+      );
+      const maintPending = elv.maintenanceContracts.find(
+        (c) => c.serviceType === "MAINTENANCE" && c.status === "PENDING",
+      );
+      const inspPending = elv.maintenanceContracts.find(
+        (c) => c.serviceType === "PERIODIC_INSPECTION" && c.status === "PENDING",
+      );
+
+      if (!maintActive) {
+        const key = `${elv.id}:missing-maintenance-contract`;
+        if (!seen.has(key)) {
+          seen.add(key);
+          items.push({
+            type: "missing-maintenance-contract",
+            label: "Mungon kontratë aktive mirëmbajtjeje",
+            elevatorId: elv.id,
+            registryNumber: elv.registryNumber,
+          });
+        }
+      }
+
+      if (!inspActive) {
+        const key = `${elv.id}:missing-inspection-contract`;
+        if (!seen.has(key)) {
+          seen.add(key);
+          items.push({
+            type: "missing-inspection-contract",
+            label: "Mungon kontratë inspektimi periodik (OMI)",
+            elevatorId: elv.id,
+            registryNumber: elv.registryNumber,
+          });
+        }
+      }
+
+      if (maintPending) {
+        const key = `${elv.id}:pending-maintenance-contract`;
+        if (!seen.has(key)) {
+          seen.add(key);
+          items.push({
+            type: "pending-maintenance-contract",
+            label: "Kontratë mirëmbajtjeje - në pritje pranimi",
+            elevatorId: elv.id,
+            registryNumber: elv.registryNumber,
+            date: maintPending.endDate ?? undefined,
+          });
+        }
+      }
+
+      if (inspPending) {
+        const key = `${elv.id}:pending-inspection-contract`;
+        if (!seen.has(key)) {
+          seen.add(key);
+          items.push({
+            type: "pending-inspection-contract",
+            label: "Kontratë inspektimi - në pritje pranimi",
+            elevatorId: elv.id,
+            registryNumber: elv.registryNumber,
+            date: inspPending.endDate ?? undefined,
+          });
+        }
+      }
+
+      const contract = maintActive ?? elv.maintenanceContracts.find((c) => c.serviceType === "MAINTENANCE");
       if (contract?.endDate && contract.endDate <= expiryThreshold && contract.endDate >= now) {
         const key = `${elv.id}:maintenance-contract-expiring`;
         if (!seen.has(key)) {
           seen.add(key);
           items.push({
-            type: "maintenance",
-            label: "Kontrata e mirëmbajtjes skadon",
+            type: "maintenance-contract-expiring",
+            label: "Kontrata e mirëmbajtjes skadon së shpejti",
             elevatorId: elv.id,
             registryNumber: elv.registryNumber,
             date: contract.endDate,
+          });
+        }
+      } else if (contract?.endDate && contract.endDate < now && contract.status === "ACTIVE") {
+        const key = `${elv.id}:maintenance-contract-expired`;
+        if (!seen.has(key)) {
+          seen.add(key);
+          items.push({
+            type: "maintenance-contract-expired",
+            label: "Kontrata e mirëmbajtjes ka skaduar",
+            elevatorId: elv.id,
+            registryNumber: elv.registryNumber,
+            date: contract.endDate,
+          });
+        }
+      }
+
+      if (inspActive?.endDate && inspActive.endDate <= expiryThreshold && inspActive.endDate >= now) {
+        const key = `${elv.id}:inspection-contract-expiring`;
+        if (!seen.has(key)) {
+          seen.add(key);
+          items.push({
+            type: "inspection-contract-expiring",
+            label: "Kontrata e inspektimit skadon së shpejti",
+            elevatorId: elv.id,
+            registryNumber: elv.registryNumber,
+            date: inspActive.endDate,
+          });
+        }
+      } else if (inspActive?.endDate && inspActive.endDate < now) {
+        const key = `${elv.id}:inspection-contract-expired`;
+        if (!seen.has(key)) {
+          seen.add(key);
+          items.push({
+            type: "inspection-contract-expired",
+            label: "Kontrata e inspektimit ka skaduar",
+            elevatorId: elv.id,
+            registryNumber: elv.registryNumber,
+            date: inspActive.endDate,
           });
         }
       }
@@ -596,6 +732,36 @@ export class OwnerDashboardService {
       }
     }
 
-    return items.slice(0, 20);
+    return items.slice(0, 40);
+  }
+
+  static async syncComplianceNotifications(orgId: string) {
+    const now = new Date();
+    const expiryThreshold = new Date(now);
+    expiryThreshold.setDate(expiryThreshold.getDate() + 30);
+    const items = await this.getDeadlineItems(orgId, expiryThreshold, now);
+    return OwnerComplianceNotificationService.syncForOrganization(
+      orgId,
+      OwnerComplianceNotificationService.alertsFromDeadlineItems(items),
+    );
+  }
+
+  static async syncAllComplianceNotifications() {
+    const orgRows = await db.elevator.findMany({
+      where: { deletedAt: null, status: ElevatorStatus.ACTIVE },
+      select: { ownerOrgId: true },
+      distinct: ["ownerOrgId"],
+    });
+
+    let organizations = 0;
+    let created = 0;
+
+    for (const row of orgRows) {
+      const result = await this.syncComplianceNotifications(row.ownerOrgId);
+      organizations += 1;
+      created += result.created;
+    }
+
+    return { organizations, created };
   }
 }

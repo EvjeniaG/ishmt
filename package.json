@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "prisma generate && next dev --turbopack",
+    "dev": "next dev",
     "build": "prisma generate && next build",
     "start": "next start",
     "lint": "next lint",
@@ -22,6 +22,9 @@
     "db:import:legacy": "tsx prisma/import-legacy-registry.ts",
     "db:import:legacy:dry-run": "tsx prisma/import-legacy-registry.ts --dry-run",
     "db:fix:certifier-org-names": "tsx prisma/fix-certifier-org-names.ts",
+    "db:fix:legacy-inspection-results": "tsx prisma/fix-legacy-inspection-results.ts",
+    "db:backfill:qr": "tsx prisma/backfill-legacy-qr-codes.ts",
+    "db:backfill:qr:dry-run": "tsx prisma/backfill-legacy-qr-codes.ts --dry-run",
     "postinstall": "prisma generate",
     "docker:up": "docker compose up -d",
     "docker:down": "docker compose down",

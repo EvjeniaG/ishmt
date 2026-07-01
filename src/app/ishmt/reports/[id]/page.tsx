@@ -1,10 +1,13 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { CitizenReportStatus } from "@prisma/client";
 import { AppShell } from "@/components/layout/app-shell";
 import { StandardPageLayout } from "@/components/layout/standard-page-layout";
 import { DataSheet, SectionCard } from "@/components/shared/institutional";
 import { ReportTriageActions } from "@/components/ishmt/report-triage-actions";
 import { getAuthSession } from "@/lib/auth";
+import { ROLE_CODES } from "@/lib/constants/roles";
+import { citizenReportHasActiveAssignment } from "@/lib/ishmt/citizen-report-queue";
 import { PERMISSIONS } from "@/lib/permissions/codes";
 import { roleHasPermission } from "@/lib/permissions/matrix";
 import { CitizenReportService } from "@/lib/services/citizen-report-service";
@@ -30,7 +33,18 @@ export default async function CitizenReportDetailPage({
 
   const report = await CitizenReportService.getById(id);
   const canManage = roleHasPermission(session.user.roleCode, PERMISSIONS.REPORTS_MANAGE);
+  const canSelfAssign = session.user.roleCode === ROLE_CODES.FIELD_INSPECTOR;
   const assignedToMe = report.assignedInspector?.id === session.user.id;
+  const hasAssignedInspector = citizenReportHasActiveAssignment(
+    report.status,
+    report.assignedInspectorId,
+  );
+  const closingAction = report.actions.find(
+    (action) => action.action === "RESOLVED" || action.action === "DISMISSED",
+  );
+  const isClosed =
+    report.status === CitizenReportStatus.RESOLVED ||
+    report.status === CitizenReportStatus.DISMISSED;
 
   return (
     <AppShell title="Raporti i qytetarit">
@@ -74,10 +88,26 @@ export default async function CitizenReportDetailPage({
               { label: "Vendndodhja", value: report.locationAddress ?? "-" },
               {
                 label: "Inspektori i caktuar",
-                value: report.assignedInspector
+                value: hasAssignedInspector && report.assignedInspector
                   ? `${report.assignedInspector.firstName} ${report.assignedInspector.lastName}`
                   : "-",
               },
+              ...(isClosed && closingAction
+                ? [
+                    {
+                      label: "Mbyllur nga",
+                      value: `${closingAction.actor.firstName} ${closingAction.actor.lastName}`,
+                    },
+                  ]
+                : []),
+              ...(report.resolvedAt
+                ? [
+                    {
+                      label: "Data e mbylljes",
+                      value: new Date(report.resolvedAt).toLocaleString("sq-AL"),
+                    },
+                  ]
+                : []),
               { label: "Përshkrimi", value: report.description },
               ...(report.resolutionNotes
                 ? [{ label: "Shënimi i zgjidhjes", value: report.resolutionNotes }]
@@ -103,6 +133,7 @@ export default async function CitizenReportDetailPage({
               reportId={report.id}
               status={report.status}
               assignedToMe={assignedToMe}
+              canSelfAssign={canSelfAssign}
             />
           </SectionCard>
         )}

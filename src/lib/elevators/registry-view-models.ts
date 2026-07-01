@@ -48,13 +48,16 @@ function resolveDisplayInspectionResult(
   type: string,
   result: string | null,
   conductedDate: Date | null,
+  status?: string | null,
 ): { result: string | null; resultLabel: string; isPass: boolean; isFail: boolean } {
   const today = startOfDay(new Date());
   const conducted = conductedDate ? startOfDay(conductedDate) : null;
   const isPastPeriodic =
     type === "PERIODIC" && conducted != null && conducted.getTime() <= today.getTime();
+  const storedResult =
+    result ?? (status && status !== "PENDING" ? status : null);
 
-  const effectiveResult = result ?? (isPastPeriodic ? "PASS" : null);
+  const effectiveResult = storedResult ?? (isPastPeriodic ? "PASS" : null);
   const resultLabel = effectiveResult
     ? (INSPECTION_RESULT_LABELS[effectiveResult] ?? effectiveResult)
     : "Në pritje";
@@ -316,7 +319,7 @@ export function buildInspectionRegistryView(input: {
     intervalMonths: input.intervalMonths ?? null,
     items: sorted.map((i) => {
       const legacyImport = isLegacyImportFindings(i.findings);
-      const display = resolveDisplayInspectionResult(i.type, i.result, i.conductedDate);
+      const display = resolveDisplayInspectionResult(i.type, i.result, i.conductedDate, i.status);
       const reportReference = extractLegacyReportReference(i.findings);
       const isPeriodic = i.type === "PERIODIC";
 
@@ -336,11 +339,13 @@ export function buildInspectionRegistryView(input: {
         scheduledDate: i.scheduledDate.toISOString(),
         nextInspectionDate: i.nextInspectionDate?.toISOString() ?? null,
         inspectorName:
-          isPeriodic || legacyImport || legacyKiInsp || isLegacyInitial
-            ? null
-            : i.inspector
-              ? `${i.inspector.firstName} ${i.inspector.lastName}`
-              : null,
+          i.type === "EXTRAORDINARY" && i.inspector
+            ? `${i.inspector.firstName} ${i.inspector.lastName}`
+            : isPeriodic || legacyImport || legacyKiInsp || isLegacyInitial
+              ? null
+              : i.inspector
+                ? `${i.inspector.firstName} ${i.inspector.lastName}`
+                : null,
         conductedByOrg: inspectionConductedByOrg(
           i.type,
           i.conductedDate,

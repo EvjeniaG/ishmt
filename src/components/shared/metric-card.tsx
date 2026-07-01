@@ -30,19 +30,22 @@ export function MetricCard({
   accent = "primary",
   subtitle,
   compact = false,
+  interactive = true,
 }: {
   label: string;
   value: number | string;
   accent?: "primary" | "warning" | "danger" | "success";
   subtitle?: React.ReactNode;
   compact?: boolean;
+  interactive?: boolean;
 }) {
   const styles = accentStyles[accent];
 
   return (
     <Card
       className={cn(
-        "portal-surface-interactive overflow-hidden bg-gradient-to-br",
+        interactive ? "portal-surface-interactive" : "portal-surface",
+        "overflow-hidden bg-gradient-to-br",
         styles.card,
       )}
     >

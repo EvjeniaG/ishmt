@@ -32,6 +32,7 @@ export function NationalSearchResults({
             <th>Adresa</th>
             <th>Bashkia</th>
             <th>Personi përgjegjës i ashensorit</th>
+            <th>Foto QR</th>
             <th>Serial</th>
             <th className="text-right">Veprime</th>
           </tr>
@@ -51,6 +52,15 @@ export function NationalSearchResults({
               <td>{e.buildingAddress}</td>
               <td>{e.municipality.nameSq}</td>
               <td>{e.ownerOrg.name}</td>
+              <td>
+                {!e.hasActiveQr ? (
+                  <span className="font-medium text-gov-danger">Pa QR</span>
+                ) : e.hasQrPlacementPhoto ? (
+                  <span className="text-green-700">Konfirmuar</span>
+                ) : (
+                  <span className="font-medium text-amber-800">Mungon foto</span>
+                )}
+              </td>
               <td>{e.technicalData?.serialNumber ?? "-"}</td>
               <td className="text-right">
                 <div className="flex flex-wrap justify-end gap-x-3 gap-y-1">

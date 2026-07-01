@@ -56,7 +56,7 @@ function buildDetailRows(item: InspectionItem) {
     { label: "Rezultati", value: item.resultLabel },
     {
       label: isPeriodic ? "Data e inspektimit" : "Data e kryerjes",
-      value: fmtDateSq(item.conductedDate ?? item.scheduledDate),
+      value: fmtDateSq(item.conductedDate),
     },
   ];
 
@@ -64,12 +64,7 @@ function buildDetailRows(item: InspectionItem) {
     rows.push({ label: "Raporti", value: item.reportReference });
   }
 
-  if (!isPeriodic) {
-    rows.push({ label: "Data e planifikuar", value: fmtDateSq(item.scheduledDate) });
-    if (nextDate !== "-") {
-      rows.push({ label: "Inspektimi i radhës", value: nextDate });
-    }
-  } else if (nextDate !== "-") {
+  if (nextDate !== "-") {
     rows.push({ label: "Inspektimi i radhës", value: nextDate });
   }
 
@@ -96,7 +91,7 @@ function InspectionCard({
   elevatorId?: string;
   showOmiEnrich?: boolean;
 }) {
-  const conducted = fmtDateSq(item.conductedDate ?? item.scheduledDate);
+  const conducted = fmtDateSq(item.conductedDate);
   const tone = resultTone(item);
   const detailRows = buildDetailRows(item);
   const isPeriodic = item.type === "PERIODIC";

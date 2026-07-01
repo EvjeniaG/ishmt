@@ -149,7 +149,9 @@ export default async function ElevatorQrPrintPage({
                 <QrPlacementForm
                   qrCodeId={data.qrCodeId}
                   elevatorId={id}
+                  registryNumber={data.registryNumber}
                   hasPlacementPhoto={data.hasPlacementPhoto}
+                  placementPhotoDocumentId={data.placementPhotoDocumentId}
                 />
               </div>
             )}

@@ -284,7 +284,6 @@ function inspectionFields(
     { label: "Lloji", value: labelFrom(INSPECTION_TYPE_LABELS, insp.type) },
     { label: "Statusi", value: labelFrom(INSPECTION_RESULT_LABELS, insp.status) },
     { label: "Rezultati", value: insp.result ? labelFrom(INSPECTION_RESULT_LABELS, insp.result) : "-" },
-    { label: "Data e planifikuar", value: fmtDate(insp.scheduledDate) },
     { label: "Data e kryerjes", value: fmtDate(insp.conductedDate) },
     { label: "Inspektori", value: insp.inspector ? `${insp.inspector.firstName} ${insp.inspector.lastName}` : "-" },
     { label: legacyImport ? "Shënime" : "Gjetjet", value: fmt(findings) },

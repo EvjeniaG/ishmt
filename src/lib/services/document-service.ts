@@ -3,6 +3,7 @@ import {
   AuditAction,
   DocumentAccessAction,
   DocumentClassification,
+  FieldInspectionAssignmentStatus,
   MaintenanceContractStatus,
   Prisma,
 } from "@prisma/client";
@@ -66,6 +67,9 @@ export class DocumentService {
     if (entityType === "elevator" || entityType === "qr_code") {
       const elevator = await this.resolveElevatorFromLink(entityType, entityId);
       if (elevator && (await this.orgCanAccessElevator(ctx, elevator))) {
+        return;
+      }
+      if (elevator && (await this.fieldInspectorCanAttachToElevator(ctx, elevator.id))) {
         return;
       }
       throw new Error("Nuk keni leje për të ngarkuar dokumente për këtë ashensor.");
@@ -329,6 +333,29 @@ export class DocumentService {
       return qr?.elevator && !qr.elevator.deletedAt ? qr.elevator : null;
     }
     return null;
+  }
+
+  /** Field inspector with an open assignment on this elevator (scheduled or in progress). */
+  private static async fieldInspectorCanAttachToElevator(ctx: AuthContext, elevatorId: string) {
+    if (!hasPermission(ctx, PERMISSIONS.INSPECTIONS_FIELD_CONDUCT)) {
+      return false;
+    }
+
+    const assignment = await db.fieldInspectionAssignment.findFirst({
+      where: {
+        elevatorId,
+        assigneeId: ctx.userId,
+        status: {
+          in: [
+            FieldInspectionAssignmentStatus.SCHEDULED,
+            FieldInspectionAssignmentStatus.IN_PROGRESS,
+          ],
+        },
+      },
+      select: { id: true },
+    });
+
+    return Boolean(assignment);
   }
 
   /** Owner, assigned maintenance/certifier org, or org with pending/active service contract. */

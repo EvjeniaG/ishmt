@@ -199,7 +199,7 @@ export function HomePortalPage() {
                 </h2>
                 <p className="mt-3 max-w-lg text-sm leading-relaxed text-muted-foreground sm:text-base">
                   Verifikoni statusin e ashensorit duke skanuar kodin QR, ose raportoni probleme
-                  sigurie te ISHMT — pa hyrje në sistem.
+                  sigurie te ISHMT - pa hyrje në sistem.
                 </p>
                 <ul className="mt-6 space-y-3 text-sm text-muted-foreground">
                   <li className="flex items-start gap-2">
@@ -295,7 +295,7 @@ export function HomePortalPage() {
                 <p className="portal-eyebrow">Qasja në sistem</p>
                 <h2 className="portal-title mt-1">Kush përdor portalin</h2>
                 <p className="portal-subtitle mt-2">
-                  Çdo rol ka hapësirën e vet të punës — nga aplikimi fillestar deri te
+                  Çdo rol ka hapësirën e vet të punës - nga aplikimi fillestar deri te
                   mbikëqyrja institucionale.
                 </p>
                 <div className="mt-6">

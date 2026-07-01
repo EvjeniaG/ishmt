@@ -40,9 +40,10 @@ function menuForRole(roleCode: RoleCode): MenuItem[] {
     case ROLE_CODES.FIELD_INSPECTOR:
       return [
         { href: dashboard, label: "Detyrat e mia" },
+        { href: "/ishmt/search", label: "Kërko ashensor" },
+        { href: "/portal/raportet", label: "Gjenero raport" },
         { href: profile, label: "Profili" },
         { href: notifications, label: "Njoftimet" },
-        { href: "/ishmt/my-field-inspections", label: "Inspektim terreni" },
       ];
     case ROLE_CODES.SECTOR_SPECIALIST:
       return [

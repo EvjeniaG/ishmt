@@ -1,8 +1,32 @@
-import { ApplicationStatus } from "@prisma/client";
+import { ApplicationStatus, ElevatorStatus } from "@prisma/client";
 import { db } from "@/lib/db";
 import { ComplianceService } from "@/lib/services/compliance-service";
 import { DeadlineService } from "@/lib/deadlines/deadline-service";
 import { CITIZEN_REPORT_TRIAGE_STATUSES } from "@/lib/ishmt/citizen-report-queue";
+
+const ACTIVE_ELEVATOR = {
+  deletedAt: null,
+  status: ElevatorStatus.ACTIVE,
+} as const;
+
+async function countActiveElevatorsMissingQrPlacement(): Promise<number> {
+  return db.elevator.count({
+    where: {
+      ...ACTIVE_ELEVATOR,
+      OR: [
+        { qrCodes: { none: { isActive: true } } },
+        {
+          qrCodes: {
+            some: {
+              isActive: true,
+              placementPhotoDocumentId: null,
+            },
+          },
+        },
+      ],
+    },
+  });
+}
 
 const REVIEW_STATUSES: ApplicationStatus[] = [
   ApplicationStatus.SUBMITTED,
@@ -28,6 +52,7 @@ export class IshmtDashboardService {
       recentApprovals,
       applicationsThisWeek,
       pipelineApps,
+      placementMissingQr,
     ] = await Promise.all([
       db.elevator.count({ where: { deletedAt: null } }),
       db.elevator.groupBy({
@@ -65,6 +90,7 @@ export class IshmtDashboardService {
         where: { deletedAt: null, status: { in: REVIEW_STATUSES }, submittedAt: { not: null } },
         select: { id: true, applicationNumber: true, submittedAt: true },
       }),
+      countActiveElevatorsMissingQrPlacement(),
     ]);
 
     const legalDeadlines = DeadlineService.summarizeProcedureQueue(pipelineApps);
@@ -107,6 +133,7 @@ export class IshmtDashboardService {
         name: munMap.get(m.municipalityId) ?? m.municipalityId,
         count: m._count.municipalityId,
       })),
+      placementMissingQr,
     };
   }
 }

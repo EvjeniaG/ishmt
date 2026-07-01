@@ -22,6 +22,7 @@ import { ElevatorDeadlinesCard } from "@/components/deadlines/elevator-deadlines
 import { DeadlineService } from "@/lib/deadlines/deadline-service";
 import { getInspectionIntervalMonths } from "@/lib/deadlines/inspection-interval";
 import { QrImage } from "@/components/elevators/qr-image";
+import { QrPlacementForm } from "@/components/elevators/qr-placement-form";
 import { QrService } from "@/lib/services/qr-service";
 import { ElevatorTabPanel } from "@/components/elevators/elevator-tab-panel";
 import {
@@ -421,12 +422,41 @@ export default async function ElevatorDigitalFilePage({
                       <Link href={`/portal/elevators/${id}/qr`} className="block text-primary hover:underline">
                         Hap pamjen e printimit →
                       </Link>
+                      {!qr.placementPhotoDocumentId && isOwnerViewer && (
+                        <p className="text-sm font-medium text-amber-800">
+                          Ngarkoni fotografinë e vendosjes së QR në seksionin më poshtë.
+                        </p>
+                      )}
                     </div>
                   </div>
                 </CardContent>
               </Card>
             )}
             <ElevatorTabPanel groups={tabDossier.qr} />
+            {qr?.code && isOwnerViewer && (
+              <QrPlacementForm
+                qrCodeId={qr.id}
+                elevatorId={id}
+                registryNumber={elevator.registryNumber}
+                hasPlacementPhoto={Boolean(qr.placementPhotoDocumentId)}
+                placementPhotoDocumentId={qr.placementPhotoDocumentId}
+              />
+            )}
+            {qr?.placementPhotoDocumentId && !isOwnerViewer && (
+              <Card>
+                <CardHeader>
+                  <CardTitle>Foto vendosjeje QR</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <a
+                    href={`/api/documents/${qr.placementPhotoDocumentId}/download`}
+                    className="text-sm font-medium text-gov-primary hover:underline"
+                  >
+                    Shiko / shkarko fotografinë e vendosjes →
+                  </a>
+                </CardContent>
+              </Card>
+            )}
           </div>
         )}
 

@@ -112,8 +112,33 @@
     @apply overflow-x-auto;
   }
 
+  .portal-table-wrap-compact {
+    @apply overflow-x-visible;
+  }
+
   .portal-table {
     @apply w-full min-w-[640px] text-sm;
+  }
+
+  .portal-table-compact {
+    @apply min-w-0 table-fixed;
+  }
+
+  .portal-table-compact thead th,
+  .portal-table-compact tbody td,
+  .portal-table-compact tfoot td {
+    @apply px-4 py-3;
+  }
+
+  .portal-table-compact thead th:first-child,
+  .portal-table-compact tbody td:first-child {
+    @apply w-auto;
+  }
+
+  .portal-table-compact thead th:last-child,
+  .portal-table-compact tbody td:last-child,
+  .portal-table-compact tfoot td:last-child {
+    @apply w-28;
   }
 
   .portal-table thead tr {

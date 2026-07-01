@@ -1,6 +1,6 @@
 "use client";
 
-import { useLayoutEffect } from "react";
+import { useLayoutEffect, useRef } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
 
 function scrollAllRootsToTop() {
@@ -13,14 +13,25 @@ function scrollAllRootsToTop() {
   document.body.scrollTop = 0;
 }
 
-/** Rikthen scroll-in në fillim kur ndryshon faqja ose parametrat e URL-së. */
+import { isContractsSearchParamsChange } from "@/lib/ishmt/contract-issue-filters";
 export function ScrollToTop() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const searchKey = searchParams.toString();
+  const navigationRef = useRef<{ pathname: string; search: string } | null>(null);
 
   useLayoutEffect(() => {
+    const prev = navigationRef.current;
+
+    if (prev && prev.pathname === pathname && pathname === "/ishmt/contracts") {
+      if (isContractsSearchParamsChange(prev.search, searchKey)) {
+        navigationRef.current = { pathname, search: searchKey };
+        return;
+      }
+    }
+
     scrollAllRootsToTop();
+    navigationRef.current = { pathname, search: searchKey };
   }, [pathname, searchKey]);
 
   return null;

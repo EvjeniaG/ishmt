@@ -99,22 +99,29 @@ export function IshmtDashboardStats({ metrics }: { metrics: Metrics }) {
             key: "missing-inspection",
             label: "Mungesë inspektimi të regjistruar",
             value: metrics.complianceSummary.gapCounts.missingInspection,
-            href: "/ishmt/compliance",
+            href: "/ishmt/search?complianceGap=missing-inspection",
             emphasis: metrics.complianceSummary.gapCounts.missingInspection > 0,
           },
           {
             key: "missing-company",
             label: "Mungesë kompanie mirëmbajtjeje",
             value: metrics.complianceSummary.gapCounts.missingMaintenanceCompany,
-            href: "/ishmt/compliance",
+            href: "/ishmt/search?complianceGap=missing-maintenance-company",
             emphasis: metrics.complianceSummary.gapCounts.missingMaintenanceCompany > 0,
           },
           {
             key: "missing-record",
             label: "Mungesë regjistrimi mirëmbajtjeje",
             value: metrics.complianceSummary.gapCounts.missingMaintenanceRecord,
-            href: "/ishmt/compliance",
+            href: "/ishmt/search?complianceGap=missing-maintenance-record",
             emphasis: metrics.complianceSummary.gapCounts.missingMaintenanceRecord > 0,
+          },
+          {
+            key: "missing-qr-photo",
+            label: "Pa foto vendosjeje QR",
+            value: metrics.placementMissingQr,
+            href: "/ishmt/search?missingQrPlacement=1",
+            emphasis: metrics.placementMissingQr > 0,
           },
         ]
       : []),
@@ -160,12 +167,12 @@ export function IshmtDashboardStats({ metrics }: { metrics: Metrics }) {
           </Link>
         }
       >
-        <PortalTableWrap>
+        <PortalTableWrap compact>
           <thead>
             <tr>
               <th>Indikatori / mungesa</th>
-              <th className="w-24 text-right">Raste</th>
-              <th className="w-20"></th>
+              <th className="text-right">Raste</th>
+              <th className="w-16"></th>
             </tr>
           </thead>
           <tbody>
@@ -187,11 +194,11 @@ export function IshmtDashboardStats({ metrics }: { metrics: Metrics }) {
       </SectionCard>
 
       <SectionCard title="Procesi administrativ" subtitle="Radha e aplikimeve dhe raportimeve">
-        <PortalTableWrap>
+        <PortalTableWrap compact>
           <thead>
             <tr>
               <th>Treguesi</th>
-              <th className="w-24 text-right">Vlera</th>
+              <th className="text-right">Vlera</th>
             </tr>
           </thead>
           <tbody>
@@ -213,11 +220,11 @@ export function IshmtDashboardStats({ metrics }: { metrics: Metrics }) {
       </SectionCard>
 
       <SectionCard title="Gjendja administrative" subtitle="Shpërndarja sipas statusit në regjistër">
-        <PortalTableWrap>
+        <PortalTableWrap compact>
           <thead>
             <tr>
               <th>Statusi</th>
-              <th className="w-24 text-right">Numri</th>
+              <th className="text-right">Numri</th>
             </tr>
           </thead>
           <tbody>
@@ -243,11 +250,11 @@ export function IshmtDashboardStats({ metrics }: { metrics: Metrics }) {
         {metrics.topMunicipalities.length === 0 ? (
           <p className="px-6 py-8 text-sm text-muted-foreground">Nuk ka të dhëna të disponueshme.</p>
         ) : (
-          <PortalTableWrap>
+          <PortalTableWrap compact>
             <thead>
               <tr>
                 <th>Bashkia</th>
-                <th className="w-24 text-right">Numri</th>
+                <th className="text-right">Numri</th>
               </tr>
             </thead>
             <tbody>

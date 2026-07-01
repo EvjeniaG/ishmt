@@ -1,10 +1,11 @@
 import { createHash, randomBytes } from "crypto";
 import QRCode from "qrcode";
-import { AuditAction, ComplianceIndicator, Prisma } from "@prisma/client";
+import { AuditAction, ComplianceIndicator, DocumentClassification, Prisma } from "@prisma/client";
 import { AuditService } from "@/lib/audit/audit-service";
 import { db } from "@/lib/db";
 import { buildPublicAlerts } from "@/lib/elevators/build-public-alerts";
 import { resolveElevatorComplianceView } from "@/lib/elevators/resolve-elevator-compliance";
+import { DocumentService } from "@/lib/services/document-service";
 
 function generateQrCode(): string {
   return randomBytes(6).toString("hex").slice(0, 12).toUpperCase();
@@ -307,10 +308,47 @@ export class QrService {
       publicUrl: qr ? this.buildPublicUrl(qr.code) : null,
       hasQrImage: Boolean(qr?.imageDocumentId),
       hasPlacementPhoto: Boolean(qr?.placementPhotoDocumentId),
+      placementPhotoDocumentId: qr?.placementPhotoDocumentId ?? null,
       qrCodeId: qr?.id ?? null,
       imageDocumentId: qr?.imageDocumentId ?? null,
       certificateDocumentId: certificate?.documentId ?? null,
     };
+  }
+
+  /** Krijon kod QR dhe imazhin PNG për ashensorë pa QR (p.sh. import legacy). */
+  static async ensureQrForElevator(elevatorId: string, actorId: string) {
+    const elevator = await db.elevator.findFirst({
+      where: { id: elevatorId, deletedAt: null },
+      include: { qrCodes: { where: { isActive: true }, take: 1 } },
+    });
+    if (!elevator) {
+      throw new Error("Ashensori nuk u gjet.");
+    }
+
+    let qr = elevator.qrCodes[0];
+    if (!qr) {
+      qr = await db.$transaction((tx) => this.createQrSkeleton(elevatorId, actorId, tx));
+    }
+
+    if (!qr.imageDocumentId) {
+      const qrImageBuffer = await this.generateQrImageBuffer(qr.code);
+      const qrImageDocument = await DocumentService.uploadSystemDocument({
+        buffer: qrImageBuffer,
+        originalFilename: `qr-${qr.code}.png`,
+        mimeType: "image/png",
+        classification: DocumentClassification.TECHNICAL,
+        entityType: "qr_code",
+        entityId: qr.id,
+        purpose: "QR_IMAGE",
+        uploadedById: actorId,
+      });
+      qr = await db.qrCode.update({
+        where: { id: qr.id },
+        data: { imageDocumentId: qrImageDocument.id },
+      });
+    }
+
+    return qr;
   }
 
   static async confirmPlacement(

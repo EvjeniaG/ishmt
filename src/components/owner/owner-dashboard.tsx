@@ -72,6 +72,36 @@ export function OwnerDashboard({ data }: { data: DashboardData }) {
         />
       </div>
 
+      <SectionCard title="Alarme & kontrata" subtitle="Mungesa dhe afate që kërkojnë veprim" padded>
+        <div className="portal-kpi-grid sm:grid-cols-2 lg:grid-cols-3">
+          <MetricCard
+            label="Pa kontratë mirëmbajtjeje"
+            value={data.alarmSummary.noMaintenanceContract}
+            accent={data.alarmSummary.noMaintenanceContract > 0 ? "danger" : "success"}
+            subtitle="Caktoni kompaninë e autorizuar"
+          />
+          <MetricCard
+            label="Pa kontratë inspektimi (OMI)"
+            value={data.alarmSummary.noInspectionContract}
+            accent={data.alarmSummary.noInspectionContract > 0 ? "danger" : "success"}
+            subtitle="Kontratë periodike me trupin certifikues"
+          />
+          <MetricCard
+            label="Kontrata skadon / skaduar"
+            value={data.alarmSummary.contractExpiring + data.alarmSummary.contractExpired}
+            accent={data.alarmSummary.contractExpiring + data.alarmSummary.contractExpired > 0 ? "warning" : "primary"}
+            subtitle={`${data.alarmSummary.pendingContracts} në pritje pranimi`}
+          />
+        </div>
+        {data.unreadNotifications > 0 && (
+          <p className="mt-4 text-sm">
+            <Link href="/portal/notifications" className="font-medium text-gov-primary hover:underline">
+              {data.unreadNotifications} njoftime të palexuara →
+            </Link>
+          </p>
+        )}
+      </SectionCard>
+
       <SectionCard title="Veprime të kërkuara" subtitle="Detyrimet që kërkojnë ndërhyrjen tuaj" padded>
         {data.requiredActions.length === 0 ? (
           <PortalEmptyState>Nuk ka veprime që kërkojnë vëmendje.</PortalEmptyState>

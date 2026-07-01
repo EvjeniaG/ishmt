@@ -41,6 +41,12 @@ const EXPORT_REPORTS_NAV: PortalNavItem = {
   icon: TableProperties,
 };
 
+const ISHMT_CONTRACTS_NAV: PortalNavItem = {
+  href: "/ishmt/contracts",
+  label: "Kontratat & afatet",
+  icon: Clock3,
+};
+
 const OWNER_NAV: NavGroup[] = [
   {
     label: "Kryesore",
@@ -49,6 +55,7 @@ const OWNER_NAV: NavGroup[] = [
       { href: "/portal/applications", label: "Aplikimet e mia", icon: ClipboardList },
       { href: "/portal/elevators", label: "Ashensorët e mi", icon: Building2 },
       { href: "/portal/maintenance", label: "Kontratat e mirëmbajtjes", icon: ScrollText },
+      { href: "/portal/notifications", label: "Njoftimet", icon: Clock3 },
       EXPORT_REPORTS_NAV,
       { href: "/portal/profile", label: "Profili", icon: User },
     ],
@@ -113,6 +120,7 @@ const SECTOR_SPECIALIST_NAV: NavGroup[] = [
     label: "Monitorimi i sektorit",
     items: [
       { href: "/ishmt/dashboard", label: "Paneli", icon: LayoutDashboard },
+      ISHMT_CONTRACTS_NAV,
       { href: "/ishmt/reports", label: "Raportimet e qytetarëve", icon: FileText },
       { href: "/ishmt/search", label: "Regjistri i ashensorëve", icon: Search },
       { href: "/ishmt/review", label: "Shqyrtimi i aplikimeve", icon: ClipboardList },
@@ -127,6 +135,7 @@ const SECTOR_HEAD_NAV: NavGroup[] = [
     label: "Përgjegjës i Sektorit të Produkteve Mekanike",
     items: [
       { href: "/ishmt/dashboard", label: "Paneli", icon: LayoutDashboard },
+      ISHMT_CONTRACTS_NAV,
       { href: "/ishmt/review", label: "Shqyrtimi i aplikimeve", icon: ClipboardList },
       { href: "/ishmt/field-inspections", label: "Cakto inspektim terreni", icon: ShieldCheck },
       { href: "/ishmt/reports", label: "Raportimet e qytetarëve", icon: FileText },
@@ -142,6 +151,7 @@ const ISHMT_DIRECTOR_NAV: NavGroup[] = [
     label: "Drejtor Teknik",
     items: [
       { href: "/ishmt/chief/dashboard", label: "Paneli", icon: LayoutDashboard },
+      ISHMT_CONTRACTS_NAV,
       { href: "/ishmt/chief/approvals", label: "Miratimet & vendimet", icon: ClipboardCheck },
       { href: "/ishmt/field-inspections", label: "Cakto inspektim terreni", icon: ShieldCheck },
       { href: "/ishmt/search", label: "Regjistri i ashensorëve", icon: Building2 },
@@ -159,6 +169,7 @@ const CHIEF_INSPECTOR_NAV: NavGroup[] = [
     label: "Kryeinspektor",
     items: [
       { href: "/ishmt/chief/dashboard", label: "Paneli", icon: LayoutDashboard },
+      ISHMT_CONTRACTS_NAV,
       { href: "/ishmt/chief/approvals", label: "Miratimet & vendimet", icon: ClipboardCheck },
       { href: "/ishmt/field-inspections", label: "Cakto inspektim terreni", icon: ShieldCheck },
       { href: "/ishmt/search", label: "Regjistri i ashensorëve", icon: Building2 },
@@ -174,6 +185,7 @@ const ADMIN_NAV: NavGroup[] = [
     label: "Administrator i sistemit",
     items: [
       { href: "/ishmt/admin/dashboard", label: "Paneli", icon: LayoutDashboard },
+      ISHMT_CONTRACTS_NAV,
       { href: "/ishmt/admin/users", label: "Përdoruesit", icon: Users },
       { href: "/ishmt/admin/audit", label: "Audit log", icon: ScrollText },
       { href: "/ishmt/admin/config", label: "Konfigurime", icon: Settings },

@@ -183,7 +183,12 @@ export class MaintenanceWorkService {
           });
 
           const lastPeriodicPass = await db.inspection.findFirst({
-            where: { elevatorId: elevator.id, type: InspectionType.PERIODIC, result: InspectionResult.PASS },
+            where: {
+              elevatorId: elevator.id,
+              type: InspectionType.PERIODIC,
+              conductedDate: { not: null },
+              OR: [{ result: InspectionResult.PASS }, { status: InspectionResult.PASS }],
+            },
             orderBy: { conductedDate: "desc" },
           });
 

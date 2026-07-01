@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { ComplianceIndicator } from "@prisma/client";
 import { AppShell } from "@/components/layout/app-shell";
@@ -48,14 +49,48 @@ export default async function IshmtCompliancePage() {
         />
 
         {summary.gapCounts && (
-          <KpiStrip
-            columns={3}
-            items={[
-              { label: "Pa inspektim", value: summary.gapCounts.missingInspection, emphasis: true },
-              { label: "Pa kompani mirëmbajtjeje", value: summary.gapCounts.missingMaintenanceCompany, emphasis: true },
-              { label: "Pa regjistrim mirëmbajtjeje", value: summary.gapCounts.missingMaintenanceRecord, emphasis: true },
-            ]}
-          />
+          <SectionCard title="Mungesa në regjistër" subtitle="Klikoni «Shiko» për listën e ashensorëve" padded>
+            <PortalTableWrap>
+              <thead>
+                <tr>
+                  <th>Mungesa</th>
+                  <th className="w-24 text-right">Raste</th>
+                  <th className="w-20"></th>
+                </tr>
+              </thead>
+              <tbody>
+                {[
+                  {
+                    label: "Pa inspektim të regjistruar",
+                    value: summary.gapCounts.missingInspection,
+                    href: "/ishmt/search?complianceGap=missing-inspection",
+                  },
+                  {
+                    label: "Pa kompani mirëmbajtjeje",
+                    value: summary.gapCounts.missingMaintenanceCompany,
+                    href: "/ishmt/search?complianceGap=missing-maintenance-company",
+                  },
+                  {
+                    label: "Pa regjistrim mirëmbajtjeje",
+                    value: summary.gapCounts.missingMaintenanceRecord,
+                    href: "/ishmt/search?complianceGap=missing-maintenance-record",
+                  },
+                ].map((row) => (
+                  <tr key={row.href}>
+                    <td>{row.label}</td>
+                    <td className="text-right font-semibold tabular-nums">{row.value}</td>
+                    <td>
+                      {row.value > 0 && (
+                        <Link href={row.href} className="portal-table-link">
+                          Shiko
+                        </Link>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </PortalTableWrap>
+          </SectionCard>
         )}
 
         <SectionCard

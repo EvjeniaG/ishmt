@@ -10,7 +10,7 @@ export function getNotificationHref(
   if (entityType === "application") {
     return isIshmt ? `/ishmt/review/${entityId}` : `/portal/applications/${entityId}`;
   }
-  if (entityType === "elevator") {
+  if (entityType === "elevator" || entityType === "compliance_alert") {
     return isIshmt ? `/ishmt/elevators/${entityId}` : `/portal/elevators/${entityId}`;
   }
 
