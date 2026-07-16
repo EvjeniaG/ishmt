@@ -2,6 +2,10 @@ import {
   ApplicationStatus,
 } from "@prisma/client";
 import { db } from "@/lib/db";
+import {
+  withDemoDataApplicationScope,
+  withDemoDataElevatorScope,
+} from "@/lib/demo/demo-data-mode";
 import { getNationalComplianceAggregate } from "@/lib/elevators/elevator-compliance-stats";
 import { DeadlineService } from "@/lib/deadlines/deadline-service";
 
@@ -28,13 +32,20 @@ export class ChiefDashboardService {
       pipelineApps,
     ] = await Promise.all([
       db.application.count({
-        where: { status: ApplicationStatus.PENDING_CHIEF_INSPECTOR, deletedAt: null },
+        where: withDemoDataApplicationScope({
+          status: ApplicationStatus.PENDING_CHIEF_INSPECTOR,
+          deletedAt: null,
+        }),
       }),
       db.applicationWorkflowHistory.count({
         where: { action: "RECOMMEND_REJECTION", createdAt: { gte: daysAgo(30) } },
       }),
       db.application.count({
-        where: { status: ApplicationStatus.APPROVED, approvedAt: { gte: daysAgo(30) }, deletedAt: null },
+        where: withDemoDataApplicationScope({
+          status: ApplicationStatus.APPROVED,
+          approvedAt: { gte: daysAgo(30) },
+          deletedAt: null,
+        }),
       }),
       db.applicationWorkflowHistory.count({
         where: { action: "REJECT", createdAt: { gte: daysAgo(30) } },
@@ -43,7 +54,10 @@ export class ChiefDashboardService {
         where: { action: "RETURN", createdAt: { gte: daysAgo(30) } },
       }),
       db.application.findMany({
-        where: { status: ApplicationStatus.PENDING_CHIEF_INSPECTOR, deletedAt: null },
+        where: withDemoDataApplicationScope({
+          status: ApplicationStatus.PENDING_CHIEF_INSPECTOR,
+          deletedAt: null,
+        }),
         include: {
           data: { select: { buildingAddress: true } },
           ownerOrg: { select: { name: true } },
@@ -54,13 +68,16 @@ export class ChiefDashboardService {
       db.application.groupBy({
         by: ["status"],
         _count: { status: true },
-        where: { deletedAt: null, status: { in: PIPELINE_STATUSES } },
+        where: withDemoDataApplicationScope({
+          deletedAt: null,
+          status: { in: PIPELINE_STATUSES },
+        }),
       }),
-      db.elevator.count({ where: { deletedAt: null } }),
+      db.elevator.count({ where: withDemoDataElevatorScope({ deletedAt: null }) }),
       db.elevator.groupBy({
         by: ["status"],
         _count: { status: true },
-        where: { deletedAt: null },
+        where: withDemoDataElevatorScope({ deletedAt: null }),
       }),
       getNationalComplianceAggregate(),
       db.applicationWorkflowHistory.findMany({
@@ -73,7 +90,11 @@ export class ChiefDashboardService {
         take: 10,
       }),
       db.application.findMany({
-        where: { deletedAt: null, status: { in: PIPELINE_STATUSES }, submittedAt: { not: null } },
+        where: withDemoDataApplicationScope({
+          deletedAt: null,
+          status: { in: PIPELINE_STATUSES },
+          submittedAt: { not: null },
+        }),
         select: { id: true, applicationNumber: true, submittedAt: true },
       }),
     ]);

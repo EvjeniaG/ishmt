@@ -3,11 +3,13 @@
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { markNotificationReadAction } from "@/lib/actions/notification-actions";
+import { getNotificationHref } from "@/lib/notifications/get-notification-href";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 
 export function NotificationList({
   notifications,
+  notificationsHref = "/portal/notifications",
 }: {
   notifications: {
     id: string;
@@ -18,6 +20,7 @@ export function NotificationList({
     entityType: string | null;
     entityId: string | null;
   }[];
+  notificationsHref?: string;
 }) {
   const router = useRouter();
   const params = useSearchParams();
@@ -31,7 +34,7 @@ export function NotificationList({
     const next = new URLSearchParams(params.toString());
     if (on) next.set("unread", "1");
     else next.delete("unread");
-    router.push(`/portal/notifications?${next.toString()}`);
+    router.push(`${notificationsHref}?${next.toString()}`);
   }
 
   if (filtered.length === 0) {
@@ -88,16 +91,15 @@ export function NotificationList({
               </div>
               <p className="text-sm text-muted-foreground">{n.body}</p>
               <p className="mt-1 text-xs text-muted-foreground">{new Date(n.createdAt).toLocaleString("sq-AL")}</p>
-              {n.entityType === "application" && n.entityId && (
-                <Link href={`/portal/applications/${n.entityId}`} className="text-sm text-gov-primary hover:underline">
-                  Shiko aplikimin →
-                </Link>
-              )}
-              {n.entityType === "elevator" && n.entityId && (
-                <Link href={`/portal/elevators/${n.entityId}`} className="text-sm text-gov-primary hover:underline">
-                  Shiko ashensorin →
-                </Link>
-              )}
+              {(() => {
+                const href = getNotificationHref(n.entityType, n.entityId, notificationsHref);
+                if (!href) return null;
+                return (
+                  <Link href={href} className="mt-2 inline-flex text-sm text-gov-primary hover:underline">
+                    Shiko detajin →
+                  </Link>
+                );
+              })()}
             </div>
             {!n.readAt && (
               <Button size="sm" variant="outline" onClick={() => markNotificationReadAction(n.id)}>

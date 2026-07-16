@@ -1,10 +1,15 @@
-import { ElevatorStatus } from "@prisma/client";
+import { ElevatorStatus, Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
+import { withDemoDataElevatorScope } from "@/lib/demo/demo-data-mode";
 
 const ACTIVE_ELEVATOR = {
   deletedAt: null,
   status: ElevatorStatus.ACTIVE,
 } as const;
+
+function activeElevatorWhere(extra: Prisma.ElevatorWhereInput = {}) {
+  return withDemoDataElevatorScope({ ...ACTIVE_ELEVATOR, ...extra });
+}
 
 const ACTIVE_QR = {
   isActive: true,
@@ -26,45 +31,41 @@ export class QrPlacementStatsService {
   static async getNationalSummary(): Promise<QrPlacementSummary> {
     const [withActiveQr, placementConfirmed, placementMissing, grouped] = await Promise.all([
       db.elevator.count({
-        where: {
-          ...ACTIVE_ELEVATOR,
+        where: activeElevatorWhere({
           qrCodes: { some: ACTIVE_QR },
-        },
+        }),
       }),
       db.elevator.count({
-        where: {
-          ...ACTIVE_ELEVATOR,
+        where: activeElevatorWhere({
           qrCodes: {
             some: {
               ...ACTIVE_QR,
               placementPhotoDocumentId: { not: null },
             },
           },
-        },
+        }),
       }),
       db.elevator.count({
-        where: {
-          ...ACTIVE_ELEVATOR,
+        where: activeElevatorWhere({
           qrCodes: {
             some: {
               ...ACTIVE_QR,
               placementPhotoDocumentId: null,
             },
           },
-        },
+        }),
       }),
       db.elevator.groupBy({
         by: ["municipalityId"],
         _count: { municipalityId: true },
-        where: {
-          ...ACTIVE_ELEVATOR,
+        where: activeElevatorWhere({
           qrCodes: {
             some: {
               ...ACTIVE_QR,
               placementPhotoDocumentId: null,
             },
           },
-        },
+        }),
         orderBy: { _count: { municipalityId: "desc" } },
         take: 15,
       }),
@@ -80,11 +81,10 @@ export class QrPlacementStatsService {
     const totalsByMun = await db.elevator.groupBy({
       by: ["municipalityId"],
       _count: { municipalityId: true },
-      where: {
-        ...ACTIVE_ELEVATOR,
+      where: activeElevatorWhere({
         municipalityId: { in: municipalityIds },
         qrCodes: { some: ACTIVE_QR },
-      },
+      }),
     });
     const totalMap = new Map(totalsByMun.map((t) => [t.municipalityId, t._count.municipalityId]));
 

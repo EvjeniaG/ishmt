@@ -150,8 +150,8 @@ export default async function ReviewDetailPage({
           </div>
         }
       >
-        <div className="grid gap-6 lg:grid-cols-[1fr_380px]">
-          <div className="space-y-6">
+        <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(28rem,32rem)] xl:grid-cols-[minmax(0,1fr)_34rem]">
+          <div className="min-w-0 space-y-6">
             <SectionCard title="Dosja e aplikimit" subtitle="Të dhënat kryesore të parashtruara" padded>
               <div className="grid gap-2 text-sm md:grid-cols-2">
                 <p><strong>Personi përgjegjës i ashensorit:</strong> {application.ownerOrg.name}</p>
@@ -257,8 +257,9 @@ export default async function ReviewDetailPage({
             )}
           </div>
 
-          <div className="space-y-4 lg:sticky lg:top-6 lg:max-h-[calc(100dvh-2rem)] lg:self-start lg:overflow-y-auto lg:overscroll-contain lg:pr-1">
-            <IshmtReviewActions
+          <aside className="flex min-w-0 flex-col gap-4 lg:sticky lg:top-6 lg:max-h-[calc(100dvh-2rem)] lg:self-start lg:overflow-hidden lg:border-l lg:border-border/50 lg:pl-6">
+            <div className="min-h-0 flex-1 overflow-hidden">
+              <IshmtReviewActions
               applicationId={id}
               status={application.status}
               roleCode={session.user.roleCode}
@@ -272,11 +273,12 @@ export default async function ReviewDetailPage({
                   : undefined
               }
             />
+            </div>
             {application.targetElevator?.requiresAttention && (
               <PhysicalVerificationButton elevatorId={application.targetElevator.id} />
             )}
             {application.targetElevator && (
-              <SectionCard title="Dosja e ashensorit" padded>
+              <SectionCard title="Dosja e ashensorit" padded className="shrink-0">
                 <Link
                   href={`/portal/elevators/${application.targetElevator.id}`}
                   className="text-sm text-primary hover:underline"
@@ -285,7 +287,7 @@ export default async function ReviewDetailPage({
                 </Link>
               </SectionCard>
             )}
-          </div>
+          </aside>
         </div>
       </StandardPageLayout>
     </AppShell>

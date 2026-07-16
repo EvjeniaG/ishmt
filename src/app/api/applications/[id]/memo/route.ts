@@ -6,6 +6,7 @@ import { PERMISSIONS } from "@/lib/permissions/codes";
 import { db } from "@/lib/db";
 import { PdfService } from "@/lib/services/pdf-service";
 import { ApplicationService } from "@/lib/services/application-service";
+import { resolveChiefInspectorDisplayName } from "@/lib/ishmt/chief-inspector";
 
 const TYPE_LABELS: Record<ApplicationType, string> = {
   NEW_REGISTRATION: "Regjistrim i ri",
@@ -48,6 +49,7 @@ export async function GET(
   const inspectorName = application.assignedInspector
     ? `${application.assignedInspector.firstName} ${application.assignedInspector.lastName}`.trim()
     : undefined;
+  const chiefInspectorName = await resolveChiefInspectorDisplayName();
 
   const pdf = await PdfService.generateInspectionMemoPdf({
     applicationNumber: application.applicationNumber,
@@ -58,6 +60,7 @@ export async function GET(
     submittedAt,
     issuedDate,
     inspectorName,
+    chiefInspectorName,
     recommendation:
       reviewMeta.recommendation === "APPROVE"
         ? "Miratim i kërkesës"

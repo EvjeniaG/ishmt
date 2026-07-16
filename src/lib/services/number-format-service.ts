@@ -108,30 +108,47 @@ export class NumberFormatService {
       throw new Error("Bashkisë i mungon kodi zyrtar i regjistrit. Plotësoni legacyRegistryCode para gjenerimit të numrit.");
     }
 
-    let sequence: number;
+    const maxAttempts = 200;
 
-    if (formatKey === REGISTRY_FORMAT_KEYS.ISHMT_LEGACY) {
-      const seq = await tx.legacyRegistrySequence.upsert({
-        where: { municipalityId },
-        update: { lastSequence: { increment: 1 } },
-        create: { municipalityId, lastSequence: 1 },
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      let sequence: number;
+
+      if (formatKey === REGISTRY_FORMAT_KEYS.ISHMT_LEGACY) {
+        const seq = await tx.legacyRegistrySequence.upsert({
+          where: { municipalityId },
+          update: { lastSequence: { increment: 1 } },
+          create: { municipalityId, lastSequence: 1 },
+        });
+        sequence = seq.lastSequence;
+      } else {
+        const seq = await tx.registrySequence.upsert({
+          where: { municipalityId_year: { municipalityId, year } },
+          update: { lastSequence: { increment: 1 } },
+          create: { municipalityId, year, lastSequence: 1 },
+        });
+        sequence = seq.lastSequence;
+      }
+
+      const registryNumber = applyTemplate(template, {
+        year,
+        munCode: municipality.code,
+        munLegacyCode: munLegacyCode ?? municipality.code,
+        sequence,
       });
-      sequence = seq.lastSequence;
-    } else {
-      const seq = await tx.registrySequence.upsert({
-        where: { municipalityId_year: { municipalityId, year } },
-        update: { lastSequence: { increment: 1 } },
-        create: { municipalityId, year, lastSequence: 1 },
+
+      const existing = await tx.elevator.findFirst({
+        where: { registryNumber },
+        select: { id: true },
       });
-      sequence = seq.lastSequence;
+
+      if (!existing) {
+        return registryNumber;
+      }
     }
 
-    return applyTemplate(template, {
-      year,
-      munCode: municipality.code,
-      munLegacyCode: munLegacyCode ?? municipality.code,
-      sequence,
-    });
+    throw new Error(
+      "Nuk u gjenerua dot numër regjistri unik. Kontrolloni sekuencën e bashkisë dhe regjistrin ekzistues.",
+    );
   }
 
   /**
@@ -183,18 +200,34 @@ export class NumberFormatService {
     const formatKey = config.certificate.active;
     const template = config.certificate.formats[formatKey];
     const year = new Date().getFullYear();
+    const maxAttempts = 200;
 
-    const seq = await client.certificateSequence.upsert({
-      where: { year_typeCode: { year, typeCode } },
-      update: { lastSequence: { increment: 1 } },
-      create: { year, typeCode, lastSequence: 1 },
-    });
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      const seq = await client.certificateSequence.upsert({
+        where: { year_typeCode: { year, typeCode } },
+        update: { lastSequence: { increment: 1 } },
+        create: { year, typeCode, lastSequence: 1 },
+      });
 
-    return applyTemplate(template, {
-      year,
-      munCode: "",
-      munLegacyCode: "",
-      sequence: seq.lastSequence,
-    });
+      const certificateNumber = applyTemplate(template, {
+        year,
+        munCode: "",
+        munLegacyCode: "",
+        sequence: seq.lastSequence,
+      });
+
+      const existing = await client.certificate.findFirst({
+        where: { certificateNumber },
+        select: { id: true },
+      });
+
+      if (!existing) {
+        return certificateNumber;
+      }
+    }
+
+    throw new Error(
+      "Nuk u gjenerua dot numër certifikate unik. Kontrolloni sekuencën e certifikatave dhe regjistrin ekzistues.",
+    );
   }
 }

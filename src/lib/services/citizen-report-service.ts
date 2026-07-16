@@ -11,6 +11,12 @@ import { AuditService } from "@/lib/audit/audit-service";
 import { ROLE_CODES } from "@/lib/constants/roles";
 import { NotificationService } from "@/lib/services/notification-service";
 import type { AuthContext } from "@/lib/permissions/guards";
+import { hasPermission } from "@/lib/permissions/guards";
+import { PERMISSIONS } from "@/lib/permissions/codes";
+import {
+  ISHMT_FIELD_INSPECTOR_ROLES,
+  canAssignFieldInspections,
+} from "@/lib/permissions/ishmt-roles";
 
 const REPORT_TYPE_SEQUENCE_CODE = "RPT";
 
@@ -98,7 +104,7 @@ export class CitizenReportService {
     });
     await Promise.all(
       ishmtOrgs.map((org) =>
-        NotificationService.notifyOrgMembers(org.id, {
+        NotificationService.notifyIshmtOperationsStaff(org.id, {
           title: "Raportim i ri nga qytetari",
           body: `Raporti ${report.reportNumber} (${report.type}) pret shqyrtim.`,
           entityType: "citizen_report",
@@ -114,6 +120,8 @@ export class CitizenReportService {
     status?: CitizenReportStatus;
     statuses?: CitizenReportStatus[];
     type?: CitizenReportType;
+    priority?: ReportPriority;
+    query?: string;
     assignedToMe?: boolean;
     inspectorId?: string;
   }) {
@@ -124,8 +132,25 @@ export class CitizenReportService {
       where.status = filters.status;
     }
     if (filters?.type) where.type = filters.type;
+    if (filters?.priority) where.priority = filters.priority;
     if (filters?.assignedToMe && filters.inspectorId) {
       where.assignedInspectorId = filters.inspectorId;
+    }
+
+    const query = filters?.query?.trim();
+    if (query) {
+      where.AND = [
+        ...(Array.isArray(where.AND) ? where.AND : where.AND ? [where.AND] : []),
+        {
+          OR: [
+            { reportNumber: { contains: query, mode: "insensitive" } },
+            { description: { contains: query, mode: "insensitive" } },
+            { reporterName: { contains: query, mode: "insensitive" } },
+            { locationAddress: { contains: query, mode: "insensitive" } },
+            { elevator: { registryNumber: { contains: query, mode: "insensitive" } } },
+          ],
+        },
+      ];
     }
 
     const closedStatuses: CitizenReportStatus[] = [
@@ -200,6 +225,99 @@ export class CitizenReportService {
         tx,
       );
     });
+
+    return this.getById(reportId);
+  }
+
+  static async assignInspector(ctx: AuthContext, reportId: string, inspectorId: string) {
+    if (
+      !canAssignFieldInspections(ctx.roleCode) ||
+      !hasPermission(ctx, PERMISSIONS.REPORTS_MANAGE)
+    ) {
+      throw new Error("Nuk keni leje të caktoni inspektor terreni për raportin.");
+    }
+
+    const report = await db.citizenReport.findFirst({
+      where: { id: reportId },
+      select: { id: true, reportNumber: true, status: true, assignedInspectorId: true },
+    });
+    if (!report) throw new Error("Raporti nuk u gjet.");
+
+    if (
+      report.status === CitizenReportStatus.RESOLVED ||
+      report.status === CitizenReportStatus.DISMISSED
+    ) {
+      throw new Error("Raporti i mbyllur nuk mund të caktohet inspektor.");
+    }
+
+    const roles = await db.authRole.findMany({
+      where: { code: { in: [...ISHMT_FIELD_INSPECTOR_ROLES] } },
+      select: { id: true },
+    });
+    const roleIds = roles.map((role) => role.id);
+
+    const inspectorMembership = await db.orgMembership.findFirst({
+      where: {
+        userId: inspectorId,
+        organizationId: ctx.activeOrgId,
+        deactivatedAt: null,
+        roleId: { in: roleIds },
+        user: { isActive: true },
+      },
+      include: {
+        user: { select: { id: true, firstName: true, lastName: true } },
+      },
+    });
+    if (!inspectorMembership) {
+      throw new Error("Inspektori i zgjedhur nuk është anëtar i vlefshëm i ISHMT.");
+    }
+
+    const fromStatus = report.status;
+    const toStatus =
+      fromStatus === CitizenReportStatus.SUBMITTED || fromStatus === CitizenReportStatus.TRIAGED
+        ? CitizenReportStatus.ASSIGNED
+        : fromStatus;
+    const inspectorName = `${inspectorMembership.user.firstName} ${inspectorMembership.user.lastName}`.trim();
+    const assignerName = `${ctx.firstName} ${ctx.lastName}`.trim();
+
+    await db.$transaction(async (tx) => {
+      await tx.citizenReport.update({
+        where: { id: reportId },
+        data: { assignedInspectorId: inspectorId, status: toStatus },
+      });
+      await tx.citizenReportAction.create({
+        data: {
+          reportId,
+          action: "ASSIGNED",
+          actorId: ctx.userId,
+          comment: `Caktuar inspektor terreni: ${inspectorName} (nga ${assignerName})`,
+        },
+      });
+      await AuditService.log(
+        {
+          actorId: ctx.userId,
+          action: AuditAction.UPDATE,
+          entityType: "citizen_report",
+          entityId: reportId,
+          beforeState: {
+            status: fromStatus,
+            assignedInspectorId: report.assignedInspectorId,
+          },
+          afterState: { status: toStatus, assignedInspectorId: inspectorId },
+        },
+        tx,
+      );
+    });
+
+    if (inspectorId !== report.assignedInspectorId) {
+      await NotificationService.create({
+        userId: inspectorId,
+        title: "Raportim qytetari i caktuar",
+        body: `Ju është caktuar raporti ${report.reportNumber} për hetim në terren.`,
+        entityType: "citizen_report",
+        entityId: report.id,
+      });
+    }
 
     return this.getById(reportId);
   }

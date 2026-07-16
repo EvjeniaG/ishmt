@@ -1,5 +1,6 @@
 import { ApplicationStatus, OrgStatus, OrgType } from "@prisma/client";
 import { db } from "@/lib/db";
+import { withDemoDataElevatorScope } from "@/lib/demo/demo-data-mode";
 
 export const INSTALLER_ACTIVE_STATUSES: ApplicationStatus[] = [
   ApplicationStatus.PENDING_INSTALLER,
@@ -90,7 +91,7 @@ async function fetchCardMetrics() {
         status: { in: CERTIFIER_ACTIVE_STATUSES },
       },
     }),
-    db.elevator.count({ where: { deletedAt: null } }),
+    db.elevator.count({ where: withDemoDataElevatorScope({ deletedAt: null }) }),
   ]);
 
   return {

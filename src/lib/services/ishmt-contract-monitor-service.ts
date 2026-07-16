@@ -1,14 +1,19 @@
-import { ElevatorStatus, MaintenanceContractStatus } from "@prisma/client";
+import { ElevatorStatus, MaintenanceContractStatus, Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
+import { withDemoDataElevatorScope } from "@/lib/demo/demo-data-mode";
 import {
   ISSUE_TYPES_BY_CATEGORY,
   type ContractIssueListFilters,
 } from "@/lib/ishmt/contract-issue-filters";
 
-const ACTIVE_ELEVATOR = {
+const ACTIVE_ELEVATOR_BASE = {
   deletedAt: null,
   status: ElevatorStatus.ACTIVE,
 } as const;
+
+function activeElevatorWhere(extra: Prisma.ElevatorWhereInput = {}): Prisma.ElevatorWhereInput {
+  return withDemoDataElevatorScope({ ...ACTIVE_ELEVATOR_BASE, ...extra });
+}
 
 export type IshmtContractStats = {
   totalActive: number;
@@ -27,6 +32,8 @@ export type IshmtContractStats = {
 export type IshmtContractIssueRow = {
   elevatorId: string;
   ownerOrgId: string;
+  maintenanceOrgId: string | null;
+  certifierOrgId: string | null;
   registryNumber: string;
   buildingAddress: string;
   municipality: string;
@@ -54,11 +61,11 @@ export const CONTRACT_ISSUES_PAGE_SIZE = 50;
 const ISSUE_ELEVATOR_INCLUDE = {
   municipality: { select: { nameSq: true } },
   ownerOrg: { select: { name: true, nipt: true } },
-  maintenanceOrg: { select: { name: true } },
-  certifierOrg: { select: { name: true } },
+  maintenanceOrg: { select: { id: true, name: true } },
+  certifierOrg: { select: { id: true, name: true } },
   maintenanceContracts: {
     where: { isActive: true },
-    include: { maintenanceOrg: { select: { name: true } } },
+    include: { maintenanceOrg: { select: { id: true, name: true } } },
     orderBy: { endDate: "desc" as const },
   },
 } as const;
@@ -71,13 +78,13 @@ type ElevatorForIssues = {
   maintenanceOrgId: string | null;
   municipality: { nameSq: string };
   ownerOrg: { name: string; nipt: string | null };
-  maintenanceOrg: { name: string } | null;
-  certifierOrg: { name: string } | null;
+  maintenanceOrg: { id: string; name: string } | null;
+  certifierOrg: { id: string; name: string } | null;
   maintenanceContracts: Array<{
     serviceType: string;
     status: MaintenanceContractStatus;
     endDate: Date | null;
-    maintenanceOrg: { name: string };
+    maintenanceOrg: { id: string; name: string };
   }>;
 };
 
@@ -117,6 +124,16 @@ function buildIssueRowsForElevators(
     const base = {
       elevatorId: elv.id,
       ownerOrgId: elv.ownerOrgId,
+      maintenanceOrgId:
+        maintActive?.maintenanceOrg.id ??
+        maintPending?.maintenanceOrg.id ??
+        elv.maintenanceOrgId ??
+        null,
+      certifierOrgId:
+        inspActive?.maintenanceOrg.id ??
+        inspPending?.maintenanceOrg.id ??
+        elv.certifierOrg?.id ??
+        null,
       registryNumber: elv.registryNumber,
       buildingAddress: elv.buildingAddress,
       municipality: elv.municipality.nameSq,
@@ -292,10 +309,9 @@ export class IshmtContractMonitorService {
       maintenanceContractExpired,
       inspectionContractExpired,
     ] = await Promise.all([
-      db.elevator.count({ where: ACTIVE_ELEVATOR }),
+      db.elevator.count({ where: activeElevatorWhere() }),
       db.elevator.count({
-        where: {
-          ...ACTIVE_ELEVATOR,
+        where: activeElevatorWhere({
           maintenanceContracts: {
             none: {
               serviceType: "MAINTENANCE",
@@ -303,11 +319,10 @@ export class IshmtContractMonitorService {
               isActive: true,
             },
           },
-        },
+        }),
       }),
       db.elevator.count({
-        where: {
-          ...ACTIVE_ELEVATOR,
+        where: activeElevatorWhere({
           maintenanceContracts: {
             none: {
               serviceType: "PERIODIC_INSPECTION",
@@ -315,14 +330,14 @@ export class IshmtContractMonitorService {
               isActive: true,
             },
           },
-        },
+        }),
       }),
       db.maintenanceContract.count({
         where: {
           serviceType: "MAINTENANCE",
           status: MaintenanceContractStatus.PENDING,
           isActive: true,
-          elevator: ACTIVE_ELEVATOR,
+          elevator: activeElevatorWhere(),
         },
       }),
       db.maintenanceContract.count({
@@ -330,7 +345,7 @@ export class IshmtContractMonitorService {
           serviceType: "PERIODIC_INSPECTION",
           status: MaintenanceContractStatus.PENDING,
           isActive: true,
-          elevator: ACTIVE_ELEVATOR,
+          elevator: activeElevatorWhere(),
         },
       }),
       db.maintenanceContract.count({
@@ -339,7 +354,7 @@ export class IshmtContractMonitorService {
           status: MaintenanceContractStatus.ACTIVE,
           isActive: true,
           endDate: { gte: now, lte: in30 },
-          elevator: ACTIVE_ELEVATOR,
+          elevator: activeElevatorWhere(),
         },
       }),
       db.maintenanceContract.count({
@@ -348,7 +363,7 @@ export class IshmtContractMonitorService {
           status: MaintenanceContractStatus.ACTIVE,
           isActive: true,
           endDate: { gte: now, lte: in7 },
-          elevator: ACTIVE_ELEVATOR,
+          elevator: activeElevatorWhere(),
         },
       }),
       db.maintenanceContract.count({
@@ -357,7 +372,7 @@ export class IshmtContractMonitorService {
           status: MaintenanceContractStatus.ACTIVE,
           isActive: true,
           endDate: { gte: now, lte: in30 },
-          elevator: ACTIVE_ELEVATOR,
+          elevator: activeElevatorWhere(),
         },
       }),
       db.maintenanceContract.count({
@@ -366,7 +381,7 @@ export class IshmtContractMonitorService {
           status: MaintenanceContractStatus.ACTIVE,
           isActive: true,
           endDate: { gte: now, lte: in7 },
-          elevator: ACTIVE_ELEVATOR,
+          elevator: activeElevatorWhere(),
         },
       }),
       db.maintenanceContract.count({
@@ -375,7 +390,7 @@ export class IshmtContractMonitorService {
           status: MaintenanceContractStatus.ACTIVE,
           isActive: true,
           endDate: { lt: now },
-          elevator: ACTIVE_ELEVATOR,
+          elevator: activeElevatorWhere(),
         },
       }),
       db.maintenanceContract.count({
@@ -384,7 +399,7 @@ export class IshmtContractMonitorService {
           status: MaintenanceContractStatus.ACTIVE,
           isActive: true,
           endDate: { lt: now },
-          elevator: ACTIVE_ELEVATOR,
+          elevator: activeElevatorWhere(),
         },
       }),
     ]);
@@ -411,10 +426,9 @@ export class IshmtContractMonitorService {
     const pageSize = Math.min(Math.max(CONTRACT_ISSUES_PAGE_SIZE, 1), 100);
 
     const elevators = await db.elevator.findMany({
-      where: {
-        ...ACTIVE_ELEVATOR,
+      where: activeElevatorWhere({
         ...(filters.municipalityId ? { municipalityId: filters.municipalityId } : {}),
-      },
+      }),
       include: ISSUE_ELEVATOR_INCLUDE,
       orderBy: { registryNumber: "asc" },
     });
@@ -435,10 +449,9 @@ export class IshmtContractMonitorService {
     maxRows = CONTRACT_ISSUES_EXPORT_MAX,
   ): Promise<IshmtContractIssueRow[]> {
     const elevators = await db.elevator.findMany({
-      where: {
-        ...ACTIVE_ELEVATOR,
+      where: activeElevatorWhere({
         ...(filters.municipalityId ? { municipalityId: filters.municipalityId } : {}),
-      },
+      }),
       include: ISSUE_ELEVATOR_INCLUDE,
       orderBy: { registryNumber: "asc" },
     });
@@ -449,5 +462,29 @@ export class IshmtContractMonitorService {
     );
 
     return filtered.slice(0, maxRows);
+  }
+
+  /** Kur kërkimi përputhet me ashensor aktiv por nuk ka alarm kontratash. */
+  static async findActiveElevatorBySearchQuery(query: string | undefined) {
+    const q = query?.trim();
+    if (!q) return null;
+
+    return db.elevator.findFirst({
+      where: activeElevatorWhere({
+        OR: [
+          { registryNumber: { contains: q, mode: "insensitive" } },
+          { buildingAddress: { contains: q, mode: "insensitive" } },
+          { buildingName: { contains: q, mode: "insensitive" } },
+          { ownerOrg: { name: { contains: q, mode: "insensitive" } } },
+          { ownerOrg: { nipt: { contains: q, mode: "insensitive" } } },
+        ],
+      }),
+      select: {
+        id: true,
+        registryNumber: true,
+        buildingAddress: true,
+        municipality: { select: { nameSq: true } },
+      },
+    });
   }
 }

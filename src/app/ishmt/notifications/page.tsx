@@ -15,7 +15,11 @@ export default async function IshmtNotificationsPage() {
     redirect("/unauthorized");
   }
 
-  const notifications = await NotificationService.listForUser(session.user.id);
+  const notifications = await NotificationService.listForUser(
+    session.user.id,
+    50,
+    session.user.roleCode,
+  );
 
   return (
     <AppShell title="Njoftimet">
@@ -33,7 +37,9 @@ export default async function IshmtNotificationsPage() {
           padded
         >
           <Suspense fallback={<p className="text-sm text-muted-foreground">Duke ngarkuar…</p>}>
-            <NotificationList notifications={notifications.map((n) => ({
+            <NotificationList
+              notificationsHref="/ishmt/notifications"
+              notifications={notifications.map((n) => ({
               id: n.id,
               title: n.title,
               body: n.body,

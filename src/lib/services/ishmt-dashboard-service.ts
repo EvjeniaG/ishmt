@@ -1,5 +1,9 @@
 import { ApplicationStatus, ElevatorStatus } from "@prisma/client";
 import { db } from "@/lib/db";
+import {
+  withDemoDataApplicationScope,
+  withDemoDataElevatorScope,
+} from "@/lib/demo/demo-data-mode";
 import { ComplianceService } from "@/lib/services/compliance-service";
 import { DeadlineService } from "@/lib/deadlines/deadline-service";
 import { CITIZEN_REPORT_TRIAGE_STATUSES } from "@/lib/ishmt/citizen-report-queue";
@@ -11,7 +15,7 @@ const ACTIVE_ELEVATOR = {
 
 async function countActiveElevatorsMissingQrPlacement(): Promise<number> {
   return db.elevator.count({
-    where: {
+    where: withDemoDataElevatorScope({
       ...ACTIVE_ELEVATOR,
       OR: [
         { qrCodes: { none: { isActive: true } } },
@@ -24,7 +28,7 @@ async function countActiveElevatorsMissingQrPlacement(): Promise<number> {
           },
         },
       ],
-    },
+    }),
   });
 }
 
@@ -54,40 +58,59 @@ export class IshmtDashboardService {
       pipelineApps,
       placementMissingQr,
     ] = await Promise.all([
-      db.elevator.count({ where: { deletedAt: null } }),
+      db.elevator.count({ where: withDemoDataElevatorScope({ deletedAt: null }) }),
       db.elevator.groupBy({
         by: ["status"],
         _count: { status: true },
-        where: { deletedAt: null },
+        where: withDemoDataElevatorScope({ deletedAt: null }),
       }),
       ComplianceService.getNationalSummary(),
       db.application.count({
-        where: { status: ApplicationStatus.UNDER_REVIEW, deletedAt: null },
+        where: withDemoDataApplicationScope({
+          status: ApplicationStatus.UNDER_REVIEW,
+          deletedAt: null,
+        }),
       }),
       db.application.count({
-        where: { status: ApplicationStatus.PENDING_CHIEF_INSPECTOR, deletedAt: null },
+        where: withDemoDataApplicationScope({
+          status: ApplicationStatus.PENDING_CHIEF_INSPECTOR,
+          deletedAt: null,
+        }),
       }),
       db.citizenReport.count({
         where: { status: { in: CITIZEN_REPORT_TRIAGE_STATUSES } },
       }),
       db.elevator.count({
-        where: { status: "PENDING_CONFIRMATION", deletedAt: null },
+        where: withDemoDataElevatorScope({
+          status: "PENDING_CONFIRMATION",
+          deletedAt: null,
+        }),
       }),
       db.application.count({
-        where: { status: ApplicationStatus.SUBMITTED, deletedAt: null },
+        where: withDemoDataApplicationScope({
+          status: ApplicationStatus.SUBMITTED,
+          deletedAt: null,
+        }),
       }),
       db.application.count({
-        where: {
+        where: withDemoDataApplicationScope({
           status: ApplicationStatus.APPROVED,
           approvedAt: { gte: weekAgo },
           deletedAt: null,
-        },
+        }),
       }),
       db.application.count({
-        where: { submittedAt: { gte: weekAgo }, deletedAt: null },
+        where: withDemoDataApplicationScope({
+          submittedAt: { gte: weekAgo },
+          deletedAt: null,
+        }),
       }),
       db.application.findMany({
-        where: { deletedAt: null, status: { in: REVIEW_STATUSES }, submittedAt: { not: null } },
+        where: withDemoDataApplicationScope({
+          deletedAt: null,
+          status: { in: REVIEW_STATUSES },
+          submittedAt: { not: null },
+        }),
         select: { id: true, applicationNumber: true, submittedAt: true },
       }),
       countActiveElevatorsMissingQrPlacement(),
@@ -98,7 +121,7 @@ export class IshmtDashboardService {
     const byMunicipality = await db.elevator.groupBy({
       by: ["municipalityId"],
       _count: { municipalityId: true },
-      where: { deletedAt: null, status: "ACTIVE" },
+      where: withDemoDataElevatorScope({ deletedAt: null, status: "ACTIVE" }),
       orderBy: { _count: { municipalityId: "desc" } },
       take: 10,
     });

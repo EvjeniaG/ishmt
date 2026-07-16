@@ -1,6 +1,7 @@
 import { ApplicationStatus, ApplicationType } from "@prisma/client";
 import { ROLE_CODES, type RoleCode } from "@/lib/constants/roles";
 import type { RegistrationPhase } from "@/lib/registration/phase-router";
+import { isDemoToolsEnabled } from "@/lib/demo/demo-data-mode";
 
 export type RegistrationDemoStep =
   | "owner-basic-data"
@@ -19,9 +20,7 @@ export const REGISTRATION_DEMO_STEP_LABELS: Record<RegistrationDemoStep, string>
   "owner-pre-submit": "Demo - plotëso dosjen para parashtrimit",
 };
 
-export function isDemoToolsEnabled(): boolean {
-  return process.env.NODE_ENV !== "production";
-}
+export { isDemoToolsEnabled } from "@/lib/demo/demo-data-mode";
 
 /** Which demo fill action is available for the current user on this application. */
 export function resolveRegistrationDemoStep(input: {

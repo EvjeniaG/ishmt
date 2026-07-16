@@ -972,7 +972,7 @@ export class ApplicationService {
 
     const ishmtOrg = await db.organization.findFirst({ where: { type: OrgType.ISHMT, deletedAt: null } });
     if (ishmtOrg) {
-      await NotificationService.notifyOrgMembers(ishmtOrg.id, {
+      await NotificationService.notifyIshmtOperationsStaff(ishmtOrg.id, {
         title: "Aplikim modernizimi",
         body: `${application.applicationNumber} u parashtrua për shqyrtim.`,
         entityType: "application",
@@ -1033,7 +1033,7 @@ export class ApplicationService {
 
     const ishmtOrg = await db.organization.findFirst({ where: { type: OrgType.ISHMT, deletedAt: null } });
     if (ishmtOrg) {
-      await NotificationService.notifyOrgMembers(ishmtOrg.id, {
+      await NotificationService.notifyIshmtOperationsStaff(ishmtOrg.id, {
         title: "Aplikim i ri për regjistrim",
         body: `${application.applicationNumber} u parashtrua për shqyrtim nga ISHMT.`,
         entityType: "application",
@@ -1084,7 +1084,7 @@ export class ApplicationService {
 
     const ishmtOrg = await db.organization.findFirst({ where: { type: OrgType.ISHMT, deletedAt: null } });
     if (ishmtOrg) {
-      await NotificationService.notifyOrgMembers(ishmtOrg.id, {
+      await NotificationService.notifyIshmtOperationsStaff(ishmtOrg.id, {
         title: `Aplikim i ri: ${application.type}`,
         body: `${application.applicationNumber} u parashtrua për shqyrtim.`,
         entityType: "application",
@@ -1251,7 +1251,7 @@ export class ApplicationService {
 
     const ishmtOrg = await db.organization.findFirst({ where: { type: OrgType.ISHMT, deletedAt: null } });
     if (ishmtOrg) {
-      await NotificationService.notifyOrgMembers(ishmtOrg.id, {
+      await NotificationService.notifyIshmtOperationsStaff(ishmtOrg.id, {
         title: "Dosje për miratim",
         body: `${application.applicationNumber} u dërgua nga inspektori për miratim final.`,
         entityType: "application",
@@ -1317,7 +1317,7 @@ export class ApplicationService {
 
     const ishmtOrg = await db.organization.findFirst({ where: { type: OrgType.ISHMT, deletedAt: null } });
     if (ishmtOrg) {
-      await NotificationService.notifyOrgMembers(ishmtOrg.id, {
+      await NotificationService.notifyIshmtOperationsStaff(ishmtOrg.id, {
         title: "Rekomandim refuzimi",
         body: `${application.applicationNumber} - inspektori rekomandon refuzimin. Shqyrtoni për vendim final.`,
         entityType: "application",

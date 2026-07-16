@@ -84,7 +84,6 @@ export function CorrectionApplicationView({
             <p className="mt-4 text-sm text-muted-foreground">
               Kërkesa për ndryshim dhe arsyet regjistrohen në sistem me korrigjimet e specifikuara.
               Certifikata aktive CR referohet automatikisht - nuk kërkohet ngarkim shkrimi.
-              Për arkiv, mund të shkarkoni formularin PDF nga banneri i aplikimit.
             </p>
           )}
         </ApplicationWorkflowSection>

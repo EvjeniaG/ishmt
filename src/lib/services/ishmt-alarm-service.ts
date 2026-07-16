@@ -3,6 +3,10 @@ import {
   FieldInspectionAssignmentStatus,
 } from "@prisma/client";
 import { db } from "@/lib/db";
+import {
+  withDemoDataApplicationScope,
+  withDemoDataElevatorScope,
+} from "@/lib/demo/demo-data-mode";
 import { getNationalComplianceAggregate } from "@/lib/elevators/elevator-compliance-stats";
 import { type IshmtAlarm, sortIshmtAlarms } from "@/lib/ishmt/dashboard-alarms";
 import { DeadlineService } from "@/lib/deadlines/deadline-service";
@@ -76,19 +80,31 @@ export class IshmtAlarmService {
       contractStats,
     ] = await Promise.all([
       db.application.count({
-        where: { status: ApplicationStatus.SUBMITTED, deletedAt: null },
+        where: withDemoDataApplicationScope({
+          status: ApplicationStatus.SUBMITTED,
+          deletedAt: null,
+        }),
       }),
       db.application.count({
-        where: { status: ApplicationStatus.UNDER_REVIEW, deletedAt: null },
+        where: withDemoDataApplicationScope({
+          status: ApplicationStatus.UNDER_REVIEW,
+          deletedAt: null,
+        }),
       }),
       db.application.count({
-        where: { status: ApplicationStatus.PENDING_CHIEF_INSPECTOR, deletedAt: null },
+        where: withDemoDataApplicationScope({
+          status: ApplicationStatus.PENDING_CHIEF_INSPECTOR,
+          deletedAt: null,
+        }),
       }),
       db.citizenReport.count({
         where: { status: { in: CITIZEN_REPORT_TRIAGE_STATUSES } },
       }),
       db.elevator.count({
-        where: { status: "PENDING_CONFIRMATION", deletedAt: null },
+        where: withDemoDataElevatorScope({
+          status: "PENDING_CONFIRMATION",
+          deletedAt: null,
+        }),
       }),
       getNationalComplianceAggregate(),
       db.fieldInspectionAssignment.count({
@@ -107,11 +123,11 @@ export class IshmtAlarmService {
         where: { action: "RECOMMEND_REJECTION", createdAt: { gte: monthAgo } },
       }),
       db.application.findMany({
-        where: {
+        where: withDemoDataApplicationScope({
           deletedAt: null,
           status: { in: REVIEW_STATUSES },
           submittedAt: { not: null },
-        },
+        }),
         select: { id: true, applicationNumber: true, submittedAt: true },
       }),
       IshmtContractMonitorService.getNationalStats(),

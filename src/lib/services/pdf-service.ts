@@ -1,5 +1,6 @@
 import PDFDocument from "pdfkit";
 import { assertPdfkitFontsAvailable } from "@/lib/pdf/pdfkit-setup";
+import { DEFAULT_CHIEF_INSPECTOR_NAME } from "@/lib/ishmt/chief-inspector";
 
 function createPdfDocument(options: PDFKit.PDFDocumentOptions) {
   assertPdfkitFontsAvailable();
@@ -110,6 +111,7 @@ export type InspectionMemoPdfVariables = {
   submittedAt: string;
   issuedDate: string;
   inspectorName?: string;
+  chiefInspectorName?: string;
   recommendation?: string;
   summary?: string;
 };
@@ -234,7 +236,7 @@ export class PdfService {
       doc.text("KRYEINSPEKTOR", left, doc.y, { width: contentWidth, align: "center" });
       doc.moveDown(0.3);
       doc.font("Helvetica").fontSize(10);
-      doc.text(`(${variables.chiefInspectorName ?? "Emër Mbiemër"})`, left, doc.y, {
+      doc.text(`(${variables.chiefInspectorName ?? DEFAULT_CHIEF_INSPECTOR_NAME})`, left, doc.y, {
         width: contentWidth,
         align: "center",
       });
@@ -379,7 +381,7 @@ export class PdfService {
         width: contentWidth / 2,
         align: "center",
       });
-      doc.font("Helvetica").fontSize(10).text(`(${variables.chiefInspectorName ?? "Emër Mbiemër"})`, left + contentWidth / 2, doc.y, {
+      doc.font("Helvetica").fontSize(10).text(`(${variables.chiefInspectorName ?? DEFAULT_CHIEF_INSPECTOR_NAME})`, left + contentWidth / 2, doc.y, {
         width: contentWidth / 2,
         align: "center",
       });
@@ -628,7 +630,12 @@ export class PdfService {
       doc.font("Helvetica").fontSize(10);
       doc.text("Përgjegjësi i Sektorit të Produkteve Mekanike", left, doc.y + 40);
       doc.text("Drejtori i Drejtorisë së Mbikëqyrjes së Produkteve", left, doc.y + 20);
-      doc.text("Konfirmimi i Kryeinspektorit", left, doc.y + 20);
+      doc.text("Kryeinspektori", left, doc.y + 20);
+      doc.text(
+        `(${variables.chiefInspectorName ?? DEFAULT_CHIEF_INSPECTOR_NAME})`,
+        left,
+        doc.y + 4,
+      );
       if (variables.inspectorName) {
         doc.moveDown(2);
         doc.text(`Inspektori: ${variables.inspectorName}`, left, doc.y);

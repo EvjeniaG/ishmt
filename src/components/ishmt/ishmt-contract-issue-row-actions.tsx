@@ -15,6 +15,8 @@ export function IshmtContractIssueRowActions({ row }: { row: IshmtContractIssueR
     setBusy(true);
     const result = await notifyOwnerForContractIssueAction({
       ownerOrgId: row.ownerOrgId,
+      maintenanceOrgId: row.maintenanceOrgId,
+      certifierOrgId: row.certifierOrgId,
       elevatorId: row.elevatorId,
       issueType: row.issueType,
       issueLabel: row.issueLabel,
@@ -39,7 +41,7 @@ export function IshmtContractIssueRowActions({ row }: { row: IshmtContractIssueR
         onClick={() => void notify()}
       >
         <Mail className="mr-1 h-3 w-3" aria-hidden />
-        {done ? "U dërgua" : busy ? "…" : "Njofto"}
+        {done ? "U dërgua" : busy ? "…" : "Njofto palët"}
       </Button>
     </div>
   );

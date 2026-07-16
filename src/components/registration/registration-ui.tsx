@@ -1,7 +1,6 @@
 import {
   Building2,
   ClipboardCheck,
-  Download,
   FileCheck2,
   Send,
   ShieldCheck,
@@ -122,18 +121,5 @@ export function AlertPanel({
         <div className="mt-1 text-sm leading-relaxed text-muted-foreground">{children}</div>
       </div>
     </div>
-  );
-}
-
-/** PDF zyrtar i kërkesës - link i thjeshtë. */
-export function RegistrationRequestFormLink({ applicationId }: { applicationId: string }) {
-  return (
-    <a
-      href={`/api/applications/${applicationId}/request-form`}
-      className="inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-gov-primary"
-    >
-      <Download className="h-3.5 w-3.5" aria-hidden />
-      Shkarko PDF e kërkesës
-    </a>
   );
 }

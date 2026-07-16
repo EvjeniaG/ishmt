@@ -50,7 +50,6 @@ import { getReturnToRoles, isReturnedToRole } from "@/lib/workflows/return-targe
 import { LegalDeadlineBadge } from "@/components/deadlines/deadline-badge";
 import { ProcedureDeadlineNotice } from "@/components/deadlines/procedure-deadline-notice";
 import { DeadlineService } from "@/lib/deadlines/deadline-service";
-import { Download } from "lucide-react";
 import { displayCertifierOrganizationName } from "@/lib/elevators/format-om-body";
 
 export default async function ApplicationDetailPage({
@@ -309,15 +308,6 @@ export default async function ApplicationDetailPage({
           hasReason={Boolean(data?.deregistrationReasonType && data?.deregistrationReason)}
           hasModernization={Boolean(data?.modernizationType)}
           ownershipAccepted={ownershipDelegation?.status === DelegationStatus.ACCEPTED}
-          actions={
-            session.user.roleCode === ROLE_CODES.OWNER &&
-            !(isOwnerRegistration && registrationPhase) ? (
-              <a href={`/api/applications/${id}/request-form`} className="workflow-action-pill">
-                <Download className="h-4 w-4" aria-hidden />
-                Shkarko formularin
-              </a>
-            ) : undefined
-          }
         />
 
         {isRegistrationDelegate && registrationPhase && (

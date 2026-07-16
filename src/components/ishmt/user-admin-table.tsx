@@ -36,9 +36,9 @@ function UserStatus({ user }: { user: UserRow }) {
     return <WorkflowStatusChip label="Jo aktiv" tone="neutral" />;
   }
   if (locked) {
-    return <WorkflowStatusChip label="I bllokuar" tone="warning" />;
+    return <WorkflowStatusChip label="I bllokuar" tone="danger" />;
   }
-  return <WorkflowStatusChip label="Aktiv" tone="success" />;
+  return <WorkflowStatusChip label="Aktiv" tone="done" />;
 }
 
 export function UserAdminTable({ users }: { users: UserRow[] }) {

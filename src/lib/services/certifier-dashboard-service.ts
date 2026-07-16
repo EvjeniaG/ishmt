@@ -6,6 +6,7 @@ import {
   MaintenanceContractStatus,
   ReturnTargetRole,
 } from "@prisma/client";
+import { certifierOrgHasMaintenanceAssignments } from "@/lib/certifier/certifier-maintenance-access";
 import { db } from "@/lib/db";
 import { ApplicationService } from "@/lib/services/application-service";
 import type { AuthContext } from "@/lib/permissions/guards";
@@ -49,6 +50,7 @@ export class CertifierDashboardService {
 
     const orgId = ctx.activeOrgId;
     const baseWhere = certifierAppWhere(orgId);
+    const hasMaintenanceAssignments = await certifierOrgHasMaintenanceAssignments(orgId);
 
     const [
       inProgress,
@@ -156,13 +158,15 @@ export class CertifierDashboardService {
         orderBy: { createdAt: "desc" },
         take: 10,
       }),
-      db.maintenanceContract.count({
-        where: {
-          maintenanceOrgId: orgId,
-          status: MaintenanceContractStatus.ACTIVE,
-          serviceType: "MAINTENANCE",
-        },
-      }),
+      hasMaintenanceAssignments
+        ? db.maintenanceContract.count({
+            where: {
+              maintenanceOrgId: orgId,
+              status: MaintenanceContractStatus.ACTIVE,
+              serviceType: "MAINTENANCE",
+            },
+          })
+        : Promise.resolve(0),
       db.maintenanceContract.count({
         where: {
           maintenanceOrgId: orgId,
@@ -179,20 +183,22 @@ export class CertifierDashboardService {
     ]);
 
     const requiredActions = [
-      ...pendingMaintenanceContracts.map((c) => ({
-        id: `maint-contract-${c.id}`,
-        applicationNumber: c.elevator?.registryNumber ?? "-",
-        owner: c.elevator?.ownerOrg?.name ?? "-",
-        address: c.elevator?.buildingAddress ?? "-",
-        status: "PENDING_CONTRACT" as const,
-        type: "MAINTENANCE" as const,
-        dueDate: c.endDate,
-        href: c.elevatorId
-          ? `/portal/elevators/${c.elevatorId}?tab=maintenance`
-          : "/portal/omi/kontratat",
-        actionLabel: "Ngarko kontratën dhe prano",
-        severity: "warning" as const,
-      })),
+      ...(hasMaintenanceAssignments
+        ? pendingMaintenanceContracts.map((c) => ({
+            id: `maint-contract-${c.id}`,
+            applicationNumber: c.elevator?.registryNumber ?? "-",
+            owner: c.elevator?.ownerOrg?.name ?? "-",
+            address: c.elevator?.buildingAddress ?? "-",
+            status: "PENDING_CONTRACT" as const,
+            type: "MAINTENANCE" as const,
+            dueDate: c.endDate,
+            href: c.elevatorId
+              ? `/portal/elevators/${c.elevatorId}?tab=maintenance`
+              : "/portal/omi/kontratat",
+            actionLabel: "Ngarko kontratën dhe prano",
+            severity: "warning" as const,
+          }))
+        : []),
       ...pendingInspectionContracts.map((c) => ({
         id: `contract-${c.id}`,
         applicationNumber: c.elevator?.registryNumber ?? "-",
@@ -231,9 +237,10 @@ export class CertifierDashboardService {
 
     const certificationPending = inProgress + returned;
     const inspectionPending = pendingInspectionContracts.length;
-    const maintenancePending = pendingMaintenanceContracts.length;
+    const maintenancePending = hasMaintenanceAssignments ? pendingMaintenanceContracts.length : 0;
 
     return {
+      hasMaintenanceAssignments,
       cards: {
         certifikim: {
           value: completed,
@@ -256,14 +263,16 @@ export class CertifierDashboardService {
               ? "Në pritje të pranimit të ftesës për certifikim"
               : "Nuk ka instalime në pritje të certifikimit",
         },
-        mirembajtje: {
-          value: maintenancePending + activeMaintenanceContracts,
-          accent: maintenancePending > 0 ? ("warning" as const) : ("success" as const),
-          subtitle:
-            maintenancePending > 0
-              ? `${maintenancePending} ftesa · ${activeMaintenanceContracts} aktive`
-              : `${activeMaintenanceContracts} kontrata aktive`,
-        },
+        mirembajtje: hasMaintenanceAssignments
+          ? {
+              value: maintenancePending + activeMaintenanceContracts,
+              accent: maintenancePending > 0 ? ("warning" as const) : ("success" as const),
+              subtitle:
+                maintenancePending > 0
+                  ? `${maintenancePending} ftesa · ${activeMaintenanceContracts} aktive`
+                  : `${activeMaintenanceContracts} kontrata aktive`,
+            }
+          : null,
         inspektime: {
           value: inspectionPending + activeInspectionContracts,
           accent: inspectionPending > 0 ? ("warning" as const) : ("primary" as const),

@@ -15,6 +15,11 @@ import {
   StatusPill,
 } from "@/components/elevators/registry-shared";
 import { cn } from "@/lib/utils";
+import { MonthlyControlDetails } from "@/components/maintenance/monthly-control-details";
+import {
+  formatMonthlyControlSummary,
+  parseMonthlyControlPayload,
+} from "@/lib/maintenance/monthly-control-payload";
 
 const TYPE_LABELS: Record<string, string> = {
   ROUTINE: "Rutinë",
@@ -26,7 +31,7 @@ const TYPE_LABELS: Record<string, string> = {
 const TYPE_FILTERS = [
   { value: "all", label: "Të gjitha" },
   { value: "interventions", label: "Ndërhyrje" },
-  { value: "monthly", label: "Raporte teknik periodik" },
+  { value: "monthly", label: "Kontrolle periodike mujore" },
 ] as const;
 
 type Filter = (typeof TYPE_FILTERS)[number]["value"];
@@ -34,8 +39,15 @@ type MaintenanceRecordItem = MaintenanceRegistryView["records"][number];
 
 function RecordCard({ record, compact }: { record: MaintenanceRecordItem; compact?: boolean }) {
   const typeLabel = record.isMonthlyReport
-    ? "Raport teknik periodik"
+    ? "Kontroll periodik mujor"
     : TYPE_LABELS[record.typeLabel] ?? record.typeLabel;
+
+  const monthlyPayload = record.isMonthlyReport
+    ? parseMonthlyControlPayload(record.findings)
+    : null;
+  const monthlySummary = record.isMonthlyReport
+    ? formatMonthlyControlSummary(record.findings)
+    : null;
 
   const detailRows = [
     { label: "Lloji", value: record.interventionLabel },
@@ -49,9 +61,10 @@ function RecordCard({ record, compact }: { record: MaintenanceRecordItem; compac
     ...(record.durationMinutes != null
       ? [{ label: "Kohëzgjatja", value: `${record.durationMinutes} min` }]
       : []),
-    ...(record.description ? [{ label: "Përshkrimi", value: record.description }] : []),
+    ...(record.description ? [{ label: "Përmbledhje", value: record.description }] : []),
     ...(record.partsReplaced ? [{ label: "Pjesët e zëvendësuara", value: record.partsReplaced }] : []),
-    ...(record.findings ? [{ label: "Vërejtje", value: record.findings }] : []),
+    ...(!monthlyPayload && record.findings ? [{ label: "Vërejtje", value: record.findings }] : []),
+    ...(monthlySummary && !monthlyPayload ? [{ label: "Përmbledhje kontrolli", value: monthlySummary }] : []),
     ...(record.nextDueDate ? [{ label: "Afati i radhës", value: fmtDateSq(record.nextDueDate) }] : []),
     { label: "Regjistruar", value: fmtDateTimeSq(record.createdAt) },
   ];
@@ -89,6 +102,7 @@ function RecordCard({ record, compact }: { record: MaintenanceRecordItem; compac
         <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground transition-transform group-open:rotate-180" />
       </summary>
       <div className="space-y-2 border-t border-border/60 px-3 pb-3 pt-2">
+        {monthlyPayload && <MonthlyControlDetails findings={record.findings} />}
         <DetailRows rows={detailRows} />
         {record.documentId && (
           <DocumentDownload

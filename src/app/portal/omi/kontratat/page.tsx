@@ -24,6 +24,7 @@ import {
   MaintenanceContractService,
 } from "@/lib/services/maintenance-contract-service";
 import { ROLE_CODES } from "@/lib/constants/roles";
+import { certifierOrgHasMaintenanceAssignments } from "@/lib/certifier/certifier-maintenance-access";
 
 const MS_PER_DAY = 1000 * 60 * 60 * 24;
 
@@ -65,13 +66,17 @@ export default async function OmiKontratatPage() {
 
   await MaintenanceContractService.expireOverdue();
 
+  const hasMaintenanceAssignments = await certifierOrgHasMaintenanceAssignments(ctx.activeOrgId);
+
   const [pendingMaintenance, pendingInspection, allContracts] = await Promise.all([
-    MaintenanceWorkService.listPendingContracts(ctx),
+    hasMaintenanceAssignments ? MaintenanceWorkService.listPendingContracts(ctx) : Promise.resolve([]),
     CertifierInspectionService.listPendingContracts(ctx),
     db.maintenanceContract.findMany({
       where: {
         maintenanceOrgId: ctx.activeOrgId,
-        serviceType: { in: ["MAINTENANCE", "PERIODIC_INSPECTION"] },
+        serviceType: hasMaintenanceAssignments
+          ? { in: ["MAINTENANCE", "PERIODIC_INSPECTION"] }
+          : "PERIODIC_INSPECTION",
       },
       include: {
         elevator: { include: { municipality: true, ownerOrg: { select: { name: true } } } },
@@ -111,7 +116,11 @@ export default async function OmiKontratatPage() {
       <StandardPageLayout
         eyebrow="Portali · Certifikues / OMI"
         title="Kontratat aktive"
-        description="Mirëmbajtje dhe inspektime periodike - ftesa, kontrata aktive dhe afatet"
+        description={
+          hasMaintenanceAssignments
+            ? "Inspektime periodike dhe mirëmbajtje (ku jeni caktuar edhe si kompani mirëmbajtëse)"
+            : "Inspektime periodike OMI — kompania certifikuese nuk menaxhon mirëmbajtjen"
+        }
         actions={
           <Link href="/portal/dashboard" className="text-sm text-gov-primary hover:underline">
             ← Kthehu te paneli
@@ -121,11 +130,9 @@ export default async function OmiKontratatPage() {
         <KpiStrip
           items={[
             { label: "Kontrata aktive", value: activeCount },
-            {
-              label: "Mirëmbajtje aktive",
-              value: maintenanceActive,
-              emphasis: maintenanceActive > 0,
-            },
+            ...(hasMaintenanceAssignments
+              ? [{ label: "Mirëmbajtje aktive", value: maintenanceActive, emphasis: maintenanceActive > 0 }]
+              : []),
             {
               label: "Inspektim aktive",
               value: inspectionActive,
@@ -196,8 +203,9 @@ export default async function OmiKontratatPage() {
               </div>
               <p className="font-medium">Nuk keni asnjë kontratë ende</p>
               <p className="max-w-md text-sm text-muted-foreground">
-                Kontratat e mirëmbajtjes dhe inspektimit shfaqen këtu sapo personi përgjegjës i ashensorit ju cakton si
-                kompani shërbimi për një ashensor.
+                {hasMaintenanceAssignments
+                  ? "Kontratat e inspektimit dhe mirëmbajtjes shfaqen këtu sapo personi përgjegjës i ashensorit ju cakton si kompani shërbimi."
+                  : "Kontratat e inspektimit periodik shfaqen këtu sapo personi përgjegjës i ashensorit ju cakton si OMI për një ashensor."}
               </p>
             </div>
           ) : (

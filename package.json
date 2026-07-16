@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "prisma generate && next dev --turbopack",
     "build": "prisma generate && next build",
     "start": "next start",
     "lint": "next lint",
@@ -18,6 +18,8 @@
     "db:studio": "prisma studio",
     "db:seed": "prisma db seed",
     "db:seed:demo": "tsx prisma/seed-demo.ts",
+    "db:seed:full-demo": "prisma db seed && tsx prisma/seed-demo.ts",
+    "db:seed:chief-demo": "tsx prisma/seed-chief-approval-demo.ts",
     "db:seed:pipeline-demos": "tsx prisma/seed-pipeline-demos.ts",
     "db:import:legacy": "tsx prisma/import-legacy-registry.ts",
     "db:import:legacy:dry-run": "tsx prisma/import-legacy-registry.ts --dry-run",

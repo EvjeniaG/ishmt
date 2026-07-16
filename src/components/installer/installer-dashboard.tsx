@@ -5,12 +5,30 @@ import { MetricCard } from "@/components/shared/metric-card";
 import { PortalEmptyState, PortalTableWrap } from "@/components/shared/portal-table";
 import { SectionCard } from "@/components/shared/institutional";
 import { ApplicationStatusBadge } from "@/components/applications/application-status-badge";
+import { RequiredActionsPanel } from "@/components/dashboard/required-actions-panel";
 import { ROLE_CODES } from "@/lib/constants/roles";
+import { type RequiredActionItem } from "@/lib/dashboard/required-actions";
 import type { InstallerDashboardService } from "@/lib/services/installer-dashboard-service";
 
 type Data = Awaited<ReturnType<typeof InstallerDashboardService.getDashboard>>;
 
+function toRequiredActions(actions: Data["requiredActions"]): RequiredActionItem[] {
+  return actions.map((action) => ({
+    id: action.id,
+    title: `${action.applicationNumber} · ${action.actionLabel}`,
+    subtitle: `${action.owner} · ${action.address}`,
+    severity: action.severity,
+    href: action.href,
+    actionLabel: action.actionLabel,
+    dueDate: action.dueDate,
+    applicationStatus: action.status,
+    applicationType: action.type,
+  }));
+}
+
 export function InstallerDashboard({ data }: { data: Data }) {
+  const requiredActions = toRequiredActions(data.requiredActions);
+
   return (
     <StandardPageLayout
       eyebrow="Portali · Instalues"
@@ -31,24 +49,11 @@ export function InstallerDashboard({ data }: { data: Data }) {
         <MetricCard label="Dokumente të Ngarkuara" value={data.cards.uploadedDocs} />
       </div>
 
-      <SectionCard title="Veprime të kërkuara" padded>
-        {data.requiredActions.length === 0 ? (
-          <PortalEmptyState>Nuk ka veprime në pritje.</PortalEmptyState>
-        ) : (
-          <div className="space-y-3">
-            {data.requiredActions.map((a) => (
-              <div key={a.id} className="portal-list-item">
-                <div>
-                  <p className="font-medium">{a.applicationNumber} · {a.actionLabel}</p>
-                  <p className="text-muted-foreground">{a.owner} · {a.address}</p>
-                  <ApplicationStatusBadge status={a.status} type={a.type} roleCode={ROLE_CODES.INSTALLER} />
-                </div>
-                <Button asChild size="sm" variant="outline"><Link href={a.href}>{a.actionLabel}</Link></Button>
-              </div>
-            ))}
-          </div>
-        )}
-      </SectionCard>
+      <RequiredActionsPanel
+        actions={requiredActions}
+        layout="list"
+        statusRoleCode={ROLE_CODES.INSTALLER}
+      />
 
       <SectionCard
         title="Aplikimet e fundit"

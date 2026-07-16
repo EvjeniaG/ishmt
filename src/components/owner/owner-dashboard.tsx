@@ -6,25 +6,13 @@ import { PortalEmptyState, PortalTableWrap } from "@/components/shared/portal-ta
 import { SectionCard } from "@/components/shared/institutional";
 import { ComplianceIndicatorBadge } from "@/components/shared/compliance-indicator-badge";
 import { APPLICATION_TYPE_LABELS } from "@/lib/constants/application-labels";
-import { ApplicationStatusBadge, WorkflowStatusChip } from "@/components/applications/application-status-badge";
+import { ApplicationStatusBadge } from "@/components/applications/application-status-badge";
 import { ElevatorStatusBadge } from "@/components/elevators/elevator-status-badge";
 import { ROLE_CODES } from "@/lib/constants/roles";
-import type { OwnerDashboardService, RequiredActionItem } from "@/lib/services/owner-dashboard-service";
-import { cn } from "@/lib/utils";
+import type { OwnerDashboardService } from "@/lib/services/owner-dashboard-service";
+import { RequiredActionsPanel } from "@/components/dashboard/required-actions-panel";
 
 type DashboardData = Awaited<ReturnType<typeof OwnerDashboardService.getDashboard>>;
-
-const SEVERITY_LABELS: Record<RequiredActionItem["severity"], string> = {
-  danger: "Prioritet i lartë",
-  warning: "Monitorim",
-  info: "Referencë",
-};
-
-function SeverityBadge({ severity }: { severity: RequiredActionItem["severity"] }) {
-  const tone =
-    severity === "danger" ? "danger" as const : severity === "warning" ? "waiting" as const : "action" as const;
-  return <WorkflowStatusChip label={SEVERITY_LABELS[severity]} tone={tone} />;
-}
 
 export function OwnerDashboard({ data }: { data: DashboardData }) {
   const actionCount = data.requiredActions.length;
@@ -102,43 +90,11 @@ export function OwnerDashboard({ data }: { data: DashboardData }) {
         )}
       </SectionCard>
 
-      <SectionCard title="Veprime të kërkuara" subtitle="Detyrimet që kërkojnë ndërhyrjen tuaj" padded>
-        {data.requiredActions.length === 0 ? (
-          <PortalEmptyState>Nuk ka veprime që kërkojnë vëmendje.</PortalEmptyState>
-        ) : (
-          <PortalTableWrap>
-            <thead>
-              <tr>
-                <th className="w-36">Prioriteti</th>
-                <th>Përshkrimi</th>
-                <th className="w-28">Afati</th>
-                <th className="w-32"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {data.requiredActions.map((action) => (
-                <tr key={action.id}>
-                  <td>
-                    <SeverityBadge severity={action.severity} />
-                  </td>
-                  <td>
-                    <p className="font-medium text-foreground">{action.title}</p>
-                    <p className="mt-0.5 text-xs text-muted-foreground">{action.subtitle}</p>
-                  </td>
-                  <td className="text-sm tabular-nums text-muted-foreground">
-                    {action.dueDate ? new Date(action.dueDate).toLocaleDateString("sq-AL") : "-"}
-                  </td>
-                  <td>
-                    <Link href={action.href} className="portal-table-link">
-                      {action.actionLabel}
-                    </Link>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </PortalTableWrap>
-        )}
-      </SectionCard>
+      <RequiredActionsPanel
+        actions={data.requiredActions}
+        subtitle="Detyrimet që kërkojnë ndërhyrjen tuaj"
+        layout="table"
+      />
 
       <SectionCard title="Veprime të shpejta" subtitle="Nisni një proces ose menaxhoni ashensorët" padded>
         <div className="space-y-5">

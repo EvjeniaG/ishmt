@@ -46,7 +46,7 @@ export const APPLICATION_TYPE_GUIDE: Record<ApplicationGuideKey, ApplicationGuid
     steps: [
       "Zgjidhni ashensorin",
       "Specifikoni fushat e gabuara, vlerat e sakta dhe arsyen e korrigjimit",
-      "Konfirmoni dhe parashtroni te ISHMT (formular digjital - opsional PDF për arkiv)",
+      "Konfirmoni dhe parashtroni te ISHMT (formular digjital)",
       "Pas miratimit: certifikata e vjetër shfuqizohet, lëshohet CR e re nëse ndikon",
     ],
     approvers: "ISHMT",

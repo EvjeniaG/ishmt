@@ -1,5 +1,6 @@
 import { ComplianceIndicator, ElevatorStatus, Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
+import { withDemoDataElevatorScope } from "@/lib/demo/demo-data-mode";
 import {
   computeElevatorComplianceIndicator,
   ELEVATOR_COMPLIANCE_INCLUDE,
@@ -52,7 +53,7 @@ export class ChiefGeoService {
     if (filters.regionId) where.municipality = { regionId: filters.regionId };
 
     const elevators = await db.elevator.findMany({
-      where,
+      where: withDemoDataElevatorScope(where),
       include: {
         municipality: {
           select: { code: true, nameSq: true, region: { select: { nameSq: true } } },

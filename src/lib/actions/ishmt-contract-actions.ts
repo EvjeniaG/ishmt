@@ -15,6 +15,8 @@ const NOTIFY_BATCH_MAX = 1000;
 
 export async function notifyOwnerForContractIssueAction(input: {
   ownerOrgId: string;
+  maintenanceOrgId?: string | null;
+  certifierOrgId?: string | null;
   elevatorId: string;
   issueType: string;
   issueLabel: string;
@@ -27,8 +29,10 @@ export async function notifyOwnerForContractIssueAction(input: {
       return { success: false, error: "Nuk keni leje." };
     }
 
-    const result = await OwnerComplianceNotificationService.notifyForContractIssue({
+    const result = await OwnerComplianceNotificationService.notifyStakeholdersForContractIssue({
       ownerOrgId: input.ownerOrgId,
+      maintenanceOrgId: input.maintenanceOrgId,
+      certifierOrgId: input.certifierOrgId,
       elevatorId: input.elevatorId,
       issueType: input.issueType,
       issueLabel: input.issueLabel,
@@ -65,7 +69,7 @@ export async function notifyFilteredContractOwnersAction(
       return { success: false, error: "Nuk ka raste për njoftim." };
     }
 
-    const result = await OwnerComplianceNotificationService.notifyForContractIssues(rows);
+    const result = await OwnerComplianceNotificationService.notifyStakeholdersForContractIssues(rows);
     revalidatePath("/ishmt/contracts");
     return {
       success: true,

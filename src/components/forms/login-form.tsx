@@ -10,6 +10,12 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { getDefaultRedirectForRole } from "@/lib/permissions/routes";
 import type { RoleCode } from "@/lib/constants/roles";
+import { isDemoToolsEnabled } from "@/lib/demo/demo-data-mode";
+import {
+  DEMO_LOGIN_CREDENTIALS,
+  DEMO_LOGIN_PASSWORD,
+  type DemoLoginCredential,
+} from "@/lib/demo/demo-login-credentials";
 
 type AccountLevel =
   | "OWNER"
@@ -52,33 +58,10 @@ const LEVEL_HINTS: Record<AccountLevel, string> = {
   DIRECTORATE: "Llogari institucionale e Drejtorisë së Politikave (regjistrim kompanish).",
 };
 
-/** Përkohësisht - vetëm dev/demo. Kërkon `npm run db:seed:demo` (jo vetëm db:seed). */
-const DEMO_PASSWORD = "Ishmt2026";
+/** Përkohësisht — vetëm dev/demo. Kërkon `npm run db:seed:full-demo`. */
+const DEMO_PASSWORD = DEMO_LOGIN_PASSWORD;
 
-const DEMO_CREDENTIALS: {
-  role: string;
-  level: AccountLevel;
-  identifier: string;
-}[] = [
-  { role: "Personi përgjegjës i ashensorit", level: "OWNER", identifier: "I90404004D" },
-  { role: "Instalues - Ashensorë Pro", level: "INSTALLER", identifier: "K11111111A" },
-  { role: "Instalues - Lift Master", level: "INSTALLER", identifier: "L10000001A" },
-  { role: "Instalues - Euro Ashensorë", level: "INSTALLER", identifier: "L10000002B" },
-  { role: "Certifikues - OMI Certifikim", level: "CERTIFIER", identifier: "K22222222B" },
-  { role: "Certifikues - Inspekt OMI", level: "CERTIFIER", identifier: "M20000001A" },
-  { role: "Certifikues - Quality Lift", level: "CERTIFIER", identifier: "M20000002B" },
-  { role: "Mirëmbajtje - Servis Ashensorë", level: "MAINTENANCE", identifier: "K33333333C" },
-  { role: "Mirëmbajtje - Servis Lift 24", level: "MAINTENANCE", identifier: "N30000001A" },
-  { role: "Admin ISHMT", level: "ADMIN", identifier: "I90101001A" },
-  { role: "Kryeinspektor - Edison Konomi", level: "CHIEF_INSPECTOR", identifier: "I90505005E" },
-  { role: "Drejtor Teknik - Erion Prifti", level: "ISHMT_DIRECTOR", identifier: "I90606006F" },
-  { role: "Përgjegjës i Sektorit të Produkteve Mekanike - Albert Shqalshi", level: "SECTOR_HEAD", identifier: "I90707007G" },
-  { role: "Specialist sektori", level: "SECTOR_SPECIALIST", identifier: "I90808008H" },
-  { role: "Inspektor terreni", level: "FIELD_INSPECTOR", identifier: "I90909009I" },
-  { role: "Drejtoria e Politikave", level: "DIRECTORATE", identifier: "I90303003C" },
-];
-
-const SHOW_DEMO_CREDENTIALS = process.env.NODE_ENV !== "production";
+const DEMO_CREDENTIALS = DEMO_LOGIN_CREDENTIALS;
 
 export function LoginForm() {
   const router = useRouter();
@@ -91,11 +74,12 @@ export function LoginForm() {
   const [password, setPassword] = useState("");
   const [totpCode, setTotpCode] = useState("");
   const [needsTwoFactor, setNeedsTwoFactor] = useState(false);
+  const showDemoCredentials = isDemoToolsEnabled();
 
-  function applyDemoCredential(cred: (typeof DEMO_CREDENTIALS)[number]) {
+  function applyDemoCredential(cred: DemoLoginCredential) {
     setIdentifier(cred.identifier);
     setPassword(DEMO_PASSWORD);
-    setLevel(cred.level);
+    setLevel(cred.level as AccountLevel);
     setError(null);
   }
 
@@ -140,7 +124,7 @@ export function LoginForm() {
   }
 
   return (
-    <Card className={`mx-auto w-full ${SHOW_DEMO_CREDENTIALS ? "max-w-2xl" : "max-w-md"}`}>
+    <Card className={`mx-auto w-full ${showDemoCredentials ? "max-w-2xl" : "max-w-md"}`}>
       <CardHeader>
         <CardTitle>Mirëseerdhët</CardTitle>
         <CardDescription>
@@ -234,7 +218,7 @@ export function LoginForm() {
           )}
         </form>
 
-        {SHOW_DEMO_CREDENTIALS && (
+        {showDemoCredentials && (
           <div className="mt-6 rounded-lg border border-amber-200 bg-amber-50/80 p-4 text-sm">
             <p className="font-semibold text-amber-950">Kredenciale demo (përkohësisht)</p>
             <p className="mt-1 text-xs text-amber-900/80">

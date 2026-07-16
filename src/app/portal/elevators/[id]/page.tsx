@@ -41,6 +41,7 @@ import {
 } from "@/lib/elevators/dossier-viewer";
 import { CertifierDossierActions } from "@/components/elevators/certifier-dossier-actions";
 import { MaintenanceDossierActions } from "@/components/elevators/maintenance-dossier-actions";
+import { certifierCanManageMaintenanceOnElevator } from "@/lib/certifier/certifier-maintenance-access";
 
 function hasOpenServiceContract(
   contracts: Array<{ serviceType: string; status: string }>,
@@ -204,6 +205,23 @@ export default async function ElevatorDigitalFilePage({
 
   const orgId = session.user.activeOrgId;
 
+  const certifierManagesMaintenance =
+    isCertifierViewer &&
+    Boolean(orgId) &&
+    certifierCanManageMaintenanceOnElevator({
+      orgId,
+      maintenanceContracts: elevator.maintenanceContracts,
+    });
+
+  const effectiveTabs =
+    isCertifierViewer && !certifierManagesMaintenance
+      ? allowedTabs.filter((tabId) => tabId !== "maintenance")
+      : allowedTabs;
+
+  if (!effectiveTabs.includes(activeTab)) {
+    redirect(`/portal/elevators/${id}?tab=${defaultDossierTab(viewerKind)}`);
+  }
+
   const certifierPendingContract =
     isCertifierViewer && orgId
       ? (elevator.maintenanceContracts.find(
@@ -215,7 +233,7 @@ export default async function ElevatorDigitalFilePage({
       : null;
 
   const maintenancePendingContract =
-    (isMaintenanceViewer || isCertifierViewer) && orgId
+    (isMaintenanceViewer || certifierManagesMaintenance) && orgId
       ? (elevator.maintenanceContracts.find(
           (c) =>
             c.serviceType === "MAINTENANCE" &&
@@ -278,7 +296,7 @@ export default async function ElevatorDigitalFilePage({
           </div>
         </div>
 
-        <ElevatorDossierTabs elevatorId={id} activeTab={activeTab} tabs={allowedTabs} />
+        <ElevatorDossierTabs elevatorId={id} activeTab={activeTab} tabs={effectiveTabs} />
 
         {activeTab === "summary" && (isOwnerViewer || isStaffViewer) && (
           <>
@@ -462,21 +480,21 @@ export default async function ElevatorDigitalFilePage({
 
         {activeTab === "maintenance" && (
           <div className="space-y-6">
-            {(isMaintenanceViewer || isCertifierViewer) && (
+            {(isMaintenanceViewer || certifierManagesMaintenance) && (
               <MaintenanceDossierActions
                 elevatorId={id}
                 registryNumber={elevator.registryNumber}
                 pendingContract={maintenancePendingContract}
                 showServiceLinks={isMaintenanceViewer}
-                showInterventionForm={isMaintenanceViewer || isCertifierViewer}
-                showMonthlyReportForm={isMaintenanceViewer || isCertifierViewer}
+                showInterventionForm={isMaintenanceViewer || certifierManagesMaintenance}
+                showMonthlyReportForm={isMaintenanceViewer || certifierManagesMaintenance}
                 hasActiveMaintenanceContract={hasActiveMaintenanceContract}
               />
             )}
             <MaintenanceRegistryPanel
               data={maintenanceRegistry}
               audience={
-                isMaintenanceViewer || isCertifierViewer
+                isMaintenanceViewer || certifierManagesMaintenance
                   ? "maintenance"
                   : isIshmtViewer
                     ? "ishmt_staff"

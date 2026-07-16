@@ -30,7 +30,7 @@ export function MaintenanceDossierActions({
   showServiceLinks?: boolean;
   /** Shfaq formularin e ndërhyrjes direkt në dosje. */
   showInterventionForm?: boolean;
-  /** Shfaq formularin e raportit teknik periodik (30 ditë). */
+  /** Shfaq formularin e kontrollit periodik mujor. */
   showMonthlyReportForm?: boolean;
   hasActiveMaintenanceContract?: boolean;
 }) {
@@ -83,9 +83,9 @@ export function MaintenanceDossierActions({
       {showMonthlyReportForm && hasActiveMaintenanceContract && (
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Raport teknik periodik (30 ditë)</CardTitle>
+            <CardTitle className="text-base">Kontroll periodik mujor</CardTitle>
             <p className="text-sm text-muted-foreground">
-              Ngarkoni raportin teknik periodik për ashensorin {registryNumber} - detyrim çdo 30 ditë.
+              Plotësoni fushat e kontrollit për ashensorin {registryNumber} — detyrim çdo 30 ditë.
             </p>
           </CardHeader>
           <CardContent>
@@ -102,7 +102,7 @@ export function MaintenanceDossierActions({
           <CardHeader>
             <CardTitle className="text-base">Shërbimet e mirëmbajtjes</CardTitle>
             <p className="text-sm text-muted-foreground">
-              Regjistroni ndërhyrjet dhe raportet teknik periodike për këtë ashensor.
+              Regjistroni ndërhyrjet dhe kontrollet periodike mujore për këtë ashensor.
             </p>
           </CardHeader>
           <CardContent className="flex flex-wrap gap-3">
@@ -110,7 +110,7 @@ export function MaintenanceDossierActions({
               <Link href="/portal/sherbimi/nderhyrje">Ndërhyrjet</Link>
             </Button>
             <Button asChild variant="outline">
-              <Link href="/portal/sherbimi/raport-mujor">Raporti teknik periodik</Link>
+              <Link href="/portal/sherbimi/raport-mujor">Kontrolli periodik mujor</Link>
             </Button>
           </CardContent>
         </Card>

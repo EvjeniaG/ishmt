@@ -1,5 +1,9 @@
 import { NotificationChannel, NotificationStatus } from "@prisma/client";
 import { db } from "@/lib/db";
+import {
+  ISHMT_OPERATIONS_NOTIFY_EXCLUDED_ROLES,
+  notificationWhereForRole,
+} from "@/lib/notifications/field-inspector-notifications";
 
 export class NotificationService {
   static async create(input: {
@@ -26,9 +30,16 @@ export class NotificationService {
   static async notifyOrgMembers(
     organizationId: string,
     input: { title: string; body: string; entityType?: string; entityId?: string },
+    options?: { excludeMembershipRoleCodes?: readonly string[] },
   ) {
     const memberships = await db.orgMembership.findMany({
-      where: { organizationId, deactivatedAt: null },
+      where: {
+        organizationId,
+        deactivatedAt: null,
+        ...(options?.excludeMembershipRoleCodes?.length
+          ? { role: { code: { notIn: [...options.excludeMembershipRoleCodes] } } }
+          : {}),
+      },
       select: { userId: true },
     });
 
@@ -45,9 +56,19 @@ export class NotificationService {
     );
   }
 
-  static async listForUser(userId: string, limit = 50) {
+  /** Njofton stafin operacional të ISHMT, duke përjashtuar inspektorin e terrenit. */
+  static async notifyIshmtOperationsStaff(
+    organizationId: string,
+    input: { title: string; body: string; entityType?: string; entityId?: string },
+  ) {
+    return this.notifyOrgMembers(organizationId, input, {
+      excludeMembershipRoleCodes: ISHMT_OPERATIONS_NOTIFY_EXCLUDED_ROLES,
+    });
+  }
+
+  static async listForUser(userId: string, limit = 50, roleCode?: string | null) {
     return db.notification.findMany({
-      where: { userId },
+      where: notificationWhereForRole(userId, roleCode),
       orderBy: { createdAt: "desc" },
       take: limit,
     });
@@ -67,9 +88,12 @@ export class NotificationService {
     });
   }
 
-  static async unreadCount(userId: string) {
+  static async unreadCount(userId: string, roleCode?: string | null) {
     return db.notification.count({
-      where: { userId, readAt: null },
+      where: {
+        ...notificationWhereForRole(userId, roleCode),
+        readAt: null,
+      },
     });
   }
 }

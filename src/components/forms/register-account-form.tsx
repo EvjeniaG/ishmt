@@ -1,9 +1,16 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import Link from "next/link";
 import { registerAccountAction } from "@/lib/actions/auth-actions";
+import {
+  buildRegisterDemoData,
+  isRegisterDemoEnabled,
+  REGISTER_DEMO_LEVEL_LABELS,
+  REGISTER_DEMO_PASSWORD,
+  type RegisterDemoLevel,
+} from "@/lib/demo/register-demo-data";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -35,12 +42,54 @@ export function RegisterAccountForm({
   initialLevel?: Level;
 }) {
   const router = useRouter();
+  const formRef = useRef<HTMLFormElement>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [level, setLevel] = useState<Level>(initialLevel);
+  const [demoHint, setDemoHint] = useState<string | null>(null);
 
   const isCompany = COMPANY_LEVELS.includes(level);
   const showOrg = isCompany || level === "OWNER";
+  const showDemoTools = isRegisterDemoEnabled();
+  const defaultMunicipalityId = municipalities[0]?.id ?? "";
+
+  function fillDemoData() {
+    if (!defaultMunicipalityId) {
+      setError("Nuk ka bashki të ngarkuara për demo.");
+      return;
+    }
+
+    const data = buildRegisterDemoData({
+      level: level as RegisterDemoLevel,
+      municipalityId: defaultMunicipalityId,
+    });
+
+    const form = formRef.current;
+    if (!form) return;
+
+    for (const [name, value] of Object.entries(data)) {
+      const field = form.elements.namedItem(name);
+      if (
+        field instanceof HTMLInputElement ||
+        field instanceof HTMLSelectElement ||
+        field instanceof HTMLTextAreaElement
+      ) {
+        field.value = value;
+      }
+    }
+
+    const terms = form.elements.namedItem("acceptTerms");
+    if (terms && "checked" in terms) {
+      (terms as HTMLInputElement).checked = true;
+    }
+
+    setError(null);
+    setDemoHint(
+      `Të dhëna demo u plotësuan. Hyni me ${level === "OWNER" ? "Numrin Personal" : "NIPT"}: ${
+        data.personalNumber ?? data.nipt
+      } · Fjalëkalimi: ${REGISTER_DEMO_PASSWORD}`,
+    );
+  }
 
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -64,7 +113,27 @@ export function RegisterAccountForm({
         </CardDescription>
       </CardHeader>
       <CardContent>
-        <form onSubmit={onSubmit} className="grid gap-3">
+        {showDemoTools && (
+          <div className="mb-4 rounded-md border border-dashed border-amber-300 bg-amber-50/60 p-3">
+            <p className="text-xs font-medium text-amber-900">Demo — testim pipeline</p>
+            <p className="mt-1 text-[11px] text-amber-800">
+              Plotëson fushat me të dhëna fiktive unike për nivelin «{REGISTER_DEMO_LEVEL_LABELS[level as RegisterDemoLevel]}».
+              Pastaj kliko Regjistrohu.
+            </p>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="mt-2 border-amber-400 bg-white hover:bg-amber-50"
+              onClick={fillDemoData}
+            >
+              Plotëso me të dhëna demo
+            </Button>
+            {demoHint && <p className="mt-2 text-[11px] text-amber-900">{demoHint}</p>}
+          </div>
+        )}
+
+        <form ref={formRef} onSubmit={onSubmit} className="grid gap-3">
           <div className="space-y-1">
             <Label htmlFor="level" className={labelClass}>
               Niveli i aksesit *
@@ -73,7 +142,10 @@ export function RegisterAccountForm({
               id="level"
               name="level"
               value={level}
-              onChange={(e) => setLevel(e.target.value as Level)}
+              onChange={(e) => {
+                setLevel(e.target.value as Level);
+                setDemoHint(null);
+              }}
               className="flex h-9 w-full rounded-md border px-3 text-sm"
             >
               {LEVELS.map((l) => (

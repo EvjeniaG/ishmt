@@ -31,11 +31,15 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { cn } from "@/lib/utils";
 import { DemoStepFillButton } from "@/components/demo/demo-step-fill-button";
 import { FormDocumentsSection } from "@/components/applications/form-documents-section";
 import { RETURN_TARGET_LABELS } from "@/lib/workflows/return-targets";
 import type { ReturnTargetRole } from "@prisma/client";
+
+const REVIEW_TEXTAREA_CLASS =
+  "flex min-h-[3.5rem] w-full resize-y rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
 
 type Company = { id: string; name: string };
 type Municipality = { id: string; nameSq: string };
@@ -56,14 +60,94 @@ function FormError({ error }: { error: string | null }) {
 
 const RETURN_TO_ROLE_OPTIONS: ReturnTargetRole[] = ["OWNER", "INSTALLER", "CERTIFIER"];
 
+const REVIEW_ACTIONS_CARD_CLASS =
+  "flex w-full min-w-0 max-h-[calc(100dvh-5rem)] flex-col overflow-hidden shadow-md lg:max-h-[calc(100dvh-4rem)]";
+
+const REVIEW_ACTIONS_SCROLL_CLASS =
+  "min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain pr-1 [-webkit-overflow-scrolling:touch]";
+
+type ReviewDecisionMode = "approve" | "reject" | "return";
+
+function ReviewDecisionTabs({
+  mode,
+  onChange,
+}: {
+  mode: ReviewDecisionMode;
+  onChange: (mode: ReviewDecisionMode) => void;
+}) {
+  const tabs: { id: ReviewDecisionMode; label: string; activeClass: string }[] = [
+    { id: "approve", label: "Mirato", activeClass: "text-green-800 ring-green-200" },
+    { id: "reject", label: "Refuzo", activeClass: "text-destructive ring-destructive/30" },
+    { id: "return", label: "Kthe", activeClass: "text-amber-900 ring-amber-200" },
+  ];
+
+  return (
+    <div
+      role="tablist"
+      aria-label="Lloji i vendimit"
+      className="grid grid-cols-3 gap-1 rounded-xl border bg-muted/40 p-1"
+    >
+      {tabs.map((tab) => (
+        <button
+          key={tab.id}
+          type="button"
+          role="tab"
+          aria-selected={mode === tab.id}
+          onClick={() => onChange(tab.id)}
+          className={cn(
+            "rounded-lg px-2 py-2.5 text-sm font-medium transition-all",
+            mode === tab.id
+              ? cn("bg-background shadow-sm ring-1", tab.activeClass)
+              : "text-muted-foreground hover:bg-background/60 hover:text-foreground",
+          )}
+        >
+          {tab.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function InspectorRecommendationBanner({
+  inspectorReview,
+}: {
+  inspectorReview: {
+    recommendation: "APPROVE" | "REJECT";
+    requiresPhysicalInspection: boolean;
+    comment: string | null;
+  };
+}) {
+  const recommendsReject = inspectorReview.recommendation === "REJECT";
+
+  return (
+    <div
+      className={cn(
+        "rounded-xl border p-4 text-sm",
+        recommendsReject
+          ? "border-destructive/30 bg-destructive/5"
+          : "border-green-200 bg-green-50/80",
+      )}
+    >
+      <p className="font-semibold text-foreground">Rekomandimi i inspektorit</p>
+      <p className={cn("mt-1", recommendsReject ? "text-destructive" : "text-green-800")}>
+        {recommendsReject ? "Rekomandon refuzim" : "Rekomandon miratim"}
+        {inspectorReview.requiresPhysicalInspection ? " · Kërkohet verifikim fizik" : ""}
+      </p>
+      {inspectorReview.comment && (
+        <p className="mt-2 text-muted-foreground leading-relaxed">{inspectorReview.comment}</p>
+      )}
+    </div>
+  );
+}
+
 function ReturnToRolesField() {
   return (
     <fieldset className="space-y-2 rounded-md border p-3">
       <legend className="px-1 text-sm font-medium">Kthe te (mund të zgjidhni më shumë se një)</legend>
       {RETURN_TO_ROLE_OPTIONS.map((role) => (
-        <label key={role} className="flex cursor-pointer items-start gap-2 text-sm">
-          <input type="checkbox" name="returnToRoles" value={role} className="mt-0.5" />
-          <span>{RETURN_TARGET_LABELS[role]}</span>
+        <label key={role} className="flex cursor-pointer items-start gap-2 text-sm leading-snug">
+          <input type="checkbox" name="returnToRoles" value={role} className="mt-0.5 shrink-0" />
+          <span className="min-w-0 break-words">{RETURN_TARGET_LABELS[role]}</span>
         </label>
       ))}
     </fieldset>
@@ -567,11 +651,11 @@ export function InspectorReviewActions({ applicationId, status }: { applicationI
   }
 
   return (
-    <Card className="flex max-h-[min(680px,calc(100dvh-5rem))] flex-col">
-      <CardHeader className="shrink-0 pb-3">
-        <CardTitle>Veprimet e inspektorit</CardTitle>
+    <Card className={REVIEW_ACTIONS_CARD_CLASS}>
+      <CardHeader className="shrink-0 space-y-2 pb-3">
+        <CardTitle className="text-lg">Veprimet e inspektorit</CardTitle>
       </CardHeader>
-      <CardContent className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain pr-1">
+      <CardContent className={REVIEW_ACTIONS_SCROLL_CLASS}>
         {status === ApplicationStatus.SUBMITTED && (
           <Button onClick={pickup}>Merr në shqyrtim</Button>
         )}
@@ -610,14 +694,24 @@ export function InspectorReviewActions({ applicationId, status }: { applicationI
               </Button>
             </form>
 
-            <form onSubmit={returnApp} className="space-y-2 rounded-md border p-3">
+            <form onSubmit={returnApp} className="space-y-3 rounded-md border p-4">
               <p className="text-sm font-medium">Kthim për korrigjim</p>
-              <Label>Arsye kthimi</Label>
-              <Input name="reason" required />
-              <Label>Korrigjimi i kërkuar</Label>
-              <Input name="requiredCorrection" required placeholder="P.sh. Plotësoni numrin OMI" />
+              <div className="space-y-1">
+                <Label>Arsye kthimi</Label>
+                <textarea name="reason" required rows={2} className={REVIEW_TEXTAREA_CLASS} />
+              </div>
+              <div className="space-y-1">
+                <Label>Korrigjimi i kërkuar</Label>
+                <textarea
+                  name="requiredCorrection"
+                  required
+                  rows={2}
+                  className={REVIEW_TEXTAREA_CLASS}
+                  placeholder="P.sh. Plotësoni numrin OMI"
+                />
+              </div>
               <ReturnToRolesField />
-              <Button type="submit" variant="outline" className="w-full">
+              <Button type="submit" variant="outline" className="h-auto w-full whitespace-normal py-2.5">
                 Kthe për korrigjim
               </Button>
             </form>
@@ -651,6 +745,9 @@ export function AdminReviewActions({
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [mode, setMode] = useState<ReviewDecisionMode>(
+    inspectorReview?.recommendation === "REJECT" ? "reject" : "approve",
+  );
 
   async function approve() {
     if (!confirm("Konfirmo miratimin final të aplikimit?")) return;
@@ -685,49 +782,105 @@ export function AdminReviewActions({
   }
 
   return (
-    <Card className="flex max-h-[min(680px,calc(100dvh-5rem))] flex-col">
-      <CardHeader className="shrink-0 pb-3">
-        <CardTitle>Miratimi final (kryeinspektor)</CardTitle>
+    <Card className={REVIEW_ACTIONS_CARD_CLASS}>
+      <CardHeader className="shrink-0 space-y-3 pb-0">
+        <div className="space-y-2">
+          <CardTitle className="text-lg">Vendimi final</CardTitle>
+          <CardDescription>
+            Inspektori ka përfunduar shqyrtimin. Zgjidhni një veprim dhe plotësoni vetëm fushat e nevojshme.
+          </CardDescription>
+        </div>
+        {inspectorReview && <InspectorRecommendationBanner inspectorReview={inspectorReview} />}
+        <ReviewDecisionTabs mode={mode} onChange={setMode} />
       </CardHeader>
-      <CardContent className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain pr-1">
-        <p className="text-sm text-muted-foreground">
-          Inspektori ka përfunduar shqyrtimin. Miratoni, refuzoni ose ktheni dosjen për korrigjim (vendim final).
-        </p>
-        {inspectorReview && (
-          <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm">
-            <p className="font-medium">Rekomandimi i inspektorit</p>
-            <p>
-              {inspectorReview.recommendation === "REJECT"
-                ? "Rekomandon REFUZIM"
-                : "Rekomandon MIRATIM"}
-              {inspectorReview.requiresPhysicalInspection ? " · Kërkohet verifikim fizik" : ""}
+      <CardContent className={cn(REVIEW_ACTIONS_SCROLL_CLASS, "pt-4")}>
+        {mode === "approve" && (
+          <div
+            role="tabpanel"
+            className="space-y-4 rounded-xl border border-green-200 bg-green-50/50 p-4"
+          >
+            <p className="text-sm leading-relaxed text-green-950">
+              Pas miratimit gjenerohen numri i regjistrit dhe certifikata. Vendimi njoftohet automatikisht
+              personit përgjegjës të ashensorit.
             </p>
-            {inspectorReview.comment && (
-              <p className="mt-1 text-muted-foreground">{inspectorReview.comment}</p>
-            )}
+            <Button
+              onClick={approve}
+              className="h-11 w-full bg-green-700 text-base font-semibold hover:bg-green-800"
+            >
+              Mirato aplikimin
+            </Button>
           </div>
         )}
-        <Button onClick={approve} className="bg-green-700 hover:bg-green-800">
-          Mirato aplikimin
-        </Button>
-        <form onSubmit={reject} className="grid gap-2 border-t pt-4">
-          <Label>Arsye refuzimi</Label>
-          <Input name="reason" required />
-          <Button type="submit" variant="outline">Refuzo dhe njofto personin përgjegjës të ashensorit</Button>
-        </form>
-        <form onSubmit={returnApp} className="space-y-2 rounded-md border p-3">
-          <p className="text-sm font-medium">Kthim për korrigjim</p>
-          <Label>Arsye kthimi</Label>
-          <Input name="reason" required />
-          <Label>Korrigjimi i kërkuar</Label>
-          <Input name="requiredCorrection" required placeholder="P.sh. Plotësoni dokumentacionin" />
-          <ReturnToRolesField />
-          <Button type="submit" variant="outline" className="w-full">
-            Kthe për korrigjim
-          </Button>
-        </form>
+
+        {mode === "reject" && (
+          <form
+            role="tabpanel"
+            onSubmit={reject}
+            className="space-y-3 rounded-xl border border-destructive/20 bg-destructive/5 p-4"
+          >
+            <p className="text-sm text-muted-foreground">
+              Refuzimi përfundon aplikimin. Arsyeja dërgohet te personi përgjegjës i ashensorit.
+            </p>
+            <div className="space-y-1">
+              <Label htmlFor="reject-reason">Arsye refuzimi</Label>
+              <textarea
+                id="reject-reason"
+                name="reason"
+                required
+                rows={4}
+                className={`${REVIEW_TEXTAREA_CLASS} min-h-[5.5rem] bg-background`}
+                placeholder="Shkruani arsyen e refuzimit..."
+              />
+            </div>
+            <Button type="submit" variant="destructive" className="h-11 w-full">
+              Refuzo aplikimin
+            </Button>
+          </form>
+        )}
+
+        {mode === "return" && (
+          <form
+            role="tabpanel"
+            onSubmit={returnApp}
+            className="space-y-3 rounded-xl border border-amber-200 bg-amber-50/40 p-4"
+          >
+            <p className="text-sm text-muted-foreground">
+              Dosja kthehet për korrigjim te rolet e zgjedhura. Aplikimi vazhdon pas plotësimit.
+            </p>
+            <div className="space-y-1">
+              <Label htmlFor="return-reason">Arsye kthimi</Label>
+              <textarea
+                id="return-reason"
+                name="reason"
+                required
+                rows={2}
+                className={`${REVIEW_TEXTAREA_CLASS} bg-background`}
+              />
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="return-correction">Korrigjimi i kërkuar</Label>
+              <textarea
+                id="return-correction"
+                name="requiredCorrection"
+                required
+                rows={2}
+                className={`${REVIEW_TEXTAREA_CLASS} bg-background`}
+                placeholder="P.sh. Plotësoni dokumentacionin"
+              />
+            </div>
+            <ReturnToRolesField />
+            <Button type="submit" variant="outline" className="h-11 w-full border-amber-300 bg-background">
+              Kthe për korrigjim
+            </Button>
+          </form>
+        )}
+
         <FormError error={error} />
-        {success && <p className="text-sm text-green-700">{success}</p>}
+        {success && (
+          <p className="rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-800">
+            {success}
+          </p>
+        )}
       </CardContent>
     </Card>
   );

@@ -53,7 +53,7 @@ export function IshmtContractListToolbar({
         onClick={() => void notifyFiltered()}
       >
         <Mail className="mr-1.5 h-3.5 w-3.5" aria-hidden />
-        {busy ? "Duke dërguar…" : "Njofto të filtruarit"}
+        {busy ? "Duke dërguar…" : "Njofto palët e filtruara"}
       </Button>
     </div>
   );

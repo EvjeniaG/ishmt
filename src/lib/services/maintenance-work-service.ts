@@ -13,15 +13,23 @@ import { AuditService } from "@/lib/audit/audit-service";
 import { db } from "@/lib/db";
 import { ComplianceService } from "@/lib/services/compliance-service";
 import { NotificationService } from "@/lib/services/notification-service";
+import { OperationalEventNotificationService } from "@/lib/services/operational-event-notification-service";
 import { ElevatorResponsibilityService } from "@/lib/services/elevator-responsibility-service";
 import type { AuthContext } from "@/lib/permissions/guards";
 import { hasPermission } from "@/lib/permissions/guards";
 import { PERMISSIONS, type PermissionCode } from "@/lib/permissions/codes";
 import { ROLE_CODES } from "@/lib/constants/roles";
+import { certifierOrgHasMaintenanceAssignments } from "@/lib/certifier/certifier-maintenance-access";
 import {
   INTERVENTION_TYPES,
   type InterventionTypeLabel,
 } from "@/lib/constants/maintenance";
+import {
+  buildMonthlyControlDescription,
+  buildMonthlyControlPayload,
+  validateMonthlyControlInput,
+  type SubmitMonthlyControlInput,
+} from "@/lib/maintenance/monthly-control-payload";
 
 export { INTERVENTION_TYPES, type InterventionTypeLabel };
 
@@ -63,33 +71,57 @@ function timeToMinutes(value: string): number {
 }
 
 export class MaintenanceWorkService {
-  private static assertCanAcceptServiceContract(ctx: AuthContext) {
+  private static assertCanAcceptServiceContract(
+    ctx: AuthContext,
+    serviceType?: "MAINTENANCE" | "PERIODIC_INSPECTION",
+  ) {
     if (
       ctx.roleCode === ROLE_CODES.MAINTENANCE &&
       hasPermission(ctx, PERMISSIONS.MAINTENANCE_ACCEPT_CONTRACT)
     ) {
       return;
     }
-    if (
-      ctx.roleCode === ROLE_CODES.CERTIFIER &&
-      hasPermission(ctx, PERMISSIONS.CERTIFIER_ACCEPT_INSPECTION_CONTRACT)
-    ) {
-      return;
+    if (ctx.roleCode === ROLE_CODES.CERTIFIER) {
+      if (
+        serviceType === "PERIODIC_INSPECTION" &&
+        hasPermission(ctx, PERMISSIONS.CERTIFIER_ACCEPT_INSPECTION_CONTRACT)
+      ) {
+        return;
+      }
+      if (serviceType === "MAINTENANCE") {
+        return;
+      }
+      if (!serviceType) return;
     }
     throw new Error("Nuk keni leje për të pranuar kontratën.");
   }
 
-  private static assertMaintenance(
+  private static async assertMaintenance(
     ctx: AuthContext,
     permission: PermissionCode = PERMISSIONS.MAINTENANCE_VIEW_ASSIGNED,
   ) {
-    const asMaintenance =
-      ctx.roleCode === ROLE_CODES.MAINTENANCE && hasPermission(ctx, permission);
-    const asCertifier =
-      ctx.roleCode === ROLE_CODES.CERTIFIER && hasPermission(ctx, permission);
-    if (!asMaintenance && !asCertifier) {
-      throw new Error("Nuk keni leje për këtë veprim mirëmbajtjeje.");
+    if (ctx.roleCode === ROLE_CODES.MAINTENANCE && hasPermission(ctx, permission)) {
+      return;
     }
+    if (ctx.roleCode === ROLE_CODES.CERTIFIER) {
+      const hasMaintenanceRole = await certifierOrgHasMaintenanceAssignments(ctx.activeOrgId);
+      if (
+        hasMaintenanceRole &&
+        (permission === PERMISSIONS.MAINTENANCE_VIEW_ASSIGNED ||
+          permission === PERMISSIONS.MAINTENANCE_LOG_INTERVENTION ||
+          permission === PERMISSIONS.MAINTENANCE_UPLOAD_REPORT)
+      ) {
+        return;
+      }
+    }
+    throw new Error("Nuk keni leje për këtë veprim mirëmbajtjeje.");
+  }
+
+  private static assertCertifierMaintenanceAllowed(ctx: AuthContext) {
+    if (ctx.roleCode !== ROLE_CODES.CERTIFIER) return;
+    throw new Error(
+      "Kompania certifikuese nuk menaxhon mirëmbajtjen për këtë ashensor. Mirëmbajtja dhe kontrolli teknik vlejnë vetëm kur jeni caktuar edhe si kompani mirëmbajtëse.",
+    );
   }
 
   /** Kontratë aktive me kompaninë (çdo lloj shërbimi). */
@@ -118,13 +150,16 @@ export class MaintenanceWorkService {
       },
     });
     if (!contract) {
+      if (ctx.roleCode === ROLE_CODES.CERTIFIER) {
+        this.assertCertifierMaintenanceAllowed(ctx);
+      }
       throw new Error("Ky ashensor nuk ka kontratë aktive mirëmbajtjeje me kompaninë tuaj.");
     }
     return contract;
   }
 
   static async listAssignedElevators(ctx: AuthContext) {
-    this.assertMaintenance(ctx);
+    await this.assertMaintenance(ctx);
 
     const contracts = await db.maintenanceContract.findMany({
       where: {
@@ -242,13 +277,15 @@ export class MaintenanceWorkService {
   }
 
   static async acceptContract(ctx: AuthContext, contractId: string, documentId: string) {
-    this.assertCanAcceptServiceContract(ctx);
-
     const contract = await db.maintenanceContract.findFirst({
       where: { id: contractId, maintenanceOrgId: ctx.activeOrgId },
       include: { elevator: true },
     });
     if (!contract) throw new Error("Kontrata nuk u gjet.");
+    this.assertCanAcceptServiceContract(
+      ctx,
+      contract.serviceType as "MAINTENANCE" | "PERIODIC_INSPECTION",
+    );
     if (contract.status !== MaintenanceContractStatus.PENDING) {
       throw new Error("Vetëm kontratat në pritje mund të pranohen.");
     }
@@ -327,8 +364,6 @@ export class MaintenanceWorkService {
   }
 
   static async rejectContract(ctx: AuthContext, contractId: string, reason: string) {
-    this.assertCanAcceptServiceContract(ctx);
-
     if (reason.trim().length < 5) {
       throw new Error("Arsyeja e refuzimit duhet të ketë të paktën 5 karaktere.");
     }
@@ -338,6 +373,10 @@ export class MaintenanceWorkService {
       include: { elevator: true },
     });
     if (!contract) throw new Error("Kontrata nuk u gjet.");
+    this.assertCanAcceptServiceContract(
+      ctx,
+      contract.serviceType as "MAINTENANCE" | "PERIODIC_INSPECTION",
+    );
     if (contract.status !== MaintenanceContractStatus.PENDING) {
       throw new Error("Vetëm kontratat në pritje mund të refuzohen.");
     }
@@ -404,7 +443,7 @@ export class MaintenanceWorkService {
       documentId?: string;
     },
   ) {
-    this.assertMaintenance(ctx, PERMISSIONS.MAINTENANCE_LOG_INTERVENTION);
+    await this.assertMaintenance(ctx, PERMISSIONS.MAINTENANCE_LOG_INTERVENTION);
     await this.assertMaintenanceServiceContract(ctx, input.elevatorId);
 
     const startMin = timeToMinutes(input.startTime);
@@ -453,11 +492,23 @@ export class MaintenanceWorkService {
 
     await ComplianceService.recalculateForElevator(input.elevatorId);
 
+    const elevator = await db.elevator.findFirst({
+      where: { id: input.elevatorId },
+      select: { registryNumber: true },
+    });
+    if (elevator) {
+      await OperationalEventNotificationService.broadcastForElevator({
+        elevatorId: input.elevatorId,
+        title: "Ndërhyrje mirëmbajtjeje u regjistrua",
+        body: `${input.interventionType} për ashensorin ${elevator.registryNumber} më ${input.performedDate.toLocaleDateString("sq-AL")}.`,
+      });
+    }
+
     return record;
   }
 
   static async listInterventions(ctx: AuthContext, elevatorId?: string) {
-    this.assertMaintenance(ctx);
+    await this.assertMaintenance(ctx);
     return db.maintenanceRecord.findMany({
       where: {
         maintenanceOrgId: ctx.activeOrgId,
@@ -471,27 +522,32 @@ export class MaintenanceWorkService {
   }
 
   // ---------------------------------------------------------------------------
-  // 2B - Monthly reports (stored as a MaintenanceRecord with a document)
+  // 2B - Monthly field control (structured form, not PDF report)
   // ---------------------------------------------------------------------------
   static async submitMonthlyReport(
     ctx: AuthContext,
-    input: {
-      elevatorId: string;
-      periodYear: number;
-      periodMonth: number; // 1-12
-      documentId: string;
-      notes?: string;
-    },
+    input: SubmitMonthlyControlInput,
   ) {
-    this.assertMaintenance(ctx, PERMISSIONS.MAINTENANCE_UPLOAD_REPORT);
+    await this.assertMaintenance(ctx, PERMISSIONS.MAINTENANCE_UPLOAD_REPORT);
     await this.assertMaintenanceServiceContract(ctx, input.elevatorId);
+    validateMonthlyControlInput(input);
 
-    const document = await db.document.findFirst({
-      where: { id: input.documentId, uploadedById: ctx.userId, deletedAt: null },
-    });
-    if (!document) throw new Error("Dokumenti i raportit nuk u gjet. Ngarkojeni përsëri.");
+    if (input.documentId) {
+      const document = await db.document.findFirst({
+        where: { id: input.documentId, uploadedById: ctx.userId, deletedAt: null },
+      });
+      if (!document) throw new Error("Dokumenti shtesë nuk u gjet. Ngarkojeni përsëri.");
+    }
 
-    const performedDate = new Date(input.periodYear, input.periodMonth - 1, 1);
+    const payload = buildMonthlyControlPayload(input);
+    const description = buildMonthlyControlDescription(payload);
+
+    let durationMinutes: number | null = null;
+    if (input.startTime && input.endTime) {
+      const [sh, sm] = input.startTime.split(":").map((p) => parseInt(p, 10));
+      const [eh, em] = input.endTime.split(":").map((p) => parseInt(p, 10));
+      durationMinutes = (eh || 0) * 60 + (em || 0) - ((sh || 0) * 60 + (sm || 0));
+    }
 
     const record = await db.maintenanceRecord.create({
       data: {
@@ -499,9 +555,14 @@ export class MaintenanceWorkService {
         maintenanceOrgId: ctx.activeOrgId,
         type: MaintenanceType.ROUTINE,
         interventionType: MONTHLY_REPORT_TYPE,
-        performedDate,
-        description: input.notes || null,
-        documentId: input.documentId,
+        performedDate: input.performedDate,
+        startTime: input.startTime ?? null,
+        endTime: input.endTime ?? null,
+        durationMinutes,
+        technicianName: input.technicianName.trim(),
+        description,
+        findings: JSON.stringify(payload),
+        documentId: input.documentId ?? null,
         createdById: ctx.userId,
       },
     });
@@ -516,11 +577,24 @@ export class MaintenanceWorkService {
 
     await ComplianceService.recalculateForElevator(input.elevatorId);
 
+    const elevator = await db.elevator.findFirst({
+      where: { id: input.elevatorId },
+      select: { registryNumber: true },
+    });
+    if (elevator) {
+      const resultLabel = payload.result === "PASS" ? "KALUES" : "JO KALUES";
+      await OperationalEventNotificationService.broadcastForElevator({
+        elevatorId: input.elevatorId,
+        title: "Kontroll periodik mujor u regjistrua",
+        body: `${description} për ashensorin ${elevator.registryNumber} (${resultLabel}).`,
+      });
+    }
+
     return record;
   }
 
   static async listMonthlyReports(ctx: AuthContext, elevatorId?: string) {
-    this.assertMaintenance(ctx);
+    await this.assertMaintenance(ctx);
     return db.maintenanceRecord.findMany({
       where: {
         maintenanceOrgId: ctx.activeOrgId,

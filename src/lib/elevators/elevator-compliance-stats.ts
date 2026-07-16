@@ -1,5 +1,6 @@
 import { ComplianceIndicator, ElevatorStatus, Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
+import { withDemoDataElevatorScope } from "@/lib/demo/demo-data-mode";
 import { resolveElevatorComplianceView } from "@/lib/elevators/resolve-elevator-compliance";
 
 export const ELEVATOR_COMPLIANCE_INCLUDE = {
@@ -149,7 +150,7 @@ export function aggregateComplianceByMunicipality(
 
 export async function fetchElevatorsForCompliance(where: Prisma.ElevatorWhereInput = {}) {
   return db.elevator.findMany({
-    where: { deletedAt: null, ...where },
+    where: withDemoDataElevatorScope({ deletedAt: null, ...where }),
     include: ELEVATOR_COMPLIANCE_INCLUDE,
   });
 }

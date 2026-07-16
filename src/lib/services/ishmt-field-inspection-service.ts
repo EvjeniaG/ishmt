@@ -7,6 +7,7 @@ import {
 import { AuditService } from "@/lib/audit/audit-service";
 import { db } from "@/lib/db";
 import { NotificationService } from "@/lib/services/notification-service";
+import { OperationalEventNotificationService } from "@/lib/services/operational-event-notification-service";
 import type { AuthContext } from "@/lib/permissions/guards";
 import { hasPermission } from "@/lib/permissions/guards";
 import { PERMISSIONS } from "@/lib/permissions/codes";
@@ -290,8 +291,8 @@ export class IshmtFieldInspectionService {
     });
 
     const resultLabel = INSPECTION_RESULT_LABELS[input.result] ?? input.result;
-    await NotificationService.create({
-      userId: assignment.assignedById,
+    await OperationalEventNotificationService.broadcastForElevator({
+      elevatorId: assignment.elevatorId,
       title: "Inspektim terreni u përfundua",
       body: `Ashensori ${assignment.elevator.registryNumber}: ${resultLabel}.`,
       entityType: "field_inspection_assignment",

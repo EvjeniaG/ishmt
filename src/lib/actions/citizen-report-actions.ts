@@ -67,6 +67,25 @@ export async function assignReportToSelfAction(reportId: string) {
   }
 }
 
+export async function assignReportInspectorAction(reportId: string, inspectorId: string) {
+  if (!reportId || !inspectorId) {
+    return { success: false as const, error: "Të dhëna të pavlefshme" };
+  }
+
+  try {
+    const ctx = await requirePermission(PERMISSIONS.REPORTS_MANAGE);
+    await CitizenReportService.assignInspector(ctx, reportId, inspectorId);
+    revalidatePath("/ishmt/reports");
+    revalidatePath(`/ishmt/reports/${reportId}`);
+    return { success: true as const };
+  } catch (error) {
+    return {
+      success: false as const,
+      error: error instanceof Error ? error.message : "Caktimi i inspektorit dështoi",
+    };
+  }
+}
+
 export async function updateReportStatusAction(formData: FormData) {
   const reportId = String(formData.get("reportId") ?? "");
   const status = String(formData.get("status") ?? "");

@@ -1,5 +1,6 @@
 import { ApplicationStatus, ComplianceIndicator, ElevatorStatus } from "@prisma/client";
 import { db } from "@/lib/db";
+import { withDemoDataApplicationScope, withDemoDataElevatorScope } from "@/lib/demo/demo-data-mode";
 import {
   aggregateComplianceByMunicipality,
   computeElevatorComplianceIndicator,
@@ -11,7 +12,7 @@ export type ReportExportRow = Record<string, string | number | null>;
 export class ReportingService {
   static async getComplianceByMunicipality() {
     const elevators = await db.elevator.findMany({
-      where: { deletedAt: null, status: ElevatorStatus.ACTIVE },
+      where: withDemoDataElevatorScope({ deletedAt: null, status: ElevatorStatus.ACTIVE }),
       include: {
         municipality: { select: { nameSq: true, code: true } },
         ...ELEVATOR_COMPLIANCE_INCLUDE,
@@ -45,7 +46,7 @@ export class ReportingService {
     const pending = await db.application.groupBy({
       by: ["type", "status"],
       _count: { id: true },
-      where: {
+      where: withDemoDataApplicationScope({
         deletedAt: null,
         status: {
           in: [
@@ -54,7 +55,7 @@ export class ReportingService {
             ApplicationStatus.PENDING_CHIEF_INSPECTOR,
           ],
         },
-      },
+      }),
     });
 
     return { byAction, byType, pending, periodDays: days };
@@ -62,10 +63,10 @@ export class ReportingService {
 
   static async getMaintenanceNonCompliance() {
     const elevators = await db.elevator.findMany({
-      where: {
+      where: withDemoDataElevatorScope({
         deletedAt: null,
         status: ElevatorStatus.ACTIVE,
-      },
+      }),
       include: {
         municipality: { select: { nameSq: true } },
         ownerOrg: { select: { name: true } },
@@ -83,7 +84,7 @@ export class ReportingService {
     const rows = await db.elevator.groupBy({
       by: ["status"],
       _count: { status: true },
-      where: { deletedAt: null },
+      where: withDemoDataElevatorScope({ deletedAt: null }),
     });
 
     return rows.map((r) => ({
@@ -94,11 +95,11 @@ export class ReportingService {
 
   static async exportElevatorsCsv(filters?: { municipalityId?: string; status?: ElevatorStatus }) {
     const elevators = await db.elevator.findMany({
-      where: {
+      where: withDemoDataElevatorScope({
         deletedAt: null,
         ...(filters?.municipalityId ? { municipalityId: filters.municipalityId } : {}),
         ...(filters?.status ? { status: filters.status } : {}),
-      },
+      }),
       include: {
         municipality: { select: { nameSq: true } },
         ownerOrg: { select: { name: true, nipt: true } },

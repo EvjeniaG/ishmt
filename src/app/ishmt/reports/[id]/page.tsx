@@ -5,12 +5,15 @@ import { AppShell } from "@/components/layout/app-shell";
 import { StandardPageLayout } from "@/components/layout/standard-page-layout";
 import { DataSheet, SectionCard } from "@/components/shared/institutional";
 import { ReportTriageActions } from "@/components/ishmt/report-triage-actions";
+import { ReportAssignInspectorForm } from "@/components/ishmt/report-assign-inspector-form";
 import { getAuthSession } from "@/lib/auth";
 import { ROLE_CODES } from "@/lib/constants/roles";
 import { citizenReportHasActiveAssignment } from "@/lib/ishmt/citizen-report-queue";
 import { PERMISSIONS } from "@/lib/permissions/codes";
 import { roleHasPermission } from "@/lib/permissions/matrix";
+import { canAssignFieldInspections } from "@/lib/permissions/ishmt-roles";
 import { CitizenReportService } from "@/lib/services/citizen-report-service";
+import { IshmtFieldInspectionService } from "@/lib/services/ishmt-field-inspection-service";
 import {
   CITIZEN_REPORT_STATUS_LABELS,
   CITIZEN_REPORT_TYPE_LABELS,
@@ -33,6 +36,10 @@ export default async function CitizenReportDetailPage({
 
   const report = await CitizenReportService.getById(id);
   const canManage = roleHasPermission(session.user.roleCode, PERMISSIONS.REPORTS_MANAGE);
+  const canAssignInspector =
+    canManage &&
+    canAssignFieldInspections(session.user.roleCode) &&
+    roleHasPermission(session.user.roleCode, PERMISSIONS.INSPECTIONS_FIELD_ASSIGN);
   const canSelfAssign = session.user.roleCode === ROLE_CODES.FIELD_INSPECTOR;
   const assignedToMe = report.assignedInspector?.id === session.user.id;
   const hasAssignedInspector = citizenReportHasActiveAssignment(
@@ -45,6 +52,21 @@ export default async function CitizenReportDetailPage({
   const isClosed =
     report.status === CitizenReportStatus.RESOLVED ||
     report.status === CitizenReportStatus.DISMISSED;
+
+  const inspectors =
+    canAssignInspector && !isClosed
+      ? await IshmtFieldInspectionService.listFieldInspectors({
+          userId: session.user.id,
+          email: session.user.email ?? "",
+          firstName: session.user.firstName,
+          lastName: session.user.lastName,
+          activeOrgId: session.user.activeOrgId,
+          activeOrgType: session.user.activeOrgType,
+          activeOrgName: session.user.activeOrgName,
+          roleCode: session.user.roleCode,
+          permissions: session.user.permissions,
+        })
+      : [];
 
   return (
     <AppShell title="Raporti i qytetarit">
@@ -126,6 +148,20 @@ export default async function CitizenReportDetailPage({
             ]}
           />
         </SectionCard>
+
+        {canAssignInspector && (
+          <SectionCard
+            title="Caktimi i inspektorit"
+            subtitle="Zgjidhni inspektorin terreni që do të hetojë raportin"
+            padded
+          >
+            <ReportAssignInspectorForm
+              reportId={report.id}
+              inspectors={inspectors}
+              currentInspectorId={report.assignedInspectorId}
+            />
+          </SectionCard>
+        )}
 
         {canManage && (
           <SectionCard title="Veprimet e inspektorit" subtitle="Menaxhimi dhe zgjidhja e raportit" padded>

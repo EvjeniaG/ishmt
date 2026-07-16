@@ -1,3 +1,4 @@
+import path from "path";
 import { PrismaClient } from "@prisma/client";
 
 const globalForPrisma = globalThis as unknown as {
@@ -6,9 +7,11 @@ const globalForPrisma = globalThis as unknown as {
 
 function bustPrismaClientModuleCache() {
   if (process.env.NODE_ENV === "production") return;
-  for (const key of Object.keys(require.cache)) {
-    if (key.includes(`${require("path").sep}.prisma${require("path").sep}`) || key.includes("@prisma/client")) {
-      delete require.cache[key];
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const cache = require.cache as Record<string, unknown>;
+  for (const key of Object.keys(cache)) {
+    if (key.includes(`${path.sep}.prisma${path.sep}`) || key.includes("@prisma/client")) {
+      delete cache[key];
     }
   }
 }

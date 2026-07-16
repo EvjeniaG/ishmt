@@ -11,6 +11,7 @@ import { AuditService } from "@/lib/audit/audit-service";
 import { db } from "@/lib/db";
 import { ComplianceService } from "@/lib/services/compliance-service";
 import { NotificationService } from "@/lib/services/notification-service";
+import { OperationalEventNotificationService } from "@/lib/services/operational-event-notification-service";
 import { OrganizationCapabilityService } from "@/lib/services/organization-capability-service";
 import { ElevatorResponsibilityService } from "@/lib/services/elevator-responsibility-service";
 import type { AuthContext } from "@/lib/permissions/guards";
@@ -400,17 +401,18 @@ export class CertifierInspectionService {
       return created;
     });
 
-    if (result === InspectionResult.FAIL) {
-      const elevator = await db.elevator.findUnique({ where: { id: input.elevatorId } });
-      const ishmtOrg = await db.organization.findFirst({ where: { type: OrgType.ISHMT, deletedAt: null } });
-      if (ishmtOrg && elevator) {
-        await NotificationService.notifyOrgMembers(ishmtOrg.id, {
-          title: "Inspektim periodik JO KALUES",
-          body: `Ashensori ${elevator.registryNumber} dështoi inspektimin periodik dhe kërkon vëmendje.`,
-          entityType: "elevator",
-          entityId: input.elevatorId,
-        });
-      }
+    const elevator = await db.elevator.findUnique({
+      where: { id: input.elevatorId },
+      select: { registryNumber: true },
+    });
+
+    if (elevator) {
+      const resultLabel = result === InspectionResult.PASS ? "KALUES" : "JO KALUES";
+      await OperationalEventNotificationService.broadcastForElevator({
+        elevatorId: input.elevatorId,
+        title: `Inspektim periodik ${resultLabel}`,
+        body: `Ashensori ${elevator.registryNumber} · ${input.examinationType} më ${input.conductedDate.toLocaleDateString("sq-AL")}.`,
+      });
     }
 
     await ComplianceService.recalculateForElevator(input.elevatorId);

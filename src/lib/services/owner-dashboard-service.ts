@@ -15,6 +15,7 @@ import { DeadlineService } from "@/lib/deadlines/deadline-service";
 import { resolveElevatorComplianceView } from "@/lib/elevators/resolve-elevator-compliance";
 import type { AuthContext } from "@/lib/permissions/guards";
 import { ROLE_CODES } from "@/lib/constants/roles";
+import type { RequiredActionItem } from "@/lib/dashboard/required-actions";
 import { OWNER_TERM } from "@/lib/constants/owner-labels";
 import { APPLICATION_STATUS_LABELS } from "@/lib/workflows/application-workflow";
 import { labelElevatorStatus } from "@/lib/constants/display-labels";
@@ -44,15 +45,8 @@ const IN_PROGRESS_STATUSES: ApplicationStatus[] = [
   ApplicationStatus.RETURNED,
 ];
 
-export type RequiredActionItem = {
-  id: string;
-  title: string;
-  subtitle: string;
-  severity: "info" | "warning" | "danger";
-  href: string;
-  actionLabel: string;
-  dueDate?: Date;
-};
+
+export type { RequiredActionItem } from "@/lib/dashboard/required-actions";
 
 function addDays(date: Date, days: number) {
   const d = new Date(date);
@@ -740,10 +734,43 @@ export class OwnerDashboardService {
     const expiryThreshold = new Date(now);
     expiryThreshold.setDate(expiryThreshold.getDate() + 30);
     const items = await this.getDeadlineItems(orgId, expiryThreshold, now);
-    return OwnerComplianceNotificationService.syncForOrganization(
-      orgId,
-      OwnerComplianceNotificationService.alertsFromDeadlineItems(items),
-    );
+    if (items.length === 0) return { created: 0, organizations: 0 };
+
+    const elevatorIds = [...new Set(items.map((item) => item.elevatorId))];
+    const elevators = await db.elevator.findMany({
+      where: { id: { in: elevatorIds } },
+      select: { id: true, maintenanceOrgId: true, certifierOrgId: true },
+    });
+    const elevatorById = new Map(elevators.map((e) => [e.id, e]));
+
+    const byOrg = new Map<string, ReturnType<typeof OwnerComplianceNotificationService.alertsFromDeadlineItems>>();
+
+    for (const item of items) {
+      const elevator = elevatorById.get(item.elevatorId);
+      const alert = OwnerComplianceNotificationService.alertsFromDeadlineItems([item])[0];
+      if (!alert) continue;
+
+      for (const targetOrgId of OwnerComplianceNotificationService.resolveStakeholderOrgIds({
+        ownerOrgId: orgId,
+        maintenanceOrgId: elevator?.maintenanceOrgId,
+        certifierOrgId: elevator?.certifierOrgId,
+        issueType: item.type,
+      })) {
+        const existing = byOrg.get(targetOrgId) ?? [];
+        if (!existing.some((a) => a.dedupeKey === alert.dedupeKey)) {
+          existing.push(alert);
+          byOrg.set(targetOrgId, existing);
+        }
+      }
+    }
+
+    let created = 0;
+    for (const [targetOrgId, alerts] of byOrg) {
+      const result = await OwnerComplianceNotificationService.syncForOrganization(targetOrgId, alerts);
+      created += result.created;
+    }
+
+    return { created, organizations: byOrg.size };
   }
 
   static async syncAllComplianceNotifications() {

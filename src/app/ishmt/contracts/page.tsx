@@ -41,6 +41,11 @@ export default async function IshmtContractsMonitorPage({
     }),
   ]);
 
+  const matchedElevator =
+    issuesPage.total === 0 && filters.q
+      ? await IshmtContractMonitorService.findActiveElevatorBySearchQuery(filters.q)
+      : null;
+
   const prevHref =
     issuesPage.page > 1
       ? buildContractsFilterHref(filters, { page: issuesPage.page - 1 })
@@ -109,6 +114,8 @@ export default async function IshmtContractsMonitorPage({
               totalPages={issuesPage.totalPages}
               prevHref={prevHref}
               nextHref={nextHref}
+              matchedElevator={matchedElevator}
+              searchQuery={filters.q}
             />
             <OfficialTableFooter total={issuesPage.total} />
           </SectionCard>

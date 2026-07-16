@@ -8,6 +8,7 @@ import {
   Prisma,
 } from "@prisma/client";
 import { db } from "@/lib/db";
+import { withDemoDataElevatorScope } from "@/lib/demo/demo-data-mode";
 import { computeElevatorComplianceIndicator, ELEVATOR_COMPLIANCE_INCLUDE } from "@/lib/elevators/elevator-compliance-stats";
 import { AuditService } from "@/lib/audit/audit-service";
 import { NumberFormatService } from "@/lib/services/number-format-service";
@@ -311,7 +312,7 @@ export class ElevatorService {
 
   static async getByRegistryNumber(registryNumber: string) {
     return db.elevator.findFirst({
-      where: { registryNumber, deletedAt: null },
+      where: withDemoDataElevatorScope({ registryNumber, deletedAt: null }),
       include: {
         technicalData: true,
         municipality: true,

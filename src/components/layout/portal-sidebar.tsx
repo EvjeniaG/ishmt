@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   Building2,
+  Bell,
   ClipboardCheck,
   ClipboardList,
   Clock3,
@@ -45,6 +46,12 @@ const ISHMT_CONTRACTS_NAV: PortalNavItem = {
   href: "/ishmt/contracts",
   label: "Kontratat & afatet",
   icon: Clock3,
+};
+
+const ISHMT_NOTIFICATIONS_NAV: PortalNavItem = {
+  href: "/ishmt/notifications",
+  label: "Njoftimet",
+  icon: Bell,
 };
 
 const OWNER_NAV: NavGroup[] = [
@@ -96,7 +103,7 @@ const MAINTENANCE_NAV: NavGroup[] = [
       { href: "/portal/elevators", label: "Ashensorët në mirëmbajtje", icon: Building2 },
       { href: "/portal/sherbimi/contracts", label: "Kontratat", icon: ClipboardList },
       { href: "/portal/sherbimi/nderhyrje", label: "Ndërhyrjet & defektet", icon: Wrench },
-      { href: "/portal/sherbimi/raport-mujor", label: "Raportet periodike", icon: FileText },
+      { href: "/portal/sherbimi/raport-mujor", label: "Kontrollet periodike", icon: FileText },
       EXPORT_REPORTS_NAV,
       { href: "/portal/profile", label: "Profili", icon: User },
     ],
@@ -109,6 +116,7 @@ const FIELD_INSPECTOR_NAV: NavGroup[] = [
     items: [
       { href: "/ishmt/my-field-inspections", label: "Detyrat e mia", icon: ClipboardCheck },
       { href: "/ishmt/search", label: "Kërko ashensor", icon: Search },
+      ISHMT_NOTIFICATIONS_NAV,
       EXPORT_REPORTS_NAV,
       { href: getProfilePathForRole(ROLE_CODES.FIELD_INSPECTOR), label: "Profili", icon: User },
     ],
@@ -124,6 +132,7 @@ const SECTOR_SPECIALIST_NAV: NavGroup[] = [
       { href: "/ishmt/reports", label: "Raportimet e qytetarëve", icon: FileText },
       { href: "/ishmt/search", label: "Regjistri i ashensorëve", icon: Search },
       { href: "/ishmt/review", label: "Shqyrtimi i aplikimeve", icon: ClipboardList },
+      ISHMT_NOTIFICATIONS_NAV,
       EXPORT_REPORTS_NAV,
       { href: getProfilePathForRole(ROLE_CODES.SECTOR_SPECIALIST), label: "Profili", icon: User },
     ],
@@ -140,6 +149,7 @@ const SECTOR_HEAD_NAV: NavGroup[] = [
       { href: "/ishmt/field-inspections", label: "Cakto inspektim terreni", icon: ShieldCheck },
       { href: "/ishmt/reports", label: "Raportimet e qytetarëve", icon: FileText },
       { href: "/ishmt/search", label: "Regjistri i ashensorëve", icon: Search },
+      ISHMT_NOTIFICATIONS_NAV,
       EXPORT_REPORTS_NAV,
       { href: getProfilePathForRole(ROLE_CODES.SECTOR_HEAD), label: "Profili", icon: User },
     ],

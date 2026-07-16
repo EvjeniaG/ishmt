@@ -1,6 +1,7 @@
 import { AssetGenerationStatus, DocumentClassification, TemplateType, UsagePurpose } from "@prisma/client";
 import { db } from "@/lib/db";
 import { PdfService } from "@/lib/services/pdf-service";
+import { resolveChiefInspectorDisplayName } from "@/lib/ishmt/chief-inspector";
 import { ComplianceService } from "@/lib/services/compliance-service";
 import { DocumentService } from "@/lib/services/document-service";
 import { QrService } from "@/lib/services/qr-service";
@@ -40,11 +41,6 @@ async function buildCertificateVariables(input: CertificateVarInput): Promise<Re
   const { certificate, elevator, application, issuedDate } = input;
   const data = application.data;
 
-  const actor = await db.authUser.findUnique({
-    where: { id: input.actorId },
-    select: { firstName: true, lastName: true },
-  });
-
   const usagePurpose = data?.usagePurpose ? USAGE_PURPOSE_LABELS[data.usagePurpose] : undefined;
   const rawExamination = data?.examinationType ?? undefined;
   const examinationType =
@@ -74,7 +70,7 @@ async function buildCertificateVariables(input: CertificateVarInput): Promise<Re
   if (responsibleIdentifier) variables.responsibleIdentifier = responsibleIdentifier;
   if (data?.omiNumber) variables.omiNumber = data.omiNumber;
   if (examinationType) variables.examinationType = examinationType;
-  if (actor) variables.chiefInspectorName = `${actor.firstName} ${actor.lastName}`.trim();
+  variables.chiefInspectorName = await resolveChiefInspectorDisplayName();
 
   return variables;
 }

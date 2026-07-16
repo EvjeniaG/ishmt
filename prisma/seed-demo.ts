@@ -20,6 +20,7 @@ import { ROLE_CODES } from "../src/lib/constants/roles";
 import { PdfService } from "../src/lib/services/pdf-service";
 import { buildNormalizedRegistrationExtended } from "../src/lib/registration/anneks-codes";
 import { seedPipelineDemos } from "./lib/seed-pipeline-demos";
+import { seedChiefApprovalDemo } from "./lib/seed-chief-approval-demo";
 
 const prisma = new PrismaClient();
 
@@ -951,6 +952,14 @@ async function main() {
     });
     console.log(`✓ Pipeline demo: ${pipelineResult.citizenReports.join(", ")}`);
     console.log(`  (raportime · mirëmbajtje · inspektime për ${pipelineResult.elevators.join(" dhe ")})\n`);
+  }
+
+  try {
+    const chiefDemo = await seedChiefApprovalDemo(prisma);
+    console.log(`✓ Aplikim demo për kryeinspektor: ${chiefDemo.applicationNumber}`);
+    console.log(`  Hap: /ishmt/review/${chiefDemo.applicationId}\n`);
+  } catch (error) {
+    console.warn("⚠ Aplikimi demo për kryeinspektor nuk u krijua:", error instanceof Error ? error.message : error);
   }
 
   // ---------------------------------------------------------------------------

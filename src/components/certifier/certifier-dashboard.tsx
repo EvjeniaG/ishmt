@@ -5,7 +5,9 @@ import { MetricCard } from "@/components/shared/metric-card";
 import { PortalEmptyState, PortalTableWrap } from "@/components/shared/portal-table";
 import { SectionCard } from "@/components/shared/institutional";
 import { ApplicationStatusBadge } from "@/components/applications/application-status-badge";
+import { RequiredActionsPanel } from "@/components/dashboard/required-actions-panel";
 import { ROLE_CODES } from "@/lib/constants/roles";
+import { type RequiredActionItem } from "@/lib/dashboard/required-actions";
 import type { CertifierDashboardService } from "@/lib/services/certifier-dashboard-service";
 
 type Data = Awaited<ReturnType<typeof CertifierDashboardService.getDashboard>>;
@@ -14,14 +16,44 @@ function isContractAction(action: Data["requiredActions"][number]) {
   return action.status === "PENDING_CONTRACT";
 }
 
+function toRequiredActions(actions: Data["requiredActions"]): RequiredActionItem[] {
+  return actions.map((action) => {
+    if (isContractAction(action)) {
+      return {
+        id: action.id,
+        title: `${action.type === "MAINTENANCE" ? "Mirëmbajtje" : "Inspektim"} - kontrata ${action.applicationNumber}`,
+        subtitle: action.address,
+        severity: action.severity,
+        href: action.href,
+        actionLabel: action.actionLabel,
+        dueDate: action.dueDate,
+        hint: "Ngarkoni kontratën e nënshkruar dhe pranoni ftesën.",
+      };
+    }
+    return {
+      id: action.id,
+      title: action.applicationNumber,
+      subtitle: action.address,
+      severity: action.severity,
+      href: action.href,
+      actionLabel: action.actionLabel,
+      dueDate: action.dueDate,
+    };
+  });
+}
+
 export function CertifierDashboard({ data }: { data: Data }) {
   const { certifikim, instalime, mirembajtje, inspektime } = data.cards;
+  const requiredActions = toRequiredActions(data.requiredActions);
+  const description = data.hasMaintenanceAssignments
+    ? "Certifikim, inspektime periodike dhe mirëmbajtje (ku jeni caktuar edhe si kompani mirëmbajtëse)"
+    : "Certifikim dhe inspektime periodike OMI — pa detyra mirëmbajtjeje";
 
   return (
     <StandardPageLayout
       eyebrow="Portali · OMI"
       title="Paneli operativ"
-      description="Certifikim, kontrata, mirëmbajtje dhe inspektime periodike"
+      description={description}
       actions={
         <div className="flex flex-wrap gap-2">
           <Button asChild variant="default">
@@ -36,75 +68,21 @@ export function CertifierDashboard({ data }: { data: Data }) {
         </div>
       }
     >
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <MetricCard
-          compact
-          label="Certifikim"
-          value={certifikim.value}
-          accent={certifikim.accent}
-          subtitle={certifikim.subtitle}
-        />
-        <MetricCard
-          compact
-          label="Instalime"
-          value={instalime.value}
-          accent={instalime.accent}
-          subtitle={instalime.subtitle}
-        />
-        <MetricCard
-          compact
-          label="Mirëmbajtje"
-          value={mirembajtje.value}
-          accent={mirembajtje.accent}
-          subtitle={mirembajtje.subtitle}
-        />
-        <MetricCard
-          compact
-          label="Inspektime"
-          value={inspektime.value}
-          accent={inspektime.accent}
-          subtitle={inspektime.subtitle}
-        />
+      <div className={`grid gap-3 sm:grid-cols-2 ${mirembajtje ? "lg:grid-cols-4" : "lg:grid-cols-3"}`}>
+        <MetricCard compact label="Certifikim" value={certifikim.value} accent={certifikim.accent} subtitle={certifikim.subtitle} />
+        <MetricCard compact label="Instalime" value={instalime.value} accent={instalime.accent} subtitle={instalime.subtitle} />
+        {mirembajtje && (
+          <MetricCard compact label="Mirëmbajtje" value={mirembajtje.value} accent={mirembajtje.accent} subtitle={mirembajtje.subtitle} />
+        )}
+        <MetricCard compact label="Inspektime" value={inspektime.value} accent={inspektime.accent} subtitle={inspektime.subtitle} />
       </div>
 
-      <SectionCard
-        title="Veprime të kërkuara"
+      <RequiredActionsPanel
+        actions={requiredActions}
         subtitle="Detyrat që presin veprimin tuaj"
-        padded
-      >
-        {data.requiredActions.length === 0 ? (
-          <PortalEmptyState>Nuk ka veprime në pritje.</PortalEmptyState>
-        ) : (
-          <div className="space-y-3">
-            {data.requiredActions.map((a) => (
-              <div key={a.id} className="portal-list-item">
-                <div className="min-w-0 flex-1 space-y-1">
-                  {isContractAction(a) ? (
-                    <>
-                      <p className="font-medium">
-                        {a.type === "MAINTENANCE" ? "Mirëmbajtje" : "Inspektim"} - kontrata{" "}
-                        {a.applicationNumber}
-                      </p>
-                      <p className="text-muted-foreground">{a.address}</p>
-                      <p className="text-xs text-muted-foreground">
-                        Ngarkoni kontratën e nënshkruar dhe pranoni ftesën.
-                      </p>
-                    </>
-                  ) : (
-                    <>
-                      <p className="font-medium">{a.applicationNumber}</p>
-                      <p className="text-muted-foreground">{a.address}</p>
-                    </>
-                  )}
-                </div>
-                <Button asChild size="sm" variant="outline">
-                  <Link href={a.href}>{a.actionLabel}</Link>
-                </Button>
-              </div>
-            ))}
-          </div>
-        )}
-      </SectionCard>
+        layout="list"
+        statusRoleCode={ROLE_CODES.CERTIFIER}
+      />
 
       <SectionCard
         title="Aplikimet e fundit"

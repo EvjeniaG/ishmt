@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { IshmtContractIssueRowActions } from "@/components/ishmt/ishmt-contract-issue-row-actions";
 import {
   AlertTriangle,
@@ -382,6 +383,8 @@ export function IshmtContractIssuesTable({
   totalPages = 1,
   prevHref,
   nextHref,
+  matchedElevator,
+  searchQuery,
 }: {
   issues: IshmtContractIssueRow[];
   total: number;
@@ -390,11 +393,47 @@ export function IshmtContractIssuesTable({
   totalPages?: number;
   prevHref?: string;
   nextHref?: string;
+  matchedElevator?: {
+    id: string;
+    registryNumber: string;
+    buildingAddress: string;
+    municipality: { nameSq: string };
+  } | null;
+  searchQuery?: string;
 }) {
   if (issues.length === 0) {
+    if (matchedElevator) {
+      return (
+        <div className="space-y-3">
+          <PortalEmptyState>
+            Ashensori {matchedElevator.registryNumber} është në regjistër aktiv
+            {matchedElevator.municipality?.nameSq
+              ? ` (${matchedElevator.municipality.nameSq})`
+              : ""}
+            , por nuk ka alarm kontratash për filtrin aktual — kontratat e mirëmbajtjes dhe OMI
+            duken në rregull. Kjo faqe liston vetëm raste me problem (pa kontratë, skadim, pritje
+            pranimi).
+          </PortalEmptyState>
+          <Link
+            href={`/portal/elevators/${matchedElevator.id}`}
+            className="inline-flex text-sm font-medium text-gov-primary hover:underline"
+          >
+            Hap dosjen e ashensorit →
+          </Link>
+        </div>
+      );
+    }
+
     return (
       <PortalEmptyState>
-        Nuk ka raste për filtrin e zgjedhur. Regjistri është në rregull për këtë kategori.
+        {searchQuery ? (
+          <>
+            Nuk u gjet ashensor aktiv ose alarm për «{searchQuery}». Provoni Regjistrin kombëtar
+            (/ishmt/search).
+          </>
+        ) : (
+          "Nuk ka raste për filtrin e zgjedhur. Regjistri është në rregull për këtë kategori."
+        )}
       </PortalEmptyState>
     );
   }

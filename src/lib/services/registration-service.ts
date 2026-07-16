@@ -750,16 +750,23 @@ export class RegistrationService {
     if (conformity !== "NON_CONFORM") {
       const reportTargets = await db.organization.findMany({
         where: { type: { in: [OrgType.ISHMT, OrgType.DIRECTORATE] }, deletedAt: null },
-        select: { id: true },
+        select: { id: true, type: true },
       });
       await Promise.all(
         reportTargets.map((org) =>
-          NotificationService.notifyOrgMembers(org.id, {
-            title: "Raport certifikimi i ri",
-            body: `Raporti i certifikimit për ${application.applicationNumber} u përcoll njëkohësisht tek ISHMT dhe Drejtoria e Politikave të Tregut.`,
-            entityType: "application",
-            entityId: applicationId,
-          }),
+          org.type === OrgType.ISHMT
+            ? NotificationService.notifyIshmtOperationsStaff(org.id, {
+                title: "Raport certifikimi i ri",
+                body: `Raporti i certifikimit për ${application.applicationNumber} u përcoll njëkohësisht tek ISHMT dhe Drejtoria e Politikave të Tregut.`,
+                entityType: "application",
+                entityId: applicationId,
+              })
+            : NotificationService.notifyOrgMembers(org.id, {
+                title: "Raport certifikimi i ri",
+                body: `Raporti i certifikimit për ${application.applicationNumber} u përcoll njëkohësisht tek ISHMT dhe Drejtoria e Politikave të Tregut.`,
+                entityType: "application",
+                entityId: applicationId,
+              }),
         ),
       );
     }

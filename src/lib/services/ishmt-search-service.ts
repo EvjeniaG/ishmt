@@ -7,6 +7,10 @@ import { AuditService } from "@/lib/audit/audit-service";
 import { AuditAction } from "@prisma/client";
 import type { AuthContext } from "@/lib/permissions/guards";
 import { isIshmtStaffRole } from "@/lib/permissions/routes";
+import {
+  withDemoDataApplicationScope,
+  withDemoDataElevatorScope,
+} from "@/lib/demo/demo-data-mode";
 
 export type ComplianceGapFilter =
   | "missing-inspection"
@@ -74,7 +78,7 @@ export function buildNationalSearchWhere(
 ): Prisma.ElevatorWhereInput {
   const q = filters.query?.trim();
 
-  return {
+  return withDemoDataElevatorScope({
     deletedAt: null,
     ...(filters.status ? { status: filters.status } : {}),
     ...(filters.municipalityId ? { municipalityId: filters.municipalityId } : {}),
@@ -110,7 +114,7 @@ export function buildNationalSearchWhere(
           ],
         }
       : {}),
-  };
+  });
 }
 
 function complianceIndicatorFor(elv: ElevatorSearchRecord): ComplianceIndicator {
@@ -294,7 +298,7 @@ export class IshmtSearchService {
     const q = query.trim();
     if (!q) return { items: [], total: 0, page, pageSize };
 
-    const where: Prisma.ApplicationWhereInput = {
+    const where = withDemoDataApplicationScope({
       deletedAt: null,
       OR: [
         { applicationNumber: { contains: q, mode: "insensitive" } },
@@ -302,7 +306,7 @@ export class IshmtSearchService {
         { data: { serialNumber: { contains: q, mode: "insensitive" } } },
         { ownerOrg: { name: { contains: q, mode: "insensitive" } } },
       ],
-    };
+    });
 
     const [items, total] = await Promise.all([
       db.application.findMany({

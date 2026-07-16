@@ -9,6 +9,7 @@ import {
   Prisma,
 } from "@prisma/client";
 import { db } from "@/lib/db";
+import { withDemoDataElevatorScope } from "@/lib/demo/demo-data-mode";
 import { getNationalComplianceAggregate } from "@/lib/elevators/elevator-compliance-stats";
 import { SystemConfigService, type ComplianceRulesConfig } from "@/lib/services/system-config-service";
 
@@ -356,9 +357,9 @@ export class ComplianceService {
       db.elevator.groupBy({
         by: ["status"],
         _count: { status: true },
-        where: { deletedAt: null },
+        where: withDemoDataElevatorScope({ deletedAt: null }),
       }),
-      db.elevator.count({ where: { deletedAt: null } }),
+      db.elevator.count({ where: withDemoDataElevatorScope({ deletedAt: null }) }),
     ]);
 
     return { byIndicator: aggregate.byIndicator, byStatus, total, gapCounts: aggregate.gapCounts, activeRed: aggregate.activeRed, activeYellow: aggregate.activeYellow };

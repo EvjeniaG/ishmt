@@ -56,28 +56,12 @@ export class OrganizationCapabilityService {
         reason: "Subjekti eshte i fshire.",
       };
     }
-    if (org.status !== OrgStatus.ACTIVE) {
-      return {
-        ok: false,
-        qkbStatus: lookup.qkbStatus,
-        qkbStatusLabel: lookup.statusLabel,
-        reason: "Subjekti nuk eshte aktiv ne regjister.",
-      };
-    }
     if (lookup.qkbStatus !== "ACTIVE") {
       return {
         ok: false,
         qkbStatus: lookup.qkbStatus,
         qkbStatusLabel: lookup.statusLabel,
         reason: "Subjekti nuk rezulton aktiv ne QKB.",
-      };
-    }
-    if (org.type === OrgType.MAINTENANCE && !org.qkbValidated) {
-      return {
-        ok: false,
-        qkbStatus: lookup.qkbStatus,
-        qkbStatusLabel: lookup.statusLabel,
-        reason: "Subjekti nuk ka validim QKB te miratuar.",
       };
     }
 

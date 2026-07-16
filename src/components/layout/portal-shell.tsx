@@ -35,11 +35,11 @@ export async function PortalShell({
   const session = await getAuthSession();
   const unreadCount =
     session?.user && notificationsHref
-      ? await NotificationService.unreadCount(session.user.id)
+      ? await NotificationService.unreadCount(session.user.id, session.user.roleCode)
       : 0;
   const recentNotifications =
     session?.user && notificationsHref
-      ? await NotificationService.listForUser(session.user.id, 4)
+      ? await NotificationService.listForUser(session.user.id, 4, session.user.roleCode)
       : [];
 
   const initials = session?.user

@@ -66,14 +66,32 @@ export async function logInterventionAction(formData: FormData): Promise<ActionR
 
 export async function submitMonthlyReportAction(input: {
   elevatorId: string;
+  performedDate: string;
   periodYear: number;
   periodMonth: number;
-  documentId: string;
+  technicianName: string;
+  startTime?: string;
+  endTime?: string;
+  checklist: Record<string, "ok" | "not_ok" | "na">;
+  observations?: string;
   notes?: string;
+  documentId?: string;
 }): Promise<ActionResult> {
   try {
     const ctx = await requireAuth();
-    await MaintenanceWorkService.submitMonthlyReport(ctx, input);
+    await MaintenanceWorkService.submitMonthlyReport(ctx, {
+      elevatorId: input.elevatorId,
+      performedDate: new Date(input.performedDate),
+      periodYear: input.periodYear,
+      periodMonth: input.periodMonth,
+      technicianName: input.technicianName,
+      startTime: input.startTime,
+      endTime: input.endTime,
+      checklist: input.checklist,
+      observations: input.observations,
+      notes: input.notes,
+      documentId: input.documentId,
+    });
     revalidatePath("/portal/sherbimi/raport-mujor");
     revalidatePath("/portal/elevators");
     return { success: true };

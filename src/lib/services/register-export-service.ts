@@ -1,6 +1,10 @@
 import * as XLSX from "xlsx";
 import { ApplicationType, ApplicationStatus, CertificateStatus, CertificateType } from "@prisma/client";
 import { db } from "@/lib/db";
+import {
+  withDemoDataApplicationScope,
+  withDemoDataElevatorScope,
+} from "@/lib/demo/demo-data-mode";
 import { NumberFormatService } from "@/lib/services/number-format-service";
 import { USAGE_PURPOSE_LABELS } from "@/lib/constants/owner-labels";
 import { EXAMINATION_TYPE_LABELS } from "@/lib/registration/labels";
@@ -25,7 +29,7 @@ export class RegisterExportService {
   static async buildWorkbook(): Promise<Buffer> {
     const [elevators, inspections, changeApps] = await Promise.all([
       db.elevator.findMany({
-        where: { deletedAt: null },
+        where: withDemoDataElevatorScope({ deletedAt: null }),
         include: {
           technicalData: true,
           municipality: true,
@@ -39,16 +43,19 @@ export class RegisterExportService {
         orderBy: { registrationDate: "asc" },
       }),
       db.inspection.findMany({
-        where: { conductedDate: { not: null } },
+        where: {
+          conductedDate: { not: null },
+          elevator: withDemoDataElevatorScope({ deletedAt: null }),
+        },
         include: { elevator: { include: { technicalData: true } } },
         orderBy: { conductedDate: "asc" },
       }),
       db.application.findMany({
-        where: {
+        where: withDemoDataApplicationScope({
           deletedAt: null,
           type: { in: [ApplicationType.DATA_CORRECTION, ApplicationType.DATA_UPDATE, ApplicationType.MODERNIZATION] },
           status: { in: [ApplicationStatus.APPROVED, ApplicationStatus.ELEVATOR_CREATED, ApplicationStatus.ASSETS_GENERATED, ApplicationStatus.CLOSED] },
-        },
+        }),
         include: { targetElevator: true, data: true },
         orderBy: { createdAt: "asc" },
       }),

@@ -127,10 +127,11 @@ export class MaintenanceDashboardService {
         .slice(0, 5)
         .map((e) => ({
           id: e.elevatorId,
-          title: "Raport mujor i munguar",
+          title: "Kontroll periodik i munguar",
+          body: "Nuk është regjistruar kontrolli periodik mujor për këtë ashensor.",
           subtitle: e.registryNumber,
           href: "/portal/sherbimi/raport-mujor",
-          actionLabel: "Dorëzo raportin",
+          actionLabel: "Regjistro kontrollin",
           severity: "warning" as const,
         })),
       ...assignedElevators
