@@ -39,7 +39,7 @@ import { WorkflowStatusChip } from "@/components/applications/application-status
 import type { FieldInspectorOption } from "@/lib/services/ishmt-field-inspection-service";
 import type { StatusTone } from "@/lib/registration/status-presentation";
 import { cn } from "@/lib/utils";
-import { uploadElevatorDocumentClient } from "@/lib/documents/upload-elevator-document-client";
+import { uploadEntityDocumentClient } from "@/lib/documents/upload-entity-document-client";
 import { COMPLIANCE_DOCUMENT_ACCEPT, COMPLIANCE_DOCUMENT_HINT } from "@/lib/constants/document-upload";
 
 export type FieldInspectionAssignmentRow = {
@@ -47,12 +47,20 @@ export type FieldInspectionAssignmentRow = {
   scheduledDate: Date;
   status: FieldInspectionAssignmentStatus;
   instructions: string | null;
+  application: {
+    id: string;
+    applicationNumber: string;
+    data: {
+      buildingAddress: string | null;
+      municipality: { nameSq: string } | null;
+    } | null;
+  } | null;
   elevator: {
     id: string;
     registryNumber: string;
     buildingAddress: string | null;
     municipality: { nameSq: string } | null;
-  };
+  } | null;
   assignee: { id: string; firstName: string; lastName: string };
   assignedBy: { firstName: string; lastName: string };
   inspection: {
@@ -63,7 +71,28 @@ export type FieldInspectionAssignmentRow = {
     reportDocumentId: string | null;
     reportDocument: { id: string; originalFilename: string } | null;
   } | null;
+  reportDocument?: { id: string; originalFilename: string } | null;
+  verificationResult?: string | null;
 };
+
+function assignmentLabel(a: FieldInspectionAssignmentRow) {
+  if (a.elevator) return a.elevator.registryNumber;
+  if (a.application) return a.application.applicationNumber;
+  return "—";
+}
+
+function assignmentAddress(a: FieldInspectionAssignmentRow) {
+  const address = a.elevator?.buildingAddress ?? a.application?.data?.buildingAddress ?? "-";
+  const municipality =
+    a.elevator?.municipality?.nameSq ?? a.application?.data?.municipality?.nameSq ?? "-";
+  return `${address} · ${municipality}`;
+}
+
+function assignmentDetailHref(a: FieldInspectionAssignmentRow) {
+  if (a.elevator) return `/ishmt/elevators/${a.elevator.id}`;
+  if (a.application) return `/ishmt/review/${a.application.id}`;
+  return null;
+}
 
 function FormError({ error }: { error: string | null }) {
   if (!error) return null;
@@ -108,14 +137,17 @@ function inspectionResultTone(result: string | null | undefined): StatusTone {
 }
 
 function AssignmentStatusCell({ assignment }: { assignment: FieldInspectionAssignmentRow }) {
+  const result =
+    assignment.inspection?.result ??
+    assignment.verificationResult ??
+    null;
   if (
     assignment.status === FieldInspectionAssignmentStatus.COMPLETED &&
-    assignment.inspection?.result
+    result
   ) {
-    const resultLabel =
-      INSPECTION_RESULT_LABELS[assignment.inspection.result] ?? assignment.inspection.result;
+    const resultLabel = INSPECTION_RESULT_LABELS[result] ?? result;
     return (
-      <WorkflowStatusChip label={resultLabel} tone={inspectionResultTone(assignment.inspection.result)} />
+      <WorkflowStatusChip label={resultLabel} tone={inspectionResultTone(result)} />
     );
   }
   return <StatusBadge status={assignment.status} />;
@@ -433,11 +465,15 @@ export function FieldInspectionAssignmentsTable({
             <tr key={a.id}>
               <td className="tabular-nums text-muted-foreground">{index + 1}</td>
               <td>
-                <Link href={`/ishmt/elevators/${a.elevator.id}`} className="portal-table-link">
-                  <RegistryNumber>{a.elevator.registryNumber}</RegistryNumber>
-                </Link>
+                {assignmentDetailHref(a) ? (
+                  <Link href={assignmentDetailHref(a)!} className="portal-table-link">
+                    <RegistryNumber>{assignmentLabel(a)}</RegistryNumber>
+                  </Link>
+                ) : (
+                  <RegistryNumber>{assignmentLabel(a)}</RegistryNumber>
+                )}
                 <p className="mt-0.5 text-xs font-normal text-muted-foreground">
-                  {a.elevator.buildingAddress ?? "-"} · {a.elevator.municipality?.nameSq ?? "-"}
+                  {assignmentAddress(a)}
                 </p>
                 {a.instructions && (
                   <p className="mt-1.5 rounded-lg bg-muted/40 px-2 py-1 text-xs italic text-muted-foreground">
@@ -547,10 +583,24 @@ function ConductInspectionPanel({
     setSubmitting(true);
     setError(null);
     try {
-      const reportDocumentId = await uploadElevatorDocumentClient(reportFile, assignment.elevator.id, {
-        classification: "INSPECTION_REPORT",
-        purpose: "EXTRAORDINARY_INSPECTION",
-      });
+      let reportDocumentId: string;
+      if (assignment.elevator) {
+        reportDocumentId = await uploadEntityDocumentClient(
+          reportFile,
+          "elevator",
+          assignment.elevator.id,
+          { classification: "INSPECTION_REPORT", purpose: "EXTRAORDINARY_INSPECTION" },
+        );
+      } else if (assignment.application) {
+        reportDocumentId = await uploadEntityDocumentClient(
+          reportFile,
+          "application",
+          assignment.application.id,
+          { classification: "INSPECTION_REPORT", purpose: "FIELD_VERIFICATION_REPORT" },
+        );
+      } else {
+        throw new Error("Caktimi nuk lidhet me ashensor ose aplikim.");
+      }
       const res = await completeFieldInspectionAction(assignment.id, {
         conductedDate,
         result,
@@ -763,14 +813,16 @@ export function MyFieldInspectionsList({ assignments }: { assignments: FieldInsp
                   <tr>
                     <td className="tabular-nums text-muted-foreground">{index + 1}</td>
                     <td>
-                      <Link href={`/ishmt/elevators/${a.elevator.id}`} className="portal-table-link">
-                        <RegistryNumber>{a.elevator.registryNumber}</RegistryNumber>
-                      </Link>
+                      {assignmentDetailHref(a) ? (
+                        <Link href={assignmentDetailHref(a)!} className="portal-table-link">
+                          <RegistryNumber>{assignmentLabel(a)}</RegistryNumber>
+                        </Link>
+                      ) : (
+                        <RegistryNumber>{assignmentLabel(a)}</RegistryNumber>
+                      )}
                     </td>
                     <td className="max-w-[14rem] text-muted-foreground">
-                      <span className="line-clamp-2">
-                        {a.elevator.buildingAddress ?? "-"} · {a.elevator.municipality?.nameSq ?? "-"}
-                      </span>
+                      <span className="line-clamp-2">{assignmentAddress(a)}</span>
                     </td>
                     <td className="whitespace-nowrap tabular-nums">{assignmentDisplayDate(a)}</td>
                     <td>

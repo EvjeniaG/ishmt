@@ -13,7 +13,7 @@ function scrollAllRootsToTop() {
   document.body.scrollTop = 0;
 }
 
-import { isContractsSearchParamsChange } from "@/lib/ishmt/contract-issue-filters";
+import { isContractsSearchParamsChange, ISHMT_COMPLIANCE_MONITOR_PATH } from "@/lib/ishmt/contract-issue-filters";
 export function ScrollToTop() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -23,7 +23,7 @@ export function ScrollToTop() {
   useLayoutEffect(() => {
     const prev = navigationRef.current;
 
-    if (prev && prev.pathname === pathname && pathname === "/ishmt/contracts") {
+    if (prev && prev.pathname === pathname && pathname === ISHMT_COMPLIANCE_MONITOR_PATH) {
       if (isContractsSearchParamsChange(prev.search, searchKey)) {
         navigationRef.current = { pathname, search: searchKey };
         return;

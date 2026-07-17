@@ -69,7 +69,15 @@ enum ApplicationStatus {
   PENDING_OWNER_SUBMISSION
   SUBMITTED
   UNDER_REVIEW
+  PENDING_DIRECTOR
+  PENDING_SECTOR_HEAD
+  PENDING_FIELD_REVIEW
+  PENDING_SECTOR_HEAD_REPORT
+  PENDING_DIRECTOR_REPORT
   PENDING_CHIEF_INSPECTOR
+  RETURNED_TO_INSPECTORS
+  RETURNED_TO_SECTOR_HEAD
+  RETURNED_TO_DIRECTOR
   RETURNED
   REJECTED
   APPROVED
@@ -233,6 +241,21 @@ enum FieldInspectionAssignmentStatus {
   CANCELLED
 
   @@map("field_insp_assignment_status")
+}
+
+enum ApplicationFieldReviewAssignmentStatus {
+  PENDING
+  COMPLETED
+  REPLACED
+
+  @@map("app_field_review_status")
+}
+
+enum FieldInspectorReportStatus {
+  DRAFT
+  SUBMITTED
+
+  @@map("field_inspector_report_status")
 }
 
 enum MaintenanceType {
@@ -591,7 +614,13 @@ model AuthUser {
   createdOrganizations  Organization[]         @relation("OrgCreatedBy")
   createdApplications   Application[]          @relation("ApplicationCreatedBy")
   assignedApplications  Application[]          @relation("ApplicationInspector")
+  currentAssignedApplications Application[]    @relation("ApplicationCurrentAssignee")
   workflowHistory       ApplicationWorkflowHistory[]
+  applicationFieldReviewsAssigned ApplicationFieldReviewAssignment[] @relation("ApplicationFieldReviewInspector")
+  applicationFieldReviewsCreated  ApplicationFieldReviewAssignment[] @relation("ApplicationFieldReviewAssignedBy")
+  applicationFieldReviewsReplaced ApplicationFieldReviewAssignment[] @relation("ApplicationFieldReviewReplacedBy")
+  applicationParticipations       ApplicationParticipation[]         @relation("ApplicationParticipationUser")
+  applicationInternalNotes        ApplicationInternalNote[]          @relation("ApplicationInternalNoteAuthor")
   confirmedElevators    Elevator[]               @relation("ElevatorConfirmedBy")
   statusHistory         ElevatorStatusHistory[]
   ownershipChanges      ElevatorOwnershipHistory[] @relation("OwnershipCreatedBy")
@@ -885,6 +914,12 @@ model Application {
   certifierOrgId       String?           @map("certifier_org_id") @db.Uuid
   elevatorId           String?           @map("elevator_id") @db.Uuid
   assignedInspectorId  String?           @map("assigned_inspector_id") @db.Uuid
+  requiredFieldInspectorCount Int?       @map("required_field_inspector_count")
+  plannedInspectorIds  Json?             @map("planned_inspector_ids")
+  inspectorAssignmentLockedBy String?   @map("inspector_assignment_locked_by") @db.VarChar(50)
+  requiresFieldVerification Boolean       @default(false) @map("requires_field_verification")
+  fieldVerificationRequestedBy String?    @map("field_verification_requested_by") @db.VarChar(50)
+  currentAssigneeId    String?           @map("current_assignee_id") @db.Uuid
   submittedAt          DateTime?         @map("submitted_at") @db.Timestamptz
   reviewedAt           DateTime?         @map("reviewed_at") @db.Timestamptz
   approvedAt           DateTime?         @map("approved_at") @db.Timestamptz
@@ -910,12 +945,17 @@ model Application {
   certifierOrg      Organization? @relation("ApplicationCertifier", fields: [certifierOrgId], references: [id])
   targetElevator    Elevator?    @relation("ApplicationTarget", fields: [elevatorId], references: [id])
   assignedInspector AuthUser?    @relation("ApplicationInspector", fields: [assignedInspectorId], references: [id])
+  currentAssignee   AuthUser?    @relation("ApplicationCurrentAssignee", fields: [currentAssigneeId], references: [id])
   createdBy         AuthUser     @relation("ApplicationCreatedBy", fields: [createdById], references: [id])
   returnedBy        AuthUser?    @relation("ApplicationReturnedBy", fields: [returnedById], references: [id])
 
   data              ApplicationData?
   delegations       ApplicationDelegation[]
   workflowHistory   ApplicationWorkflowHistory[]
+  fieldReviewAssignments ApplicationFieldReviewAssignment[]
+  participations    ApplicationParticipation[]
+  internalNotes     ApplicationInternalNote[]
+  fieldVerificationAssignments FieldInspectionAssignment[] @relation("ApplicationFieldVerification")
   originElevator    Elevator?                  @relation("ElevatorOrigin")
   responsibleEntities ElevatorResponsibleEntity[]
   statusHistory     ElevatorStatusHistory[]
@@ -930,6 +970,7 @@ model Application {
   @@index([installerOrgId], map: "idx_app_installer")
   @@index([certifierOrgId], map: "idx_app_certifier")
   @@index([assignedInspectorId], map: "idx_app_inspector")
+  @@index([currentAssigneeId], map: "idx_app_current_assignee")
   @@index([applicationNumber], map: "idx_app_number")
   @@index([deletedAt], map: "idx_app_active")
   @@map("app_applications")
@@ -1031,6 +1072,65 @@ model ApplicationWorkflowHistory {
   @@index([applicationId], map: "idx_workflow_app")
   @@index([actorId], map: "idx_workflow_actor")
   @@map("app_workflow_history")
+}
+
+model ApplicationFieldReviewAssignment {
+  id            String                               @id @default(uuid()) @db.Uuid
+  applicationId String                               @map("application_id") @db.Uuid
+  inspectorId   String                               @map("inspector_id") @db.Uuid
+  assignedById  String                               @map("assigned_by") @db.Uuid
+  assignedByRole String?                             @map("assigned_by_role") @db.VarChar(50)
+  requiresFieldInspection Boolean?                   @default(false) @map("requires_field_inspection")
+  status        ApplicationFieldReviewAssignmentStatus @default(PENDING)
+  reportStatus  FieldInspectorReportStatus?          @map("report_status")
+  reportText    String?                              @map("report_text") @db.Text
+  completedAt   DateTime?                            @map("completed_at") @db.Timestamptz
+  replacedAt    DateTime?                            @map("replaced_at") @db.Timestamptz
+  replacedById  String?                              @map("replaced_by") @db.Uuid
+  createdAt     DateTime                             @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt     DateTime                             @updatedAt @map("updated_at") @db.Timestamptz
+
+  application Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  inspector   AuthUser    @relation("ApplicationFieldReviewInspector", fields: [inspectorId], references: [id])
+  assignedBy  AuthUser    @relation("ApplicationFieldReviewAssignedBy", fields: [assignedById], references: [id])
+  replacedBy  AuthUser?   @relation("ApplicationFieldReviewReplacedBy", fields: [replacedById], references: [id])
+
+  @@index([applicationId], map: "idx_app_field_review_app")
+  @@index([inspectorId], map: "idx_app_field_review_inspector")
+  @@index([applicationId, status], map: "idx_app_field_review_app_status")
+  @@map("app_field_review_assignments")
+}
+
+model ApplicationParticipation {
+  id            String   @id @default(uuid()) @db.Uuid
+  applicationId String   @map("application_id") @db.Uuid
+  userId        String   @map("user_id") @db.Uuid
+  roleCode      String   @map("role_code") @db.VarChar(50)
+  canAct        Boolean  @default(false) @map("can_act")
+  joinedAt      DateTime @default(now()) @map("joined_at") @db.Timestamptz
+  leftAt        DateTime? @map("left_at") @db.Timestamptz
+
+  application Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  user        AuthUser    @relation("ApplicationParticipationUser", fields: [userId], references: [id])
+
+  @@unique([applicationId, userId], map: "uq_app_participation_user")
+  @@index([userId], map: "idx_app_participation_user")
+  @@map("app_participations")
+}
+
+model ApplicationInternalNote {
+  id            String   @id @default(uuid()) @db.Uuid
+  applicationId String   @map("application_id") @db.Uuid
+  authorId      String   @map("author_id") @db.Uuid
+  body          String   @db.Text
+  mentionedUserIds Json? @map("mentioned_user_ids")
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  application Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  author      AuthUser    @relation("ApplicationInternalNoteAuthor", fields: [authorId], references: [id])
+
+  @@index([applicationId], map: "idx_app_internal_note_app")
+  @@map("app_internal_notes")
 }
 
 // =============================================================================
@@ -1371,6 +1471,7 @@ model Document {
   maintenanceContracts MaintenanceContract[]
   maintenanceRecords   MaintenanceRecord[]
   inspections          Inspection[]      @relation("InspectionReport")
+  fieldInspectionReports FieldInspectionAssignment[] @relation("FieldInspectionReport")
   qrImages             QrCode[]          @relation("QrImageDocument")
   qrPlacementPhotos    QrCode[]          @relation("QrPlacementPhoto")
 
@@ -1554,25 +1655,33 @@ model Inspection {
 
 model FieldInspectionAssignment {
   id            String                          @id @default(uuid()) @db.Uuid
-  elevatorId    String                          @map("elevator_id") @db.Uuid
+  applicationId String?                         @map("application_id") @db.Uuid
+  elevatorId    String?                         @map("elevator_id") @db.Uuid
   assigneeId    String                          @map("assignee_id") @db.Uuid
   assignedById  String                          @map("assigned_by_id") @db.Uuid
   scheduledDate DateTime                        @map("scheduled_date") @db.Date
   status        FieldInspectionAssignmentStatus @default(SCHEDULED)
   instructions  String?                         @db.Text
   inspectionId  String?                         @unique @map("inspection_id") @db.Uuid
+  verificationResult InspectionResult?          @map("verification_result")
+  verificationFindings String?                  @map("verification_findings") @db.Text
+  reportDocumentId String?                      @map("report_document_id") @db.Uuid
+  conductedDate DateTime?                       @map("conducted_date") @db.Date
   cancelledAt   DateTime?                       @map("cancelled_at") @db.Timestamptz
   cancelReason  String?                         @map("cancel_reason") @db.Text
   createdAt     DateTime                        @default(now()) @map("created_at") @db.Timestamptz
   updatedAt     DateTime                        @updatedAt @map("updated_at") @db.Timestamptz
 
-  elevator   Elevator    @relation(fields: [elevatorId], references: [id])
+  application Application? @relation("ApplicationFieldVerification", fields: [applicationId], references: [id], onDelete: Cascade)
+  elevator   Elevator?    @relation(fields: [elevatorId], references: [id])
   assignee   AuthUser    @relation("FieldInspectionAssignee", fields: [assigneeId], references: [id])
   assignedBy AuthUser    @relation("FieldInspectionAssignedBy", fields: [assignedById], references: [id])
   inspection Inspection? @relation(fields: [inspectionId], references: [id])
+  reportDocument Document? @relation("FieldInspectionReport", fields: [reportDocumentId], references: [id])
 
   @@index([assigneeId, status], map: "idx_field_insp_assignee")
   @@index([elevatorId], map: "idx_field_insp_elevator")
+  @@index([applicationId], map: "idx_field_insp_application")
   @@index([scheduledDate], map: "idx_field_insp_scheduled")
   @@map("insp_field_assignments")
 }

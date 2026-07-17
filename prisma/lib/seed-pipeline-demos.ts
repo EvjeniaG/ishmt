@@ -25,7 +25,7 @@ export type PipelineDemoActors = {
   maintenanceUserId: string;
   certifierUserId: string;
   fieldInspectorUserId: string;
-  specialistUserId: string;
+  sectorHeadUserId: string;
   maintenanceOrgId: string;
   certifierOrgId: string;
 };

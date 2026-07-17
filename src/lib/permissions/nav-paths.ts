@@ -12,7 +12,6 @@ export const ALL_AUTHENTICATED_ROLES: RoleCode[] = [
   ROLE_CODES.CERTIFIER,
   ROLE_CODES.MAINTENANCE,
   ROLE_CODES.FIELD_INSPECTOR,
-  ROLE_CODES.SECTOR_SPECIALIST,
   ROLE_CODES.SECTOR_HEAD,
   ROLE_CODES.CHIEF_INSPECTOR,
   ROLE_CODES.ISHMT_DIRECTOR,
@@ -29,26 +28,22 @@ export const PORTAL_COMPANY_ROLES: RoleCode[] = [
 
 export const ISHMT_STAFF_ROLES: RoleCode[] = [
   ROLE_CODES.FIELD_INSPECTOR,
-  ROLE_CODES.SECTOR_SPECIALIST,
   ROLE_CODES.SECTOR_HEAD,
   ROLE_CODES.CHIEF_INSPECTOR,
   ROLE_CODES.ISHMT_DIRECTOR,
   ROLE_CODES.ADMIN,
 ];
 
-export const ISHMT_APPROVER_ROLES: RoleCode[] = [
-  ROLE_CODES.CHIEF_INSPECTOR,
-  ROLE_CODES.ISHMT_DIRECTOR,
-];
+export const ISHMT_APPROVER_ROLES: RoleCode[] = [ROLE_CODES.CHIEF_INSPECTOR];
 
 export function getDashboardPathForRole(roleCode: RoleCode): string {
   switch (roleCode) {
     case ROLE_CODES.CHIEF_INSPECTOR:
-    case ROLE_CODES.ISHMT_DIRECTOR:
       return "/ishmt/chief/dashboard";
+    case ROLE_CODES.ISHMT_DIRECTOR:
+      return "/ishmt/director/dashboard";
     case ROLE_CODES.ADMIN:
       return "/ishmt/admin/dashboard";
-    case ROLE_CODES.SECTOR_SPECIALIST:
     case ROLE_CODES.SECTOR_HEAD:
       return "/ishmt/dashboard";
     case ROLE_CODES.FIELD_INSPECTOR:

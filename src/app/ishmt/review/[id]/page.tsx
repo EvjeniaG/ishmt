@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-import { ApplicationType } from "@prisma/client";
+import { ApplicationType, ApplicationStatus } from "@prisma/client";
 import { AppShell } from "@/components/layout/app-shell";
 import { StandardPageLayout } from "@/components/layout/standard-page-layout";
 import { SectionCard } from "@/components/shared/institutional";
@@ -11,6 +11,8 @@ import { IshmtReviewActions } from "@/components/applications/application-workfl
 import { PhysicalVerificationButton } from "@/components/elevators/physical-verification-button";
 import { ApplicationDocuments } from "@/components/applications/application-documents";
 import { ApplicationDataSummary } from "@/components/applications/application-data-summary";
+import { IshmtWorkflowTrail } from "@/components/applications/ishmt-workflow-trail";
+import { ApplicationFieldVerificationCard } from "@/components/applications/application-field-verification-card";
 import { DossierSectionsView } from "@/components/elevators/dossier-sections-view";
 import { LegalDeadlineBadge } from "@/components/applications/legal-deadline-badge";
 import { DocumentService } from "@/lib/services/document-service";
@@ -18,6 +20,7 @@ import { getAuthSession } from "@/lib/auth";
 import { ApplicationService, ApplicationNotAccessibleError } from "@/lib/services/application-service";
 import { PERMISSIONS } from "@/lib/permissions/codes";
 import { roleHasPermission } from "@/lib/permissions/matrix";
+import { canReviewApplications, canDirectApplications } from "@/lib/permissions/ishmt-roles";
 import { MODERNIZATION_TYPE_LABELS } from "@/lib/constants/lifecycle-labels";
 import { getApplicationDocumentSpecs } from "@/lib/documents/application-document-checklist";
 import { buildRegistrationDossier } from "@/lib/registration/build-dossier";
@@ -79,7 +82,10 @@ export default async function ReviewDetailPage({
     permissions: session.user.permissions,
   };
 
-  if (!roleHasPermission(session.user.roleCode, PERMISSIONS.APPLICATIONS_REVIEW)) {
+  if (
+    !roleHasPermission(session.user.roleCode, PERMISSIONS.APPLICATIONS_REVIEW) &&
+    !roleHasPermission(session.user.roleCode, PERMISSIONS.APPLICATIONS_APPROVE)
+  ) {
     redirect("/unauthorized");
   }
 
@@ -87,10 +93,27 @@ export default async function ReviewDetailPage({
     if (error instanceof ApplicationNotAccessibleError) notFound();
     throw error;
   });
-  const inspectorReview =
-    application.status === "PENDING_CHIEF_INSPECTOR"
+  const directorReview =
+    application.status === ApplicationStatus.PENDING_CHIEF_INSPECTOR
       ? await ApplicationService.getInspectorReviewMetadata(id)
       : null;
+  const fieldReviewAssignments = await ApplicationService.getFieldReviewAssignments(id);
+  const workflowTrail = await ApplicationService.getIshmtWorkflowTrail(id);
+  const fieldVerificationStatus = await ApplicationService.getApplicationFieldVerificationStatus(id);
+  const needsInspectorList =
+    canReviewApplications(session.user.roleCode) ||
+    canDirectApplications(session.user.roleCode) ||
+    session.user.roleCode === "CHIEF_INSPECTOR";
+  const availableInspectors = needsInspectorList
+    ? await ApplicationService.listFieldInspectors(session.user.activeOrgId)
+    : [];
+  const plannedInspectorIds = Array.isArray(application.plannedInspectorIds)
+    ? (application.plannedInspectorIds as string[])
+    : null;
+  const myFieldReviewAssignmentId =
+    fieldReviewAssignments.find(
+      (a) => a.inspectorId === session.user.id && a.status === "PENDING",
+    )?.id ?? null;
   const data = application.data;
   const rawDocuments = await DocumentService.listForEntity("application", id);
   const uploadedPurposes = await DocumentService.listPurposesForEntity("application", id);
@@ -138,7 +161,15 @@ export default async function ReviewDetailPage({
               roleCode={session.user.roleCode}
             />
             {application.submittedAt &&
-              ["SUBMITTED", "UNDER_REVIEW", "PENDING_CHIEF_INSPECTOR"].includes(application.status) && (
+              ([
+                ApplicationStatus.SUBMITTED,
+                ApplicationStatus.PENDING_DIRECTOR,
+                ApplicationStatus.PENDING_SECTOR_HEAD,
+                ApplicationStatus.PENDING_FIELD_REVIEW,
+                ApplicationStatus.PENDING_SECTOR_HEAD_REPORT,
+                ApplicationStatus.PENDING_DIRECTOR_REPORT,
+                ApplicationStatus.PENDING_CHIEF_INSPECTOR,
+              ] as ApplicationStatus[]).includes(application.status) && (
               <LegalDeadlineBadge submittedAt={application.submittedAt} />
             )}
             <a
@@ -152,7 +183,7 @@ export default async function ReviewDetailPage({
       >
         <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(28rem,32rem)] xl:grid-cols-[minmax(0,1fr)_34rem]">
           <div className="min-w-0 space-y-6">
-            <SectionCard title="Dosja e aplikimit" subtitle="Të dhënat kryesore të parashtruara" padded>
+            <SectionCard title="Dosja e aplikimit" subtitle="Të dhënat kryesore të Aplikimit për Registrim" padded>
               <div className="grid gap-2 text-sm md:grid-cols-2">
                 <p><strong>Personi përgjegjës i ashensorit:</strong> {application.ownerOrg.name}</p>
                 {isRegistration && (
@@ -255,6 +286,16 @@ export default async function ReviewDetailPage({
                 error={application.assetGenerationError}
               />
             )}
+
+            <ApplicationFieldVerificationCard status={fieldVerificationStatus} />
+
+            <IshmtWorkflowTrail
+              history={workflowTrail.history}
+              fieldAssignments={workflowTrail.fieldAssignments}
+              inspectorNames={workflowTrail.inspectorNames}
+              lockedBy={workflowTrail.lockedBy}
+              plannedInspectorIds={workflowTrail.plannedInspectorIds}
+            />
           </div>
 
           <aside className="flex min-w-0 flex-col gap-4 lg:sticky lg:top-6 lg:max-h-[calc(100dvh-2rem)] lg:self-start lg:overflow-hidden lg:border-l lg:border-border/50 lg:pl-6">
@@ -263,13 +304,22 @@ export default async function ReviewDetailPage({
               applicationId={id}
               status={application.status}
               roleCode={session.user.roleCode}
-              inspectorReview={
-                inspectorReview
-                  ? {
-                      recommendation: inspectorReview.recommendation,
-                      requiresPhysicalInspection: inspectorReview.requiresPhysicalInspection,
-                      comment: inspectorReview.comment,
-                    }
+              requiredInspectorCount={application.requiredFieldInspectorCount}
+              plannedInspectorIds={plannedInspectorIds}
+              inspectorAssignmentLockedBy={application.inspectorAssignmentLockedBy}
+              initialRequiresFieldVerification={application.requiresFieldVerification}
+              fieldVerificationCanApprove={fieldVerificationStatus.canApprove}
+              fieldReviewAssignments={fieldReviewAssignments.map((a) => ({
+                id: a.id,
+                inspectorId: a.inspectorId,
+                status: a.status,
+                inspector: a.inspector,
+              }))}
+              availableInspectors={availableInspectors}
+              myFieldReviewAssignmentId={myFieldReviewAssignmentId}
+              directorReview={
+                directorReview
+                  ? { comment: directorReview.comment }
                   : undefined
               }
             />

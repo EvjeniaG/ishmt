@@ -40,7 +40,7 @@ export const OWNER_REGISTRATION_STEPS: {
   { step: 3, id: "technical-data", label: "Të dhënat teknike", ownerAction: false, delegateRole: "INSTALLER" },
   { step: 4, id: "select-certifier", label: "Certifikuesi", ownerAction: true },
   { step: 5, id: "certification-data", label: "Certifikimi", ownerAction: false, delegateRole: "CERTIFIER" },
-  { step: 6, id: "final-review", label: "Parashtrimi", ownerAction: true },
+  { step: 6, id: "final-review", label: "Aplikim për rregjistrim", ownerAction: true },
 ];
 
 /** @deprecated Përdorni OWNER_REGISTRATION_STEPS */

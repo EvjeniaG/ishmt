@@ -13,6 +13,7 @@ import { DeadlineService } from "@/lib/deadlines/deadline-service";
 import type { AuthContext } from "@/lib/permissions/guards";
 import {
   canApproveApplications,
+  canDirectApplications,
   canReviewApplications,
   isFieldInspectorRole,
 } from "@/lib/permissions/ishmt-roles";
@@ -30,6 +31,8 @@ type AlarmSnapshot = {
   submitted: number;
   underReview: number;
   pendingChief: number;
+  pendingDirector: number;
+  pendingDirectorReport: number;
   procedureOverdue: number;
   procedureUrgent: number;
   redElevators: number;
@@ -55,6 +58,10 @@ export class IshmtAlarmService {
       return sortIshmtAlarms(this.buildChiefAlarms(snapshot));
     }
 
+    if (canDirectApplications(role)) {
+      return sortIshmtAlarms(this.buildDirectorAlarms(snapshot));
+    }
+
     if (role === ROLE_CODES.FIELD_INSPECTOR) {
       return sortIshmtAlarms(this.buildFieldInspectorAlarms(snapshot));
     }
@@ -70,6 +77,8 @@ export class IshmtAlarmService {
       submitted,
       underReview,
       pendingChief,
+      pendingDirector,
+      pendingDirectorReport,
       pendingReports,
       pendingMigration,
       complianceAggregate,
@@ -94,6 +103,18 @@ export class IshmtAlarmService {
       db.application.count({
         where: withDemoDataApplicationScope({
           status: ApplicationStatus.PENDING_CHIEF_INSPECTOR,
+          deletedAt: null,
+        }),
+      }),
+      db.application.count({
+        where: withDemoDataApplicationScope({
+          status: ApplicationStatus.PENDING_DIRECTOR,
+          deletedAt: null,
+        }),
+      }),
+      db.application.count({
+        where: withDemoDataApplicationScope({
+          status: ApplicationStatus.PENDING_DIRECTOR_REPORT,
           deletedAt: null,
         }),
       }),
@@ -139,6 +160,8 @@ export class IshmtAlarmService {
       submitted,
       underReview,
       pendingChief,
+      pendingDirector,
+      pendingDirectorReport,
       procedureOverdue: procedure.overdue,
       procedureUrgent: procedure.urgent,
       redElevators: complianceAggregate.activeRed,
@@ -164,7 +187,7 @@ export class IshmtAlarmService {
         label: "Pa kontratë mirëmbajtjeje",
         hint: "Ashensorë aktivë pa kontratë aktive me kompaninë e mirëmbajtjes",
         count: s.noMaintenanceContract,
-        href: "/ishmt/contracts?issue=no-maintenance-contract",
+        href: "/ishmt/compliance-digest?issue=no-maintenance-contract#alarmet-lista",
       },
       {
         id: "no-inspection-contract",
@@ -172,7 +195,7 @@ export class IshmtAlarmService {
         label: "Pa kontratë inspektimi (OMI)",
         hint: "Ashensorë aktivë pa kontratë periodike me trupin certifikues",
         count: s.noInspectionContract,
-        href: "/ishmt/contracts?issue=no-inspection-contract",
+        href: "/ishmt/compliance-digest?issue=no-inspection-contract#alarmet-lista",
       },
       {
         id: "maintenance-contract-expired",
@@ -180,7 +203,7 @@ export class IshmtAlarmService {
         label: "Kontrata mirëmbajtjes skaduar",
         hint: "Kontrata aktive me datë mbarimi të kaluar",
         count: s.maintenanceContractExpired,
-        href: "/ishmt/contracts?issue=maintenance-contract-expired",
+        href: "/ishmt/compliance-digest?issue=maintenance-contract-expired#alarmet-lista",
       },
       {
         id: "maintenance-contract-expiring",
@@ -188,7 +211,7 @@ export class IshmtAlarmService {
         label: "Kontrata mirëmbajtjes skadon (7 ditë)",
         hint: "Kërkon rinovim ose caktim të kompanisë së re",
         count: s.maintenanceContractExpiring7,
-        href: "/ishmt/contracts?issue=maintenance-contract-expiring",
+        href: "/ishmt/compliance-digest?issue=maintenance-contract-expiring#alarmet-lista",
       },
       {
         id: "inspection-contract-expiring",
@@ -196,7 +219,63 @@ export class IshmtAlarmService {
         label: "Kontrata inspektimit skadon (7 ditë)",
         hint: "Kërkon rinovim kontrate me OMI-n",
         count: s.inspectionContractExpiring7,
-        href: "/ishmt/contracts?issue=inspection-contract-expiring",
+        href: "/ishmt/compliance-digest?issue=inspection-contract-expiring#alarmet-lista",
+      },
+    ];
+  }
+
+  private static buildDirectorAlarms(s: AlarmSnapshot): IshmtAlarm[] {
+    const pendingReview = s.pendingDirector + s.pendingDirectorReport;
+
+    return [
+      ...this.contractAlarms(s),
+      {
+        id: "director-review",
+        priority: "critical",
+        label: "Dosje në pritje shqyrtimi",
+        hint: "Aplikime që presin delegim te përgjegjësi ose raport drejt kryeinspektorit",
+        count: pendingReview,
+        href: "/ishmt/director/review",
+      },
+      {
+        id: "procedure-overdue",
+        priority: "critical",
+        label: "Afat procedural i tejkaluar",
+        hint: "Aplikime jashtë afatit 10-ditor të shqyrtimit administrativ",
+        count: s.procedureOverdue,
+        href: "/ishmt/director/review",
+      },
+      {
+        id: "red-compliance",
+        priority: "critical",
+        label: "Jashtë përputhshmërisë",
+        hint: "Ashensorë aktivë me indikator të kuq në regjistër",
+        count: s.redElevators,
+        href: "/ishmt/search?compliance=RED&status=ACTIVE",
+      },
+      {
+        id: "procedure-urgent",
+        priority: "urgent",
+        label: "Afat procedural në skadim",
+        hint: "Maksimumi 3 ditë pune deri në përfundimin e afatit procedural",
+        count: s.procedureUrgent,
+        href: "/ishmt/director/review",
+      },
+      {
+        id: "recommended-rejection",
+        priority: "warning",
+        label: "Rekomandim refuzimi",
+        hint: "Dosje me rekomandim refuzimi nga shqyrtimi administrativ",
+        count: s.recommendedRejection,
+        href: "/ishmt/director/review",
+      },
+      {
+        id: "yellow-compliance",
+        priority: "warning",
+        label: "Afat ligjor në skadim",
+        hint: "Ashensorë aktivë me indikator të verdhë - inspektim, mirëmbajtje ose certifikatë",
+        count: s.yellowElevators,
+        href: "/ishmt/search?compliance=YELLOW&status=ACTIVE",
       },
     ];
   }

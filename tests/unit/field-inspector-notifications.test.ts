@@ -36,11 +36,11 @@ describe("field-inspector-notifications", () => {
     expect(isIshmtContractDeadlineNotifyExcludedRole(ROLE_CODES.CHIEF_INSPECTOR)).toBe(true);
     expect(isIshmtContractDeadlineNotifyExcludedRole(ROLE_CODES.ISHMT_DIRECTOR)).toBe(true);
     expect(isIshmtContractDeadlineNotifyExcludedRole(ROLE_CODES.FIELD_INSPECTOR)).toBe(true);
-    expect(isIshmtContractDeadlineNotifyExcludedRole(ROLE_CODES.SECTOR_SPECIALIST)).toBe(false);
+    expect(isIshmtContractDeadlineNotifyExcludedRole(ROLE_CODES.SECTOR_HEAD)).toBe(false);
   });
 
-  it("does not filter operational notifications for sector specialist", () => {
-    expect(notificationWhereForRole("user-1", ROLE_CODES.SECTOR_SPECIALIST)).toEqual({
+  it("does not filter operational notifications for sector head", () => {
+    expect(notificationWhereForRole("user-1", ROLE_CODES.SECTOR_HEAD)).toEqual({
       userId: "user-1",
     });
   });

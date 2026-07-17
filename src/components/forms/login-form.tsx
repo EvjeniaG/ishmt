@@ -26,7 +26,6 @@ type AccountLevel =
   | "CHIEF_INSPECTOR"
   | "ISHMT_DIRECTOR"
   | "SECTOR_HEAD"
-  | "SECTOR_SPECIALIST"
   | "FIELD_INSPECTOR"
   | "DIRECTORATE";
 
@@ -37,10 +36,9 @@ const ACCOUNT_LEVELS: { value: AccountLevel; label: string }[] = [
   { value: "MAINTENANCE", label: "Kompani mirëmbajtëse" },
   { value: "ADMIN", label: "Administrator ISHMT" },
   { value: "CHIEF_INSPECTOR", label: "Kryeinspektor" },
-  { value: "ISHMT_DIRECTOR", label: "Drejtor Teknik" },
-  { value: "SECTOR_HEAD", label: "Përgjegjës i Sektorit të Produkteve Mekanike" },
-  { value: "SECTOR_SPECIALIST", label: "Specialist sektori" },
-  { value: "FIELD_INSPECTOR", label: "Inspektor terreni" },
+  { value: "ISHMT_DIRECTOR", label: "Drejtor i Drejtorisë" },
+  { value: "SECTOR_HEAD", label: "Përgjegjës sektori" },
+  { value: "FIELD_INSPECTOR", label: "Inspektor" },
   { value: "DIRECTORATE", label: "Drejtoria e Politikave" },
 ];
 
@@ -50,11 +48,10 @@ const LEVEL_HINTS: Record<AccountLevel, string> = {
   INSTALLER: "Kompanitë instaluese regjistrohen dhe presin validimin para aktivizimit.",
   CERTIFIER: "Trupat certifikues / OMI regjistrohen dhe presin validimin para aktivizimit.",
   ADMIN: "Llogari institucionale e ISHMT për administrimin e sistemit.",
-  CHIEF_INSPECTOR: "Miratim final i aplikimeve dhe caktim inspektimi në terren.",
-  ISHMT_DIRECTOR: "Miratim final dhe mbikëqyrje operacionale; cakton inspektim terreni.",
-  SECTOR_HEAD: "Shqyrtim aplikimesh dhe caktim i inspektorit që shkon në objekt.",
-  SECTOR_SPECIALIST: "Shqyrtim administrativ i aplikimeve në zyrë.",
-  FIELD_INSPECTOR: "Inspektim fizik në objekt - detyrat e caktuara nga shefi/drejtori/kryeinspektori.",
+  CHIEF_INSPECTOR: "Marrje aplikimesh, delegim dhe miratim final i regjistrimit.",
+  ISHMT_DIRECTOR: "Delegim dhe raport drejt kryeinspektorit; cakton inspektim terreni.",
+  SECTOR_HEAD: "Caktim inspektorësh për shqyrtim dosjeje dhe raport drejt drejtorit.",
+  FIELD_INSPECTOR: "Shqyrtim i dosjes së aplikimit dhe inspektim fizik në objekt.",
   DIRECTORATE: "Llogari institucionale e Drejtorisë së Politikave (regjistrim kompanish).",
 };
 

@@ -18,7 +18,6 @@ const ISHMT_ROLES = new Set<RoleCode>([
   ROLE_CODES.CHIEF_INSPECTOR,
   ROLE_CODES.ISHMT_DIRECTOR,
   ROLE_CODES.SECTOR_HEAD,
-  ROLE_CODES.SECTOR_SPECIALIST,
   ROLE_CODES.FIELD_INSPECTOR,
   ROLE_CODES.ADMIN,
 ]);
@@ -111,7 +110,7 @@ const CLOSED: StatusPresentation = {
 
 const BLOCKED: StatusPresentation = {
   badgeLabel: "Kërkon vëmendje",
-  hint: "Rezultati i konformitetit nuk lejon parashtrimin. Kontaktoni certifikuesin ose ISHMT-në.",
+  hint: "Rezultati i konformitetit nuk lejon aplikimin për rregjistrim. Kontaktoni certifikuesin ose ISHMT-në.",
   tone: "danger",
   accentClass: "border-l-gov-danger bg-gov-danger/5",
   titleClass: "text-gov-danger",
@@ -125,24 +124,46 @@ function getIshmtStatusPresentation(status: ApplicationStatus, roleCode: RoleCod
     case ApplicationStatus.SUBMITTED:
       return {
         ...ACTION,
-        hint: "Aplikimi sapo u parashtrua dhe pret marrjen në shqyrtim.",
+        hint:
+          roleCode === ROLE_CODES.CHIEF_INSPECTOR
+            ? "Aplikim i ri për rregjistrim — delegoni te drejtori dhe caktoni numrin e inspektorëve."
+            : "Aplikimi u dërgua për rregjistrim dhe pret shqyrtimin nga ISHMT.",
         badgeLabel: "E re në radhë",
       };
+    case ApplicationStatus.PENDING_DIRECTOR:
+      return {
+        ...(roleCode === ROLE_CODES.ISHMT_DIRECTOR ? ACTION : PROGRESS),
+        hint: "Dosja pret delegimin te përgjegjësi i sektorit.",
+        badgeLabel: roleCode === ROLE_CODES.ISHMT_DIRECTOR ? "Delegoni" : "Te drejtori",
+      };
+    case ApplicationStatus.PENDING_SECTOR_HEAD:
+      return {
+        ...(roleCode === ROLE_CODES.SECTOR_HEAD ? ACTION : PROGRESS),
+        hint: "Dosja pret caktimin e inspektorëve për shqyrtim.",
+        badgeLabel: roleCode === ROLE_CODES.SECTOR_HEAD ? "Caktoni inspektorë" : "Te përgjegjësi",
+      };
+    case ApplicationStatus.PENDING_FIELD_REVIEW:
+      return {
+        ...(roleCode === ROLE_CODES.FIELD_INSPECTOR || roleCode === ROLE_CODES.SECTOR_HEAD
+          ? ACTION
+          : PROGRESS),
+        hint: "Inspektorët shqyrtojnë dosjen dhe dorëzojnë raportin.",
+        badgeLabel: "Shqyrtim dosjeje",
+      };
+    case ApplicationStatus.PENDING_DIRECTOR_REPORT:
+      return {
+        ...(roleCode === ROLE_CODES.ISHMT_DIRECTOR ? ACTION : PROGRESS),
+        hint: "Dosja pret raportin e drejtorit dhe dërgimin te kryeinspektori.",
+        badgeLabel: roleCode === ROLE_CODES.ISHMT_DIRECTOR ? "Dërgo te kryeinspektor" : "Te drejtori",
+      };
     case ApplicationStatus.UNDER_REVIEW:
-      if (roleCode === ROLE_CODES.INSPECTOR || roleCode === ROLE_CODES.SECTOR_SPECIALIST) {
-        return {
-          ...ACTION,
-          hint: "Dosja është në shqyrtim administrativ. Rekomandoni miratim, kthim ose refuzim.",
-          badgeLabel: "Shqyrtoni",
-        };
-      }
       return {
         ...PROGRESS,
-        hint: "Aplikimi është në shqyrtim nga specialisti/inspektori.",
-        badgeLabel: "Në shqyrtim",
+        hint: "Status legacy — aplikimi migrohet në zinxhirin e ri.",
+        badgeLabel: "Në shqyrtim (legacy)",
       };
     case ApplicationStatus.PENDING_CHIEF_INSPECTOR:
-      if (roleCode === ROLE_CODES.CHIEF_INSPECTOR || roleCode === ROLE_CODES.ISHMT_DIRECTOR) {
+      if (roleCode === ROLE_CODES.CHIEF_INSPECTOR) {
         return {
           ...ACTION,
           hint: "Dosja pret vendimin final të miratimit ose refuzimit.",

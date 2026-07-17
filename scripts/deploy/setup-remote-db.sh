@@ -55,7 +55,6 @@ Admin ISHMT                         | I90101001A
 Kryeinspektor                       | I90505005E
 Drejtor Teknik                      | I90606006F
 Përgjegjës Sektor Mekanik           | I90707007G
-Specialist sektori                  | I90808008H
 Inspektor terreni                   | I90909009I
 Drejtoria e Politikave              | I90303003C
 ============================================================

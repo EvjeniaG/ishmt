@@ -56,7 +56,7 @@ export const WORKFLOW_ACTION_LABELS: Record<string, string> = {
   ACCEPT_CERTIFIER: "Pranimi nga certifikuesi",
   COMPLETE_CERTIFIER: "Përfundimi i certifikimit",
   CREATE: "Krijimi i aplikimit",
-  SUBMIT: "Parashtrimi te ISHMT",
+  SUBMIT: "Aplikim për rregjistrim te ISHMT",
   PICKUP_REVIEW: "Marrja në shqyrtim",
   APPROVE: "Miratimi",
   REJECT: "Refuzimi",
@@ -69,7 +69,14 @@ export const WORKFLOW_ACTION_LABELS: Record<string, string> = {
   CERTIFIER_ACCEPTED: "Pranimi i ftesës nga certifikuesi",
   CERTIFIER_REJECTED: "Refuzimi i ftesës nga certifikuesi",
   CERTIFICATION_COMPLETED: "Përfundimi i certifikimit",
-  APPLICATION_SUBMITTED_TO_ISHMT: "Parashtrimi te ISHMT",
+  APPLICATION_SUBMITTED_TO_ISHMT: "Aplikim për rregjistrim te ISHMT",
+  DELEGATE_TO_DIRECTOR: "Delegim te Drejtori i Drejtorisë",
+  DELEGATE_TO_SECTOR_HEAD: "Delegim te Përgjegjësi i sektorit",
+  ASSIGN_FIELD_INSPECTORS: "Caktimi i inspektorëve",
+  SUBMIT_FIELD_REPORT: "Raport i inspektorit",
+  ALL_FIELD_REPORTS_COMPLETE: "Raportet e inspektorëve u përfunduan",
+  FORWARD_TO_DIRECTOR: "Raport i Përgjegjësit — drejt Drejtorit",
+  FORWARD_TO_CHIEF: "Raport i Drejtorit — drejt Kryeinspektorit",
 };
 
 export function labelApplicationStatus(status: ApplicationStatus | string | null | undefined): string {

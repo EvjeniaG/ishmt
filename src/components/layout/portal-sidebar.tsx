@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import {
   Building2,
   Bell,
+  CalendarClock,
   ClipboardCheck,
   ClipboardList,
   Clock3,
@@ -42,10 +43,10 @@ const EXPORT_REPORTS_NAV: PortalNavItem = {
   icon: TableProperties,
 };
 
-const ISHMT_CONTRACTS_NAV: PortalNavItem = {
-  href: "/ishmt/contracts",
-  label: "Kontratat & afatet",
-  icon: Clock3,
+const ISHMT_DIGEST_NAV: PortalNavItem = {
+  href: "/ishmt/compliance-digest",
+  label: "Përmbledhje ditore",
+  icon: CalendarClock,
 };
 
 const ISHMT_NOTIFICATIONS_NAV: PortalNavItem = {
@@ -112,9 +113,10 @@ const MAINTENANCE_NAV: NavGroup[] = [
 
 const FIELD_INSPECTOR_NAV: NavGroup[] = [
   {
-    label: "Inspektor terreni",
+    label: "Inspektor",
     items: [
-      { href: "/ishmt/my-field-inspections", label: "Detyrat e mia", icon: ClipboardCheck },
+      { href: "/ishmt/my-application-reviews", label: "Shqyrtimi i aplikimeve", icon: ClipboardList },
+      { href: "/ishmt/my-field-inspections", label: "Detyrat e mia në terren", icon: ClipboardCheck },
       { href: "/ishmt/search", label: "Kërko ashensor", icon: Search },
       ISHMT_NOTIFICATIONS_NAV,
       EXPORT_REPORTS_NAV,
@@ -123,28 +125,13 @@ const FIELD_INSPECTOR_NAV: NavGroup[] = [
   },
 ];
 
-const SECTOR_SPECIALIST_NAV: NavGroup[] = [
-  {
-    label: "Monitorimi i sektorit",
-    items: [
-      { href: "/ishmt/dashboard", label: "Paneli", icon: LayoutDashboard },
-      ISHMT_CONTRACTS_NAV,
-      { href: "/ishmt/reports", label: "Raportimet e qytetarëve", icon: FileText },
-      { href: "/ishmt/search", label: "Regjistri i ashensorëve", icon: Search },
-      { href: "/ishmt/review", label: "Shqyrtimi i aplikimeve", icon: ClipboardList },
-      ISHMT_NOTIFICATIONS_NAV,
-      EXPORT_REPORTS_NAV,
-      { href: getProfilePathForRole(ROLE_CODES.SECTOR_SPECIALIST), label: "Profili", icon: User },
-    ],
-  },
-];
 
 const SECTOR_HEAD_NAV: NavGroup[] = [
   {
-    label: "Përgjegjës i Sektorit të Produkteve Mekanike",
+    label: "Përgjegjës sektori",
     items: [
       { href: "/ishmt/dashboard", label: "Paneli", icon: LayoutDashboard },
-      ISHMT_CONTRACTS_NAV,
+      ISHMT_DIGEST_NAV,
       { href: "/ishmt/review", label: "Shqyrtimi i aplikimeve", icon: ClipboardList },
       { href: "/ishmt/field-inspections", label: "Cakto inspektim terreni", icon: ShieldCheck },
       { href: "/ishmt/reports", label: "Raportimet e qytetarëve", icon: FileText },
@@ -158,14 +145,14 @@ const SECTOR_HEAD_NAV: NavGroup[] = [
 
 const ISHMT_DIRECTOR_NAV: NavGroup[] = [
   {
-    label: "Drejtor Teknik",
+    label: "Drejtor i Drejtorisë",
     items: [
-      { href: "/ishmt/chief/dashboard", label: "Paneli", icon: LayoutDashboard },
-      ISHMT_CONTRACTS_NAV,
-      { href: "/ishmt/chief/approvals", label: "Miratimet & vendimet", icon: ClipboardCheck },
+      { href: "/ishmt/director/dashboard", label: "Paneli", icon: LayoutDashboard },
+      { href: "/ishmt/director/review", label: "Shqyrtimi i aplikimeve", icon: ClipboardList },
+      ISHMT_DIGEST_NAV,
       { href: "/ishmt/field-inspections", label: "Cakto inspektim terreni", icon: ShieldCheck },
       { href: "/ishmt/search", label: "Regjistri i ashensorëve", icon: Building2 },
-      { href: "/ishmt/chief/map", label: "Harta sipas bashkive", icon: Map },
+      { href: "/ishmt/director/map", label: "Harta sipas bashkive", icon: Map },
       EXPORT_REPORTS_NAV,
       { href: getProfilePathForRole(ROLE_CODES.ISHMT_DIRECTOR), label: "Profili", icon: User },
     ],
@@ -179,7 +166,8 @@ const CHIEF_INSPECTOR_NAV: NavGroup[] = [
     label: "Kryeinspektor",
     items: [
       { href: "/ishmt/chief/dashboard", label: "Paneli", icon: LayoutDashboard },
-      ISHMT_CONTRACTS_NAV,
+      { href: "/ishmt/chief/inbox", label: "Aplikime të reja", icon: ClipboardList },
+      ISHMT_DIGEST_NAV,
       { href: "/ishmt/chief/approvals", label: "Miratimet & vendimet", icon: ClipboardCheck },
       { href: "/ishmt/field-inspections", label: "Cakto inspektim terreni", icon: ShieldCheck },
       { href: "/ishmt/search", label: "Regjistri i ashensorëve", icon: Building2 },
@@ -195,7 +183,7 @@ const ADMIN_NAV: NavGroup[] = [
     label: "Administrator i sistemit",
     items: [
       { href: "/ishmt/admin/dashboard", label: "Paneli", icon: LayoutDashboard },
-      ISHMT_CONTRACTS_NAV,
+      ISHMT_DIGEST_NAV,
       { href: "/ishmt/admin/users", label: "Përdoruesit", icon: Users },
       { href: "/ishmt/admin/audit", label: "Audit log", icon: ScrollText },
       { href: "/ishmt/admin/config", label: "Konfigurime", icon: Settings },
@@ -226,7 +214,6 @@ const NAV_BY_ROLE: Record<string, NavGroup[]> = {
   [ROLE_CODES.CERTIFIER]: CERTIFIER_NAV,
   [ROLE_CODES.MAINTENANCE]: MAINTENANCE_NAV,
   [ROLE_CODES.FIELD_INSPECTOR]: FIELD_INSPECTOR_NAV,
-  [ROLE_CODES.SECTOR_SPECIALIST]: SECTOR_SPECIALIST_NAV,
   [ROLE_CODES.SECTOR_HEAD]: SECTOR_HEAD_NAV,
   [ROLE_CODES.ISHMT_DIRECTOR]: ISHMT_DIRECTOR_NAV,
   [ROLE_CODES.INSPECTOR]: INSPECTOR_NAV,

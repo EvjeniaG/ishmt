@@ -10,6 +10,7 @@ import {
   type ApplicationDocumentSpec,
 } from "@/lib/documents/application-document-checklist";
 import {
+  assignFieldInspectorsAction,
   assignInstallerAction,
   cancelApplicationAction,
   completeCertifierAction,
@@ -17,16 +18,22 @@ import {
   submitApplicationAction,
   updateLocationAction,
   approveApplicationAction,
-  forwardToAdminAction,
-  pickupReviewAction,
-  recommendRejectionAction,
+  delegateToDirectorAction,
+  delegateToSectorHeadAction,
+  forwardToChiefAction,
+  forwardToDirectorAction,
   rejectApplicationAction,
   returnApplicationAction,
+  submitFieldReportAction,
 } from "@/lib/actions/application-actions";
 import type { RoleCode } from "@/lib/constants/roles";
+import { ROLE_CODES } from "@/lib/constants/roles";
 import {
   canApproveApplications,
+  canChiefHandleApplications,
+  canDirectApplications,
   canReviewApplications,
+  isFieldInspectorRole,
 } from "@/lib/permissions/ishmt-roles";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -539,7 +546,7 @@ export function SubmitApplicationButton({
   return (
     <div>
       {blockSubmit && <p className="mb-2 text-sm text-amber-800">{blockSubmit}</p>}
-      <Button onClick={onClick} disabled={Boolean(blockSubmit)}>Parashtro te ISHMT</Button>
+      <Button onClick={onClick} disabled={Boolean(blockSubmit)}>Dërgo aplikimin për rregjistrim</Button>
       <FormError error={error} />
     </div>
   );
@@ -571,159 +578,627 @@ export function IshmtReviewActions({
   applicationId,
   status,
   roleCode,
-  inspectorReview,
+  requiredInspectorCount,
+  plannedInspectorIds,
+  inspectorAssignmentLockedBy,
+  fieldReviewAssignments,
+  availableInspectors,
+  directorReview,
+  myFieldReviewAssignmentId,
+  initialRequiresFieldVerification,
+  fieldVerificationCanApprove,
 }: {
   applicationId: string;
   status: ApplicationStatus;
   roleCode: string;
-  inspectorReview?: {
-    recommendation: "APPROVE" | "REJECT";
-    requiresPhysicalInspection: boolean;
+  requiredInspectorCount?: number | null;
+  plannedInspectorIds?: string[] | null;
+  inspectorAssignmentLockedBy?: string | null;
+  initialRequiresFieldVerification?: boolean;
+  fieldVerificationCanApprove?: boolean;
+  fieldReviewAssignments?: {
+    id: string;
+    inspectorId: string;
+    status: string;
+    inspector: { firstName: string; lastName: string };
+  }[];
+  myFieldReviewAssignmentId?: string | null;
+  availableInspectors?: { id: string; label: string }[];
+  directorReview?: {
     comment: string | null;
   };
 }) {
   const role = roleCode as RoleCode;
-  if (canApproveApplications(role)) {
+
+  if (canApproveApplications(role) && status === ApplicationStatus.PENDING_CHIEF_INSPECTOR) {
     return (
       <AdminReviewActions
         applicationId={applicationId}
         status={status}
-        inspectorReview={inspectorReview}
+        upstreamReview={directorReview}
+        fieldVerificationCanApprove={fieldVerificationCanApprove ?? true}
       />
     );
   }
-  if (canReviewApplications(role)) {
-    return <InspectorReviewActions applicationId={applicationId} status={status} />;
+
+  if (canChiefHandleApplications(role) && status === ApplicationStatus.SUBMITTED) {
+    return (
+      <ChiefDelegateActions
+        applicationId={applicationId}
+        availableInspectors={availableInspectors ?? []}
+        initialRequiresFieldVerification={initialRequiresFieldVerification}
+      />
+    );
   }
-  return null;
+
+  if (canDirectApplications(role)) {
+    if (status === ApplicationStatus.PENDING_DIRECTOR) {
+      return (
+        <DirectorDelegateActions
+          applicationId={applicationId}
+          plannedInspectorIds={plannedInspectorIds}
+          inspectorAssignmentLockedBy={inspectorAssignmentLockedBy}
+          availableInspectors={availableInspectors ?? []}
+          initialRequiresFieldVerification={initialRequiresFieldVerification}
+        />
+      );
+    }
+    if (status === ApplicationStatus.PENDING_DIRECTOR_REPORT) {
+      return <DirectorForwardActions applicationId={applicationId} />;
+    }
+  }
+
+  if (canReviewApplications(role)) {
+    if (status === ApplicationStatus.PENDING_SECTOR_HEAD || status === ApplicationStatus.RETURNED_TO_INSPECTORS) {
+      return (
+        <SectorHeadAssignActions
+          applicationId={applicationId}
+          requiredInspectorCount={requiredInspectorCount}
+          plannedInspectorIds={plannedInspectorIds}
+          availableInspectors={availableInspectors ?? []}
+          initialRequiresFieldVerification={initialRequiresFieldVerification}
+        />
+      );
+    }
+    if (status === ApplicationStatus.PENDING_FIELD_REVIEW) {
+      return (
+        <FieldReviewProgressCard assignments={fieldReviewAssignments ?? []} />
+      );
+    }
+    if (
+      status === ApplicationStatus.PENDING_SECTOR_HEAD_REPORT ||
+      status === ApplicationStatus.RETURNED_TO_SECTOR_HEAD
+    ) {
+      return <SectorHeadReportActions applicationId={applicationId} />;
+    }
+  }
+
+  if (isFieldInspectorRole(role) && status === ApplicationStatus.PENDING_FIELD_REVIEW && myFieldReviewAssignmentId) {
+    return <FieldInspectorReportActions assignmentId={myFieldReviewAssignmentId} />;
+  }
+
+  return (
+    <Card className={REVIEW_ACTIONS_CARD_CLASS}>
+      <CardContent className="pt-6">
+        <p className="text-sm text-muted-foreground">
+          Nuk ka veprime të disponueshme për rolin dhe statusin aktual.
+        </p>
+      </CardContent>
+    </Card>
+  );
 }
 
-export function InspectorReviewActions({ applicationId, status }: { applicationId: string; status: ApplicationStatus }) {
+function ReportTextarea({
+  id,
+  label,
+  value,
+  onChange,
+}: {
+  id: string;
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <div className="space-y-1">
+      <Label htmlFor={id}>{label}</Label>
+      <textarea
+        id={id}
+        required
+        rows={4}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className={REVIEW_TEXTAREA_CLASS}
+        placeholder="Shkruani raportin tuaj..."
+      />
+    </div>
+  );
+}
+
+function OptionalNoteTextarea({
+  id,
+  label,
+  value,
+  onChange,
+}: {
+  id: string;
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <div className="space-y-1">
+      <Label htmlFor={id}>{label}</Label>
+      <textarea
+        id={id}
+        rows={3}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className={REVIEW_TEXTAREA_CLASS}
+        placeholder="Shënim ose udhëzim opsional..."
+      />
+    </div>
+  );
+}
+
+function FieldVerificationCheckbox({
+  id,
+  checked,
+  onChange,
+  disabled,
+}: {
+  id: string;
+  checked: boolean;
+  onChange: (value: boolean) => void;
+  disabled?: boolean;
+}) {
+  return (
+    <label
+      htmlFor={id}
+      className={`flex items-start gap-2 rounded-md border border-amber-200/80 bg-amber-50/50 p-3 text-sm ${disabled ? "opacity-70" : ""}`}
+    >
+      <input
+        id={id}
+        type="checkbox"
+        className="mt-0.5"
+        checked={checked}
+        disabled={disabled}
+        onChange={(e) => onChange(e.target.checked)}
+      />
+      <span>
+        <span className="font-medium text-foreground">Kërko verifikim në terren</span>
+        <span className="mt-0.5 block text-xs text-muted-foreground">
+          Inspektori viziton objektin para miratimit final. Miratimi bllokohet deri sa verifikimi të përfundojë me
+          rezultat pozitiv (PASS).
+        </span>
+      </span>
+    </label>
+  );
+}
+
+function ChiefDelegateActions({
+  applicationId,
+  availableInspectors = [],
+  initialRequiresFieldVerification = false,
+}: {
+  applicationId: string;
+  availableInspectors?: { id: string; label: string }[];
+  initialRequiresFieldVerification?: boolean;
+}) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<string | null>(null);
-  const [requiresPhysical, setRequiresPhysical] = useState(false);
-  const [comment, setComment] = useState("");
+  const [noteText, setNoteText] = useState("");
+  const [selected, setSelected] = useState<string[]>([]);
+  const [requiresFieldVerification, setRequiresFieldVerification] = useState(initialRequiresFieldVerification);
 
-  async function pickup() {
-    const result = await pickupReviewAction(applicationId);
-    if (!result.success) setError(result.error);
-    else router.refresh();
+  function toggle(id: string) {
+    setSelected((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
+    );
   }
 
-  async function forward() {
-    if (!confirm("Konfirmo dërgimin e dosjes te kryeinspektori për miratim final?")) return;
-    const result = await forwardToAdminAction(applicationId, {
-      requiresPhysicalInspection: requiresPhysical,
-      comment: comment.trim() || undefined,
-    });
-    if (!result.success) setError(result.error);
-    else {
-      setSuccess("Dosja u dërgua te administratori për miratim.");
-      router.refresh();
-    }
-  }
-
-  async function recommendReject(e: React.FormEvent<HTMLFormElement>) {
+  async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
-    const reason = new FormData(e.currentTarget).get("reason");
-    if (typeof reason !== "string" || !reason.trim()) {
-      setError("Arsyeja e rekomandimit është e detyrueshme.");
-      return;
-    }
-    if (!confirm("Konfirmo rekomandimin e refuzimit te administratori? Vendimi final bëhet nga admini.")) return;
-    const result = await recommendRejectionAction(applicationId, {
-      reason: reason.trim(),
-      requiresPhysicalInspection: requiresPhysical,
+    const result = await delegateToDirectorAction(applicationId, {
+      noteText,
+      inspectorIds: selected.length ? selected : undefined,
+      requiredInspectorCount: selected.length || undefined,
+      requiresFieldVerification,
     });
-    if (!result.success) setError(result.error);
-    else {
-      setSuccess("Refuzimi u rekomandua te administratori për vendim final.");
-      router.refresh();
-    }
-  }
-
-  async function returnApp(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    const result = await returnApplicationAction(applicationId, new FormData(e.currentTarget));
     if (!result.success) setError(result.error);
     else router.refresh();
   }
 
   return (
     <Card className={REVIEW_ACTIONS_CARD_CLASS}>
-      <CardHeader className="shrink-0 space-y-2 pb-3">
-        <CardTitle className="text-lg">Veprimet e inspektorit</CardTitle>
+      <CardHeader className="shrink-0 pb-3">
+        <CardTitle className="text-lg">Kryeinspektor — delegim</CardTitle>
+        <CardDescription>
+          Delegoni Aplikimin për Registrim te drejtori i drejtorisë. Inspektorët mund të caktohen tani ose më vonë.
+        </CardDescription>
       </CardHeader>
       <CardContent className={REVIEW_ACTIONS_SCROLL_CLASS}>
-        {status === ApplicationStatus.SUBMITTED && (
-          <Button onClick={pickup}>Merr në shqyrtim</Button>
-        )}
-        {status === ApplicationStatus.UNDER_REVIEW && (
-          <>
-            <p className="text-sm text-muted-foreground">
-              Pas shqyrtimit, dërgoni dosjen te administratori për miratim final, rekomandoni refuzimin,
-              kërkoni verifikim fizik, ose ktheni për korrigjim. Inspektori nuk merr vendim final.
+        <form onSubmit={onSubmit} className="space-y-4">
+          <OptionalNoteTextarea
+            id="chief-note"
+            label="Shënim ose udhëzim"
+            value={noteText}
+            onChange={setNoteText}
+          />
+          {availableInspectors.length > 0 ? (
+            <div className="space-y-2 rounded-md border p-3">
+              <p className="text-sm font-medium">Cakto inspektorë (opsional)</p>
+              {availableInspectors.map((inspector) => (
+                <label key={inspector.id} className="flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={selected.includes(inspector.id)}
+                    onChange={() => toggle(inspector.id)}
+                  />
+                  {inspector.label}
+                </label>
+              ))}
+            </div>
+          ) : null}
+          <FieldVerificationCheckbox
+            id="chief-field-verification"
+            checked={requiresFieldVerification}
+            onChange={setRequiresFieldVerification}
+          />
+          <Button type="submit" className="w-full">
+            Delego te drejtori i drejtorisë
+          </Button>
+          <FormError error={error} />
+        </form>
+      </CardContent>
+    </Card>
+  );
+}
+
+function DirectorDelegateActions({
+  applicationId,
+  plannedInspectorIds,
+  inspectorAssignmentLockedBy,
+  availableInspectors = [],
+  initialRequiresFieldVerification = false,
+}: {
+  applicationId: string;
+  plannedInspectorIds?: string[] | null;
+  inspectorAssignmentLockedBy?: string | null;
+  availableInspectors?: { id: string; label: string }[];
+  initialRequiresFieldVerification?: boolean;
+}) {
+  const router = useRouter();
+  const [error, setError] = useState<string | null>(null);
+  const [noteText, setNoteText] = useState("");
+  const inherited = plannedInspectorIds ?? [];
+  const locked = Boolean(inspectorAssignmentLockedBy && inherited.length);
+  const [selected, setSelected] = useState<string[]>(inherited);
+  const [requiresFieldVerification, setRequiresFieldVerification] = useState(initialRequiresFieldVerification);
+
+  function toggle(id: string) {
+    if (locked) return;
+    setSelected((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
+    );
+  }
+
+  async function onSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    const result = await delegateToSectorHeadAction(applicationId, {
+      noteText,
+      inspectorIds: !locked && selected.length ? selected : undefined,
+      requiresFieldVerification,
+    });
+    if (!result.success) setError(result.error);
+    else router.refresh();
+  }
+
+  const plannedLabels = inherited
+    .map((id) => availableInspectors.find((i) => i.id === id)?.label)
+    .filter(Boolean);
+
+  return (
+    <Card className={REVIEW_ACTIONS_CARD_CLASS}>
+      <CardHeader className="shrink-0 pb-3">
+        <CardTitle className="text-lg">Drejtor i drejtorisë — delegim</CardTitle>
+        <CardDescription>
+          Delegoni te përgjegjësi i sektorit. Inspektorët e planifikuar nga hallka e sipërme shfaqen më poshtë.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className={REVIEW_ACTIONS_SCROLL_CLASS}>
+        <form onSubmit={onSubmit} className="space-y-4">
+          {locked && plannedLabels.length > 0 ? (
+            <div className="rounded-md border border-dashed p-3 text-sm">
+              <p className="font-medium">Inspektorët e caktuar nga Kryeinspektori</p>
+              <p className="mt-1 text-muted-foreground">{plannedLabels.join(", ")}</p>
+            </div>
+          ) : null}
+          {!locked && availableInspectors.length > 0 ? (
+            <div className="space-y-2 rounded-md border p-3">
+              <p className="text-sm font-medium">Cakto inspektorë (opsional)</p>
+              {availableInspectors.map((inspector) => (
+                <label key={inspector.id} className="flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={selected.includes(inspector.id)}
+                    onChange={() => toggle(inspector.id)}
+                  />
+                  {inspector.label}
+                </label>
+              ))}
+            </div>
+          ) : null}
+          <FieldVerificationCheckbox
+            id="director-field-verification"
+            checked={requiresFieldVerification}
+            onChange={setRequiresFieldVerification}
+          />
+          <OptionalNoteTextarea
+            id="director-note"
+            label="Shënim ose udhëzim"
+            value={noteText}
+            onChange={setNoteText}
+          />
+          <Button type="submit" className="w-full">
+            Delego te përgjegjësi i sektorit
+          </Button>
+          <FormError error={error} />
+        </form>
+      </CardContent>
+    </Card>
+  );
+}
+
+function DirectorForwardActions({ applicationId }: { applicationId: string }) {
+  const router = useRouter();
+  const [error, setError] = useState<string | null>(null);
+  const [reportText, setReportText] = useState("");
+
+  async function onSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    const result = await forwardToChiefAction(applicationId, reportText);
+    if (!result.success) setError(result.error);
+    else router.refresh();
+  }
+
+  return (
+    <Card className={REVIEW_ACTIONS_CARD_CLASS}>
+      <CardHeader className="shrink-0 pb-3">
+        <CardTitle className="text-lg">Drejtor i drejtorisë — dërgim</CardTitle>
+      </CardHeader>
+      <CardContent className={REVIEW_ACTIONS_SCROLL_CLASS}>
+        <form onSubmit={onSubmit} className="space-y-4">
+          <ReportTextarea
+            id="director-forward-report"
+            label="Raporti i drejtorit *"
+            value={reportText}
+            onChange={setReportText}
+          />
+          <Button type="submit" className="w-full">
+            Dërgo te kryeinspektori për miratim
+          </Button>
+          <FormError error={error} />
+        </form>
+      </CardContent>
+    </Card>
+  );
+}
+
+function SectorHeadAssignActions({
+  applicationId,
+  requiredInspectorCount,
+  plannedInspectorIds,
+  availableInspectors,
+  initialRequiresFieldVerification = false,
+}: {
+  applicationId: string;
+  requiredInspectorCount?: number | null;
+  plannedInspectorIds?: string[] | null;
+  availableInspectors: { id: string; label: string }[];
+  initialRequiresFieldVerification?: boolean;
+}) {
+  const router = useRouter();
+  const [error, setError] = useState<string | null>(null);
+  const [noteText, setNoteText] = useState("");
+  const inherited = plannedInspectorIds ?? [];
+  const [selected, setSelected] = useState<string[]>(inherited);
+  const [requiresFieldVerification, setRequiresFieldVerification] = useState(initialRequiresFieldVerification);
+
+  function toggle(id: string) {
+    if (inherited.length) return;
+    setSelected((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
+    );
+  }
+
+  async function onSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    const inspectorIds = inherited.length ? inherited : selected;
+    const result = await assignFieldInspectorsAction(applicationId, {
+      inspectorIds,
+      noteText,
+      requiresFieldVerification,
+    });
+    if (!result.success) setError(result.error);
+    else router.refresh();
+  }
+
+  const targetCount = inherited.length || selected.length || requiredInspectorCount;
+
+  return (
+    <Card className={REVIEW_ACTIONS_CARD_CLASS}>
+      <CardHeader className="shrink-0 pb-3">
+        <CardTitle className="text-lg">Përgjegjës sektori — delegim te inspektorët</CardTitle>
+        <CardDescription>
+          {inherited.length
+            ? "Inspektorët janë caktuar nga hallka e sipërme. Konfirmoni delegimin."
+            : "Zgjidhni inspektorët dhe delegoni dosjen për shqyrtim teknik."}
+        </CardDescription>
+      </CardHeader>
+      <CardContent className={REVIEW_ACTIONS_SCROLL_CLASS}>
+        <form onSubmit={onSubmit} className="space-y-4">
+          <OptionalNoteTextarea
+            id="sector-note"
+            label="Shënim ose udhëzim"
+            value={noteText}
+            onChange={setNoteText}
+          />
+          <div className="space-y-2 rounded-md border p-3">
+            <p className="text-sm font-medium">
+              Inspektorët ({inherited.length || selected.length}
+              {targetCount ? ` / ${targetCount}` : ""})
             </p>
+            {availableInspectors.length === 0 ? (
+              <p className="text-sm text-muted-foreground">Nuk u gjetën inspektorë në organizatë.</p>
+            ) : (
+              availableInspectors.map((inspector) => (
+                <label key={inspector.id} className="flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={(inherited.length ? inherited : selected).includes(inspector.id)}
+                    onChange={() => toggle(inspector.id)}
+                    disabled={inherited.length > 0}
+                  />
+                  {inspector.label}
+                </label>
+              ))
+            )}
+          </div>
+          <FieldVerificationCheckbox
+            id="sector-field-verification"
+            checked={requiresFieldVerification}
+            onChange={setRequiresFieldVerification}
+          />
+          <Button
+            type="submit"
+            className="w-full"
+            disabled={!inherited.length && selected.length < 1}
+          >
+            Delego te inspektorët
+          </Button>
+          <FormError error={error} />
+        </form>
+      </CardContent>
+    </Card>
+  );
+}
 
-            <section className="space-y-3 rounded-md border p-3">
-              <p className="text-sm font-medium">Rekomandim miratimi</p>
-              <label className="flex items-center gap-2 text-sm">
-                <input
-                  type="checkbox"
-                  checked={requiresPhysical}
-                  onChange={(e) => setRequiresPhysical(e.target.checked)}
-                />
-                Kërkohet verifikim fizik në terren
-              </label>
-              <div className="space-y-1">
-                <Label>Shënim për administratorin (opsional)</Label>
-                <Input value={comment} onChange={(e) => setComment(e.target.value)} placeholder="Rekomandim / vërejtje" />
-              </div>
-              <Button onClick={forward} className="w-full bg-green-700 hover:bg-green-800">
-                Dërgo për miratim (rekomandim)
-              </Button>
-            </section>
+function FieldReviewProgressCard({
+  assignments,
+}: {
+  assignments: { id: string; status: string; inspector: { firstName: string; lastName: string } }[];
+}) {
+  const active = assignments.filter((a) => a.status !== "REPLACED");
+  const completed = active.filter((a) => a.status === "COMPLETED").length;
 
-            <form onSubmit={recommendReject} className="space-y-2 rounded-md border p-3">
-              <p className="text-sm font-medium">Rekomandim refuzimi</p>
-              <Label>Arsye rekomandimi refuzimi</Label>
-              <Input name="reason" required />
-              <Button type="submit" variant="outline" className="w-full">
-                Rekomando refuzimin te kryeinspektori
-              </Button>
-            </form>
-
-            <form onSubmit={returnApp} className="space-y-3 rounded-md border p-4">
-              <p className="text-sm font-medium">Kthim për korrigjim</p>
-              <div className="space-y-1">
-                <Label>Arsye kthimi</Label>
-                <textarea name="reason" required rows={2} className={REVIEW_TEXTAREA_CLASS} />
-              </div>
-              <div className="space-y-1">
-                <Label>Korrigjimi i kërkuar</Label>
-                <textarea
-                  name="requiredCorrection"
-                  required
-                  rows={2}
-                  className={REVIEW_TEXTAREA_CLASS}
-                  placeholder="P.sh. Plotësoni numrin OMI"
-                />
-              </div>
-              <ReturnToRolesField />
-              <Button type="submit" variant="outline" className="h-auto w-full whitespace-normal py-2.5">
-                Kthe për korrigjim
-              </Button>
-            </form>
-          </>
-        )}
-        {status === ApplicationStatus.PENDING_CHIEF_INSPECTOR && (
-          <p className="text-sm text-muted-foreground">
-            Dosja është dërguar te kryeinspektori - në pritje të miratimit final.
+  return (
+    <Card className={REVIEW_ACTIONS_CARD_CLASS}>
+      <CardHeader className="shrink-0 pb-3">
+        <CardTitle className="text-lg">Progresi i shqyrtimit</CardTitle>
+        <CardDescription>
+          {completed} nga {active.length} raporte të përfunduara
+        </CardDescription>
+      </CardHeader>
+      <CardContent className={REVIEW_ACTIONS_SCROLL_CLASS}>
+        <div className="space-y-1 text-sm">
+          {active.map((a) => (
+            <p key={a.id}>
+              {a.inspector.firstName} {a.inspector.lastName}:{" "}
+              {a.status === "COMPLETED" ? "Raporti u dorëzua" : "Në pritje të raportit"}
+            </p>
+          ))}
+        </div>
+        {completed === active.length && active.length > 0 ? (
+          <p className="mt-4 text-sm text-muted-foreground">
+            Të gjithë inspektorët kanë përfunduar. Dosja kalon automatikisht te ju për raportin e Përgjegjësit.
           </p>
-        )}
-        <FormError error={error} />
-        {success && <p className="text-sm text-green-700">{success}</p>}
+        ) : null}
+      </CardContent>
+    </Card>
+  );
+}
+
+function SectorHeadReportActions({ applicationId }: { applicationId: string }) {
+  const router = useRouter();
+  const [error, setError] = useState<string | null>(null);
+  const [reportText, setReportText] = useState("");
+
+  async function onSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    const result = await forwardToDirectorAction(applicationId, reportText);
+    if (!result.success) setError(result.error);
+    else router.refresh();
+  }
+
+  return (
+    <Card className={REVIEW_ACTIONS_CARD_CLASS}>
+      <CardHeader className="shrink-0 pb-3">
+        <CardTitle className="text-lg">Përgjegjës sektori — raport</CardTitle>
+        <CardDescription>Plotësoni raportin tuaj dhe delegoni dosjen te drejtori.</CardDescription>
+      </CardHeader>
+      <CardContent className={REVIEW_ACTIONS_SCROLL_CLASS}>
+        <form onSubmit={onSubmit} className="space-y-4">
+          <ReportTextarea
+            id="sector-forward-report"
+            label="Raporti i përgjegjësit të sektorit *"
+            value={reportText}
+            onChange={setReportText}
+          />
+          <Button type="submit" className="w-full">
+            Dërgo te drejtori i drejtorisë
+          </Button>
+          <FormError error={error} />
+        </form>
+      </CardContent>
+    </Card>
+  );
+}
+
+function FieldInspectorReportActions({ assignmentId }: { assignmentId: string }) {
+  const router = useRouter();
+  const [error, setError] = useState<string | null>(null);
+  const [reportText, setReportText] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  async function saveDraft() {
+    setSaving(true);
+    const result = await submitFieldReportAction(assignmentId, reportText, { submit: false });
+    setSaving(false);
+    if (!result.success) setError(result.error);
+    else router.refresh();
+  }
+
+  async function onSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    const result = await submitFieldReportAction(assignmentId, reportText, { submit: true });
+    if (!result.success) setError(result.error);
+    else router.refresh();
+  }
+
+  return (
+    <Card className={REVIEW_ACTIONS_CARD_CLASS}>
+      <CardHeader className="shrink-0 pb-3">
+        <CardTitle className="text-lg">Inspektor — raport shqyrtimi</CardTitle>
+      </CardHeader>
+      <CardContent className={REVIEW_ACTIONS_SCROLL_CLASS}>
+        <form onSubmit={onSubmit} className="space-y-4">
+          <ReportTextarea
+            id="field-report"
+            label="Raporti i inspektorit *"
+            value={reportText}
+            onChange={setReportText}
+          />
+          <div className="flex flex-col gap-2">
+            <Button type="button" variant="outline" onClick={saveDraft} disabled={saving}>
+              Ruaj si draft
+            </Button>
+            <Button type="submit" className="w-full">
+              Përfundo shqyrtimin dhe dërgo raportin
+            </Button>
+          </div>
+          <FormError error={error} />
+        </form>
       </CardContent>
     </Card>
   );
@@ -732,22 +1207,20 @@ export function InspectorReviewActions({ applicationId, status }: { applicationI
 export function AdminReviewActions({
   applicationId,
   status,
-  inspectorReview,
+  upstreamReview,
+  fieldVerificationCanApprove = true,
 }: {
   applicationId: string;
   status: ApplicationStatus;
-  inspectorReview?: {
-    recommendation: "APPROVE" | "REJECT";
-    requiresPhysicalInspection: boolean;
+  upstreamReview?: {
     comment: string | null;
   };
+  fieldVerificationCanApprove?: boolean;
 }) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
-  const [mode, setMode] = useState<ReviewDecisionMode>(
-    inspectorReview?.recommendation === "REJECT" ? "reject" : "approve",
-  );
+  const [mode, setMode] = useState<ReviewDecisionMode>("approve");
 
   async function approve() {
     if (!confirm("Konfirmo miratimin final të aplikimit?")) return;
@@ -787,10 +1260,14 @@ export function AdminReviewActions({
         <div className="space-y-2">
           <CardTitle className="text-lg">Vendimi final</CardTitle>
           <CardDescription>
-            Inspektori ka përfunduar shqyrtimin. Zgjidhni një veprim dhe plotësoni vetëm fushat e nevojshme.
+            Zinxhiri i shqyrtimit hierarkik u përfundua. Merrni vendimin final të miratimit, refuzimit ose kthimit.
           </CardDescription>
         </div>
-        {inspectorReview && <InspectorRecommendationBanner inspectorReview={inspectorReview} />}
+        {upstreamReview?.comment && (
+          <p className="rounded-lg border bg-muted/40 px-3 py-2 text-sm">
+            Raporti i drejtorit: {upstreamReview.comment}
+          </p>
+        )}
         <ReviewDecisionTabs mode={mode} onChange={setMode} />
       </CardHeader>
       <CardContent className={cn(REVIEW_ACTIONS_SCROLL_CLASS, "pt-4")}>
@@ -803,9 +1280,15 @@ export function AdminReviewActions({
               Pas miratimit gjenerohen numri i regjistrit dhe certifikata. Vendimi njoftohet automatikisht
               personit përgjegjës të ashensorit.
             </p>
+            {!fieldVerificationCanApprove ? (
+              <p className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-950">
+                Miratimi është bllokuar: verifikimi në terren duhet të përfundojë me rezultat pozitiv (PASS).
+              </p>
+            ) : null}
             <Button
               onClick={approve}
-              className="h-11 w-full bg-green-700 text-base font-semibold hover:bg-green-800"
+              disabled={!fieldVerificationCanApprove}
+              className="h-11 w-full bg-green-700 text-base font-semibold hover:bg-green-800 disabled:opacity-50"
             >
               Mirato aplikimin
             </Button>

@@ -45,14 +45,6 @@ function menuForRole(roleCode: RoleCode): MenuItem[] {
         { href: profile, label: "Profili" },
         { href: notifications, label: "Njoftimet" },
       ];
-    case ROLE_CODES.SECTOR_SPECIALIST:
-      return [
-        { href: dashboard, label: "Paneli" },
-        { href: profile, label: "Profili" },
-        { href: notifications, label: "Njoftimet" },
-        { href: "/ishmt/reports", label: "Raportimet e qytetarëve" },
-        { href: "/ishmt/review", label: "Shqyrtim aplikimesh" },
-      ];
     case ROLE_CODES.SECTOR_HEAD:
       return [
         { href: dashboard, label: "Paneli" },
@@ -65,10 +57,12 @@ function menuForRole(roleCode: RoleCode): MenuItem[] {
     case ROLE_CODES.ISHMT_DIRECTOR:
       return [
         { href: dashboard, label: "Paneli" },
+        { href: "/ishmt/director/review", label: "Shqyrtimi i aplikimeve" },
+        { href: "/ishmt/search", label: "Regjistri i ashensorëve" },
+        { href: "/ishmt/director/map", label: "Harta sipas bashkive" },
+        { href: "/ishmt/field-inspections", label: "Cakto inspektim terreni" },
         { href: profile, label: "Profili" },
         { href: notifications, label: "Njoftimet" },
-        { href: "/ishmt/chief/approvals", label: "Aplikime për miratim" },
-        { href: "/ishmt/field-inspections", label: "Cakto inspektim terreni" },
       ];
     case ROLE_CODES.CHIEF_INSPECTOR:
       return [

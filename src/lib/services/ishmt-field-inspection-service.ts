@@ -12,6 +12,7 @@ import type { AuthContext } from "@/lib/permissions/guards";
 import { hasPermission } from "@/lib/permissions/guards";
 import { PERMISSIONS } from "@/lib/permissions/codes";
 import { INSPECTION_RESULT_LABELS } from "@/lib/ishmt/field-inspection-labels";
+import { completeApplicationFieldVerification } from "@/lib/services/application-field-verification";
 import {
   ISHMT_FIELD_INSPECTOR_ROLES,
   canAssignFieldInspections,
@@ -19,6 +20,18 @@ import {
 } from "@/lib/permissions/ishmt-roles";
 
 const assignmentInclude = {
+  application: {
+    select: {
+      id: true,
+      applicationNumber: true,
+      data: {
+        select: {
+          buildingAddress: true,
+          municipality: { select: { nameSq: true } },
+        },
+      },
+    },
+  },
   elevator: {
     select: {
       id: true,
@@ -39,6 +52,7 @@ const assignmentInclude = {
       reportDocument: { select: { id: true, originalFilename: true } },
     },
   },
+  reportDocument: { select: { id: true, originalFilename: true } },
 } as const;
 
 export type FieldInspectorOption = {
@@ -88,7 +102,8 @@ export class IshmtFieldInspectionService {
   static async assign(
     ctx: AuthContext,
     input: {
-      elevatorId: string;
+      elevatorId?: string;
+      applicationId?: string;
       assigneeId: string;
       scheduledDate: Date;
       instructions?: string;
@@ -96,11 +111,26 @@ export class IshmtFieldInspectionService {
   ) {
     this.assertAssigner(ctx);
 
-    const elevator = await db.elevator.findFirst({
-      where: { id: input.elevatorId, deletedAt: null },
-      select: { id: true, registryNumber: true },
-    });
-    if (!elevator) throw new Error("Ashensori nuk u gjet.");
+    if (!input.elevatorId && !input.applicationId) {
+      throw new Error("Duhet të specifikoni ashensorin ose aplikimin.");
+    }
+
+    let label = "";
+    if (input.elevatorId) {
+      const elevator = await db.elevator.findFirst({
+        where: { id: input.elevatorId, deletedAt: null },
+        select: { id: true, registryNumber: true },
+      });
+      if (!elevator) throw new Error("Ashensori nuk u gjet.");
+      label = elevator.registryNumber;
+    } else if (input.applicationId) {
+      const application = await db.application.findFirst({
+        where: { id: input.applicationId, deletedAt: null },
+        select: { applicationNumber: true },
+      });
+      if (!application) throw new Error("Aplikimi nuk u gjet.");
+      label = application.applicationNumber;
+    }
 
     const roles = await db.authRole.findMany({
       where: { code: { in: [...ISHMT_FIELD_INSPECTOR_ROLES] } },
@@ -122,7 +152,8 @@ export class IshmtFieldInspectionService {
 
     const assignment = await db.fieldInspectionAssignment.create({
       data: {
-        elevatorId: input.elevatorId,
+        elevatorId: input.elevatorId ?? null,
+        applicationId: input.applicationId ?? null,
         assigneeId: input.assigneeId,
         assignedById: ctx.userId,
         scheduledDate: input.scheduledDate,
@@ -138,6 +169,7 @@ export class IshmtFieldInspectionService {
       entityId: assignment.id,
       afterState: {
         elevatorId: input.elevatorId,
+        applicationId: input.applicationId,
         assigneeId: input.assigneeId,
         scheduledDate: input.scheduledDate.toISOString(),
       },
@@ -146,7 +178,7 @@ export class IshmtFieldInspectionService {
     await NotificationService.create({
       userId: input.assigneeId,
       title: "Caktim inspektimi në terren",
-      body: `Ju është caktuar inspektim për ashensorin ${elevator.registryNumber} më ${input.scheduledDate.toLocaleDateString("sq-AL")}.`,
+      body: `Ju është caktuar inspektim për ${label} më ${input.scheduledDate.toLocaleDateString("sq-AL")}.`,
       entityType: "field_inspection_assignment",
       entityId: assignment.id,
     });
@@ -165,7 +197,10 @@ export class IshmtFieldInspectionService {
     return db.fieldInspectionAssignment.findMany({
       where: {
         ...(status ? { status } : {}),
-        elevator: { deletedAt: null },
+        OR: [
+          { elevator: { deletedAt: null } },
+          { application: { deletedAt: null } },
+        ],
       },
       include: assignmentInclude,
       orderBy: [{ scheduledDate: "desc" }, { createdAt: "desc" }],
@@ -180,7 +215,10 @@ export class IshmtFieldInspectionService {
       where: {
         assigneeId: ctx.userId,
         ...(status ? { status } : {}),
-        elevator: { deletedAt: null },
+        OR: [
+          { elevator: { deletedAt: null } },
+          { application: { deletedAt: null } },
+        ],
       },
       include: assignmentInclude,
       orderBy: [{ scheduledDate: "asc" }, { createdAt: "desc" }],
@@ -228,6 +266,7 @@ export class IshmtFieldInspectionService {
       },
       include: {
         elevator: { select: { id: true, registryNumber: true } },
+        application: { select: { id: true, applicationNumber: true } },
       },
     });
     if (!assignment) throw new Error("Caktimi nuk u gjet ose është përfunduar.");
@@ -249,55 +288,69 @@ export class IshmtFieldInspectionService {
     const mappedResult = resultMap[input.result];
 
     const updated = await db.$transaction(async (tx) => {
-      const inspection = await tx.inspection.create({
-        data: {
+      const updatedAssignment = await completeApplicationFieldVerification(
+        tx,
+        {
+          id: assignment.id,
+          applicationId: assignment.applicationId,
           elevatorId: assignment.elevatorId,
-          inspectorId: ctx.userId,
-          type: InspectionType.EXTRAORDINARY,
-          status: mappedResult,
+          assigneeId: assignment.assigneeId,
           scheduledDate: assignment.scheduledDate,
+        },
+        {
           conductedDate: input.conductedDate,
           result: mappedResult,
-          findings: input.findings?.trim() || null,
+          findings: input.findings,
           reportDocumentId: input.reportDocumentId ?? null,
         },
-      });
-
-      const updatedAssignment = await tx.fieldInspectionAssignment.update({
-        where: { id: assignmentId },
-        data: {
-          status: FieldInspectionAssignmentStatus.COMPLETED,
-          inspectionId: inspection.id,
-        },
-        include: assignmentInclude,
-      });
-
-      await AuditService.log(
-        {
-          actorId: ctx.userId,
-          action: AuditAction.CREATE,
-          entityType: "inspection",
-          entityId: inspection.id,
-          afterState: {
-            assignmentId,
-            elevatorId: assignment.elevatorId,
-            result: input.result,
-          },
-        },
-        tx,
       );
 
-      return updatedAssignment;
+      if (assignment.elevatorId) {
+        await AuditService.log(
+          {
+            actorId: ctx.userId,
+            action: AuditAction.CREATE,
+            entityType: "inspection",
+            entityId: updatedAssignment.inspectionId ?? assignment.id,
+            afterState: {
+              assignmentId,
+              elevatorId: assignment.elevatorId,
+              result: input.result,
+            },
+          },
+          tx,
+        );
+      }
+
+      return tx.fieldInspectionAssignment.findUniqueOrThrow({
+        where: { id: assignmentId },
+        include: assignmentInclude,
+      });
     });
 
+    const subjectLabel =
+      assignment.elevator?.registryNumber ??
+      assignment.application?.applicationNumber ??
+      "subjekti";
     const resultLabel = INSPECTION_RESULT_LABELS[input.result] ?? input.result;
-    await OperationalEventNotificationService.broadcastForElevator({
-      elevatorId: assignment.elevatorId,
-      title: "Inspektim terreni u përfundua",
-      body: `Ashensori ${assignment.elevator.registryNumber}: ${resultLabel}.`,
-      entityType: "field_inspection_assignment",
-      entityId: assignmentId,
-    });
+
+    if (assignment.elevatorId) {
+      await OperationalEventNotificationService.broadcastForElevator({
+        elevatorId: assignment.elevatorId,
+        title: "Inspektim terreni u përfundua",
+        body: `Ashensori ${subjectLabel}: ${resultLabel}.`,
+        entityType: "field_inspection_assignment",
+        entityId: assignmentId,
+      });
+    } else if (assignment.applicationId) {
+      await NotificationService.create({
+        userId: assignment.assigneeId,
+        title: "Verifikim në terren u përfundua",
+        body: `${subjectLabel}: ${resultLabel}.`,
+        entityType: "application",
+        entityId: assignment.applicationId,
+      });
+    }
 
     return updated;
   }

@@ -14,9 +14,16 @@ export type WorkflowAction =
   | "START_CERTIFICATION"
   | "COMPLETE_CERTIFIER"
   | "SUBMIT"
-  | "PICKUP_REVIEW"
+  | "DELEGATE_TO_DIRECTOR"
+  | "DELEGATE_TO_SECTOR_HEAD"
+  | "ASSIGN_FIELD_INSPECTORS"
+  | "SUBMIT_FIELD_REPORT"
+  | "ALL_FIELD_REPORTS_COMPLETE"
+  | "FORWARD_TO_DIRECTOR"
   | "FORWARD_TO_CHIEF"
-  | "RECOMMEND_REJECTION"
+  | "RETURN_TO_INSPECTORS"
+  | "RETURN_TO_SECTOR_HEAD"
+  | "RETURN_TO_DIRECTOR"
   | "APPROVE"
   | "REJECT"
   | "RETURN"
@@ -25,6 +32,8 @@ export type WorkflowAction =
   | "ELEVATOR_CREATED"
   | "ASSETS_GENERATED"
   | "CLOSE";
+
+export type ReviewLevel = "CHIEF" | "DIRECTOR" | "SECTOR_HEAD" | "FIELD_INSPECTOR";
 
 export type TransitionRule = {
   applicationType: ApplicationType;
@@ -54,22 +63,64 @@ const ISHMT_REVIEW_TYPES: ApplicationType[] = [
   ApplicationType.MODERNIZATION,
 ];
 
-/** Inspektori shqyrton → kryeinspektori miraton / refuzon / kthen */
-function ishmtTwoStepApprovalTransitions(type: ApplicationType): TransitionRule[] {
+/** Zinxhir hierarkik: Kryeinspektor → Drejtor → Përgjegjës → Inspektor(ët) → lart me raporte */
+function ishmtHierarchicalReviewTransitions(type: ApplicationType): TransitionRule[] {
   return [
     {
       applicationType: type,
-      from: ApplicationStatus.UNDER_REVIEW,
-      to: ApplicationStatus.PENDING_CHIEF_INSPECTOR,
-      action: "FORWARD_TO_CHIEF",
-      roles: [ROLE_CODES.INSPECTOR],
+      from: ApplicationStatus.SUBMITTED,
+      to: ApplicationStatus.PENDING_DIRECTOR,
+      action: "DELEGATE_TO_DIRECTOR",
+      roles: [ROLE_CODES.CHIEF_INSPECTOR],
     },
     {
       applicationType: type,
-      from: ApplicationStatus.UNDER_REVIEW,
+      from: ApplicationStatus.PENDING_DIRECTOR,
+      to: ApplicationStatus.PENDING_SECTOR_HEAD,
+      action: "DELEGATE_TO_SECTOR_HEAD",
+      roles: [ROLE_CODES.ISHMT_DIRECTOR],
+    },
+    {
+      applicationType: type,
+      from: ApplicationStatus.PENDING_SECTOR_HEAD,
+      to: ApplicationStatus.PENDING_FIELD_REVIEW,
+      action: "ASSIGN_FIELD_INSPECTORS",
+      roles: [ROLE_CODES.SECTOR_HEAD],
+    },
+    {
+      applicationType: type,
+      from: ApplicationStatus.PENDING_FIELD_REVIEW,
+      to: ApplicationStatus.PENDING_FIELD_REVIEW,
+      action: "SUBMIT_FIELD_REPORT",
+      roles: [ROLE_CODES.FIELD_INSPECTOR],
+    },
+    {
+      applicationType: type,
+      from: ApplicationStatus.PENDING_FIELD_REVIEW,
+      to: ApplicationStatus.PENDING_SECTOR_HEAD_REPORT,
+      action: "ALL_FIELD_REPORTS_COMPLETE",
+      roles: [ROLE_CODES.SECTOR_HEAD],
+    },
+    {
+      applicationType: type,
+      from: ApplicationStatus.PENDING_SECTOR_HEAD_REPORT,
+      to: ApplicationStatus.PENDING_DIRECTOR_REPORT,
+      action: "FORWARD_TO_DIRECTOR",
+      roles: [ROLE_CODES.SECTOR_HEAD],
+    },
+    {
+      applicationType: type,
+      from: ApplicationStatus.PENDING_FIELD_REVIEW,
+      to: ApplicationStatus.PENDING_DIRECTOR_REPORT,
+      action: "FORWARD_TO_DIRECTOR",
+      roles: [ROLE_CODES.SECTOR_HEAD],
+    },
+    {
+      applicationType: type,
+      from: ApplicationStatus.PENDING_DIRECTOR_REPORT,
       to: ApplicationStatus.PENDING_CHIEF_INSPECTOR,
-      action: "RECOMMEND_REJECTION",
-      roles: [ROLE_CODES.INSPECTOR],
+      action: "FORWARD_TO_CHIEF",
+      roles: [ROLE_CODES.ISHMT_DIRECTOR],
     },
     {
       applicationType: type,
@@ -92,6 +143,48 @@ function ishmtTwoStepApprovalTransitions(type: ApplicationType): TransitionRule[
       action: "RETURN",
       roles: [ROLE_CODES.CHIEF_INSPECTOR],
       returnTarget: ReturnTargetRole.OWNER,
+    },
+    {
+      applicationType: type,
+      from: ApplicationStatus.PENDING_CHIEF_INSPECTOR,
+      to: ApplicationStatus.RETURNED_TO_INSPECTORS,
+      action: "RETURN_TO_INSPECTORS",
+      roles: [ROLE_CODES.CHIEF_INSPECTOR],
+    },
+    {
+      applicationType: type,
+      from: ApplicationStatus.PENDING_CHIEF_INSPECTOR,
+      to: ApplicationStatus.RETURNED_TO_SECTOR_HEAD,
+      action: "RETURN_TO_SECTOR_HEAD",
+      roles: [ROLE_CODES.CHIEF_INSPECTOR],
+    },
+    {
+      applicationType: type,
+      from: ApplicationStatus.PENDING_CHIEF_INSPECTOR,
+      to: ApplicationStatus.RETURNED_TO_DIRECTOR,
+      action: "RETURN_TO_DIRECTOR",
+      roles: [ROLE_CODES.CHIEF_INSPECTOR],
+    },
+    {
+      applicationType: type,
+      from: ApplicationStatus.RETURNED_TO_INSPECTORS,
+      to: ApplicationStatus.PENDING_FIELD_REVIEW,
+      action: "ASSIGN_FIELD_INSPECTORS",
+      roles: [ROLE_CODES.SECTOR_HEAD],
+    },
+    {
+      applicationType: type,
+      from: ApplicationStatus.RETURNED_TO_SECTOR_HEAD,
+      to: ApplicationStatus.PENDING_SECTOR_HEAD_REPORT,
+      action: "FORWARD_TO_DIRECTOR",
+      roles: [ROLE_CODES.SECTOR_HEAD],
+    },
+    {
+      applicationType: type,
+      from: ApplicationStatus.RETURNED_TO_DIRECTOR,
+      to: ApplicationStatus.PENDING_DIRECTOR_REPORT,
+      action: "FORWARD_TO_CHIEF",
+      roles: [ROLE_CODES.ISHMT_DIRECTOR],
     },
   ];
 }
@@ -138,15 +231,6 @@ function ishmtModernizationChiefReturnTransitions(): TransitionRule[] {
   ];
 }
 
-const SHARED_REVIEW_TRANSITIONS: Omit<TransitionRule, "applicationType">[] = [
-  {
-    from: ApplicationStatus.SUBMITTED,
-    to: ApplicationStatus.UNDER_REVIEW,
-    action: "PICKUP_REVIEW",
-    roles: [ROLE_CODES.INSPECTOR],
-  },
-];
-
 const REGISTRATION_TRANSITIONS: TransitionRule[] = [
   { applicationType: ApplicationType.NEW_REGISTRATION, from: ApplicationStatus.DRAFT, to: ApplicationStatus.BASIC_DATA_COMPLETED, action: "SAVE_BASIC_DATA", roles: [ROLE_CODES.OWNER] },
   { applicationType: ApplicationType.NEW_REGISTRATION, from: ApplicationStatus.RETURNED, to: ApplicationStatus.BASIC_DATA_COMPLETED, action: "SAVE_BASIC_DATA", roles: [ROLE_CODES.OWNER] },
@@ -172,10 +256,6 @@ const REGISTRATION_TRANSITIONS: TransitionRule[] = [
   { applicationType: ApplicationType.NEW_REGISTRATION, from: ApplicationStatus.PENDING_CERTIFIER, to: ApplicationStatus.CERTIFICATION_COMPLETED, action: "COMPLETE_CERTIFIER", roles: [ROLE_CODES.CERTIFIER] },
   { applicationType: ApplicationType.NEW_REGISTRATION, from: ApplicationStatus.CERTIFICATION_COMPLETED, to: ApplicationStatus.SUBMITTED, action: "SUBMIT", roles: [ROLE_CODES.OWNER] },
   { applicationType: ApplicationType.NEW_REGISTRATION, from: ApplicationStatus.PENDING_OWNER_SUBMISSION, to: ApplicationStatus.SUBMITTED, action: "SUBMIT", roles: [ROLE_CODES.OWNER] },
-  { applicationType: ApplicationType.NEW_REGISTRATION, from: ApplicationStatus.SUBMITTED, to: ApplicationStatus.UNDER_REVIEW, action: "PICKUP_REVIEW", roles: [ROLE_CODES.INSPECTOR] },
-  { applicationType: ApplicationType.NEW_REGISTRATION, from: ApplicationStatus.UNDER_REVIEW, to: ApplicationStatus.RETURNED, action: "RETURN", roles: [ROLE_CODES.INSPECTOR], returnTarget: ReturnTargetRole.INSTALLER },
-  { applicationType: ApplicationType.NEW_REGISTRATION, from: ApplicationStatus.UNDER_REVIEW, to: ApplicationStatus.RETURNED, action: "RETURN", roles: [ROLE_CODES.INSPECTOR], returnTarget: ReturnTargetRole.CERTIFIER },
-  { applicationType: ApplicationType.NEW_REGISTRATION, from: ApplicationStatus.UNDER_REVIEW, to: ApplicationStatus.RETURNED, action: "RETURN", roles: [ROLE_CODES.INSPECTOR], returnTarget: ReturnTargetRole.OWNER },
   { applicationType: ApplicationType.NEW_REGISTRATION, from: ApplicationStatus.RETURNED, to: ApplicationStatus.TECHNICAL_DATA_IN_PROGRESS, action: "START_TECHNICAL_DATA", roles: [ROLE_CODES.INSTALLER] },
   { applicationType: ApplicationType.NEW_REGISTRATION, from: ApplicationStatus.RETURNED, to: ApplicationStatus.TECHNICAL_DATA_COMPLETED, action: "COMPLETE_INSTALLER", roles: [ROLE_CODES.INSTALLER] },
   { applicationType: ApplicationType.NEW_REGISTRATION, from: ApplicationStatus.RETURNED, to: ApplicationStatus.CERTIFICATION_IN_PROGRESS, action: "START_CERTIFICATION", roles: [ROLE_CODES.CERTIFIER] },
@@ -201,15 +281,6 @@ function ownerSubmitTransitions(type: ApplicationType): TransitionRule[] {
       to: ApplicationStatus.CANCELLED,
       action: "CANCEL",
       roles: [ROLE_CODES.OWNER],
-    },
-    ...SHARED_REVIEW_TRANSITIONS.map((t) => ({ applicationType: type, ...t })),
-    {
-      applicationType: type,
-      from: ApplicationStatus.UNDER_REVIEW,
-      to: ApplicationStatus.RETURNED,
-      action: "RETURN",
-      roles: [ROLE_CODES.INSPECTOR],
-      returnTarget: ReturnTargetRole.OWNER,
     },
   ];
 }
@@ -278,34 +349,6 @@ const MODERNIZATION_TRANSITIONS: TransitionRule[] = [
     action: "SUBMIT",
     roles: [ROLE_CODES.OWNER],
   },
-  ...SHARED_REVIEW_TRANSITIONS.map((t) => ({
-    applicationType: ApplicationType.MODERNIZATION,
-    ...t,
-  })),
-  {
-    applicationType: ApplicationType.MODERNIZATION,
-    from: ApplicationStatus.UNDER_REVIEW,
-    to: ApplicationStatus.RETURNED,
-    action: "RETURN",
-    roles: [ROLE_CODES.INSPECTOR],
-    returnTarget: ReturnTargetRole.OWNER,
-  },
-  {
-    applicationType: ApplicationType.MODERNIZATION,
-    from: ApplicationStatus.UNDER_REVIEW,
-    to: ApplicationStatus.RETURNED,
-    action: "RETURN",
-    roles: [ROLE_CODES.INSPECTOR],
-    returnTarget: ReturnTargetRole.INSTALLER,
-  },
-  {
-    applicationType: ApplicationType.MODERNIZATION,
-    from: ApplicationStatus.UNDER_REVIEW,
-    to: ApplicationStatus.RETURNED,
-    action: "RETURN",
-    roles: [ROLE_CODES.INSPECTOR],
-    returnTarget: ReturnTargetRole.CERTIFIER,
-  },
 ];
 
 function lifecycleSubmitTransitions(type: ApplicationType): TransitionRule[] {
@@ -318,14 +361,6 @@ function lifecycleSubmitTransitions(type: ApplicationType): TransitionRule[] {
       action: "SUBMIT",
       roles: [ROLE_CODES.OWNER],
     },
-    {
-      applicationType: type,
-      from: ApplicationStatus.UNDER_REVIEW,
-      to: ApplicationStatus.RETURNED,
-      action: "RETURN",
-      roles: [ROLE_CODES.INSPECTOR],
-      returnTarget: ReturnTargetRole.OWNER,
-    },
   ];
 }
 
@@ -335,7 +370,7 @@ export const APPLICATION_TRANSITIONS: TransitionRule[] = [
   ...lifecycleSubmitTransitions(ApplicationType.DATA_CORRECTION),
   ...lifecycleSubmitTransitions(ApplicationType.DATA_UPDATE),
   ...MODERNIZATION_TRANSITIONS,
-  ...ISHMT_REVIEW_TYPES.flatMap((t) => ishmtTwoStepApprovalTransitions(t)),
+  ...ISHMT_REVIEW_TYPES.flatMap((t) => ishmtHierarchicalReviewTransitions(t)),
   ...ishmtRegistrationChiefReturnTransitions(),
   ...ishmtModernizationChiefReturnTransitions(),
 ];
@@ -402,7 +437,7 @@ export function assertTransition(
   return rule.to;
 }
 
-export function resolveReturnStatus(target: ReturnTargetRole): ApplicationStatus {
+export function resolveReturnStatus(_target: ReturnTargetRole): ApplicationStatus {
   return ApplicationStatus.RETURNED;
 }
 
@@ -434,10 +469,18 @@ export const APPLICATION_STATUS_LABELS: Record<ApplicationStatus, string> = {
   CERTIFICATION_IN_PROGRESS: "Certifikimi në përpunim",
   CERTIFICATION_COMPLETED: "Certifikimi u plotësua",
   CERTIFICATION_COMPLETED_WITH_ISSUES: "Certifikimi me çështje",
-  PENDING_OWNER_SUBMISSION: "Gati për parashtrim",
-  SUBMITTED: "E parashtruar",
-  UNDER_REVIEW: "Në shqyrtim (inspektor)",
-  PENDING_CHIEF_INSPECTOR: "Në pritje të miratimit (kryeinspektor)",
+  PENDING_OWNER_SUBMISSION: "Gati për Aplikim për Registrim",
+  SUBMITTED: "Në pritje të Kryeinspektorit",
+  UNDER_REVIEW: "Në shqyrtim (legacy)",
+  PENDING_DIRECTOR: "Në pritje të Drejtorit",
+  PENDING_SECTOR_HEAD: "Në pritje të Përgjegjësit",
+  PENDING_FIELD_REVIEW: "Në shqyrtim nga inspektorët",
+  PENDING_SECTOR_HEAD_REPORT: "Në pritje të raportit të Përgjegjësit",
+  PENDING_DIRECTOR_REPORT: "Në pritje të raportit të Drejtorit",
+  PENDING_CHIEF_INSPECTOR: "Në pritje të vendimit të Kryeinspektorit",
+  RETURNED_TO_INSPECTORS: "Kthyer te inspektorët",
+  RETURNED_TO_SECTOR_HEAD: "Kthyer te Përgjegjësi",
+  RETURNED_TO_DIRECTOR: "Kthyer te Drejtori",
   RETURNED: "E kthyer për korrigjim",
   REJECTED: "E refuzuar",
   APPROVED: "E miratuar",
@@ -452,4 +495,15 @@ export const RETURN_TARGET_LABELS: Record<ReturnTargetRole, string> = {
   OWNER: "Personi përgjegjës i ashensorit",
   INSTALLER: "Instaluesi",
   CERTIFIER: "Certifikuesi / OMI",
+};
+
+export const REVIEW_LEVEL_BY_ACTION: Partial<Record<WorkflowAction, ReviewLevel>> = {
+  DELEGATE_TO_DIRECTOR: "CHIEF",
+  DELEGATE_TO_SECTOR_HEAD: "DIRECTOR",
+  ASSIGN_FIELD_INSPECTORS: "SECTOR_HEAD",
+  SUBMIT_FIELD_REPORT: "FIELD_INSPECTOR",
+  FORWARD_TO_DIRECTOR: "SECTOR_HEAD",
+  FORWARD_TO_CHIEF: "DIRECTOR",
+  APPROVE: "CHIEF",
+  REJECT: "CHIEF",
 };

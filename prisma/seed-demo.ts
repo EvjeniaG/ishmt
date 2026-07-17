@@ -150,6 +150,9 @@ const TABLES_TO_CLEAR = [
   "elv_technical_data_versions",
   "elv_technical_data",
   "elv_elevators",
+  "app_internal_notes",
+  "app_participations",
+  "app_field_review_assignments",
   "app_workflow_history",
   "app_delegations",
   "app_application_data",
@@ -407,18 +410,7 @@ async function main() {
       org: ishmt,
       loginNote: "Numri Personal: I90707007G",
     },
-    {
-      email: "specialist@ishmt.gov.al",
-      nid: "I90808008H",
-      idCardNumber: "AB8080808",
-      firstName: "Specialist",
-      fatherName: "Erjon",
-      lastName: "Sektori",
-      motherName: "Anila",
-      role: ROLE_CODES.SECTOR_SPECIALIST,
-      org: ishmt,
-      loginNote: "Numri Personal: I90808008H",
-    },
+
     {
       email: "terren@ishmt.gov.al",
       nid: "I90909009I",
@@ -430,6 +422,18 @@ async function main() {
       role: ROLE_CODES.FIELD_INSPECTOR,
       org: ishmt,
       loginNote: "Numri Personal: I90909009I",
+    },
+    {
+      email: "terren2@ishmt.gov.al",
+      nid: "I90909010J",
+      idCardNumber: "AB9090910",
+      firstName: "Inspektor",
+      fatherName: "Arben",
+      lastName: "Demo 2",
+      motherName: "Elira",
+      role: ROLE_CODES.FIELD_INSPECTOR,
+      org: ishmt,
+      loginNote: "Numri Personal: I90909010J",
     },
     {
       email: "drejtoria@ishmt.gov.al",
@@ -936,17 +940,17 @@ async function main() {
   const fieldInspectorUser = await prisma.authUser.findFirst({
     where: { email: "terren@ishmt.gov.al" },
   });
-  const specialistUser = await prisma.authUser.findFirst({
-    where: { email: "specialist@ishmt.gov.al" },
+  const sectorHeadUser = await prisma.authUser.findFirst({
+    where: { email: "shef@ishmt.gov.al" },
   });
 
-  if (maintenanceUser && certifierUser && fieldInspectorUser && specialistUser && ownerUserId) {
+  if (maintenanceUser && certifierUser && fieldInspectorUser && sectorHeadUser && ownerUserId) {
     const pipelineResult = await seedPipelineDemos(prisma, seededElevators, {
       ownerUserId,
       maintenanceUserId: maintenanceUser.id,
       certifierUserId: certifierUser.id,
       fieldInspectorUserId: fieldInspectorUser.id,
-      specialistUserId: specialistUser.id,
+      sectorHeadUserId: sectorHeadUser.id,
       maintenanceOrgId: maintenanceOrg.id,
       certifierOrgId: certifierOrg.id,
     });

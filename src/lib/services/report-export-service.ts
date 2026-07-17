@@ -427,8 +427,11 @@ export class ReportExportService {
       : assignments;
 
     const rows: ExportRow[] = filtered.slice(0, MAX_ROWS).map((a) => ({
-      registryNumber: a.elevator.registryNumber,
-      address: a.elevator.buildingAddress ?? "",
+      registryNumber: a.elevator?.registryNumber ?? a.application?.applicationNumber ?? "",
+      address:
+        a.elevator?.buildingAddress ??
+        a.application?.data?.buildingAddress ??
+        "",
       status: FIELD_INSPECTION_STATUS_LABELS[a.status],
       scheduledDate: fmtDate(a.scheduledDate),
       assignee: a.assignee ? `${a.assignee.firstName} ${a.assignee.lastName}` : "",

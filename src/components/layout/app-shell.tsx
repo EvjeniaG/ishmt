@@ -61,6 +61,13 @@ const SHELL_BY_ROLE: Record<string, ShellConfig> = {
     notificationsHref: getNotificationsPathForRole(ROLE_CODES.CHIEF_INSPECTOR),
     profileHref: getProfilePathForRole(ROLE_CODES.CHIEF_INSPECTOR),
   },
+  [ROLE_CODES.ISHMT_DIRECTOR]: {
+    roleLabel: "DREJTOR I DREJTORISË",
+    homeHref: getDashboardPathForRole(ROLE_CODES.ISHMT_DIRECTOR),
+    showSearch: false,
+    notificationsHref: getNotificationsPathForRole(ROLE_CODES.ISHMT_DIRECTOR),
+    profileHref: getProfilePathForRole(ROLE_CODES.ISHMT_DIRECTOR),
+  },
   [ROLE_CODES.ADMIN]: {
     roleLabel: "ADMINISTRATOR ISHMT",
     homeHref: getDashboardPathForRole(ROLE_CODES.ADMIN),

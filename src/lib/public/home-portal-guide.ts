@@ -33,25 +33,32 @@ export const NEW_REGISTRATION_FULL_FLOW: GuideStep[] = [
               : s.id === "certification-data"
                 ? "Certifikimi, numri OM, ekzaminimi, konformiteti dhe dokumentet e certifikuesit."
                 : s.id === "final-review"
-                  ? "Rishikim i dosjes, checklist parashtrimi dhe dërgim te ISHMT."
+                  ? "Rishikim i dosjes, checklist dhe dërgim i aplikimit për rregjistrim te ISHMT."
                   : s.label,
   })),
   {
     step: 7,
-    actor: "ISHMT - Specialist sektori",
-    title: "Shqyrtim administrativ",
+    actor: "ISHMT - Kryeinspektor",
+    title: "Delegim dhe caktim inspektorësh",
     description:
-      "Marrja e aplikimit në shqyrtim, verifikimi i dokumenteve dhe dërgesa te kryeinspektori ose kthim për korrigjim.",
+      "Merr aplikimin, cakton numrin e inspektorëve dhe e delegon te drejtori i drejtorisë.",
   },
   {
     step: 8,
-    actor: "ISHMT - Kryeinspektor",
-    title: "Miratim final",
+    actor: "ISHMT - Drejtor → Përgjegjës → Inspektor(ët)",
+    title: "Shqyrtim hierarkik me raporte",
     description:
-      "Miratim, refuzim ose kthim te personi përgjegjës, instaluesi ose certifikuesi. Pas miratimit krijohet ashensori në regjistër.",
+      "Zinxhiri: drejtor delegon te përgjegjësi, përgjegjësi cakton inspektorët, secili dorëzon raportin e vet.",
   },
   {
     step: 9,
+    actor: "ISHMT - Kryeinspektor",
+    title: "Miratim final",
+    description:
+      "Pas raporteve të drejtorit, kryeinspektori miraton, refuzon ose kthen për korrigjim.",
+  },
+  {
+    step: 10,
     actor: "Sistemi",
     title: "Certifikata & QR",
     description:
@@ -60,11 +67,11 @@ export const NEW_REGISTRATION_FULL_FLOW: GuideStep[] = [
 ];
 
 export const ISHMT_REVIEW_FLOW = [
-  "Parashtrimi nga personi përgjegjës",
-  "Marrja në shqyrtim nga specialisti i sektorit",
-  "Verifikim i plotësisë së dosjes dhe afatit 10-ditor",
-  "Dërgesa te kryeinspektori për vendim final",
-  "Miratim → krijim ashensori, certifikatë dhe QR",
+  "Aplikim për rregjistrim nga personi përgjegjës",
+  "Kryeinspektori delegon dhe cakton numrin e inspektorëve",
+  "Drejtor i drejtorisë → përgjegjës sektori → inspektor(ët)",
+  "Secili nivel dorëzon raportin e vet",
+  "Kryeinspektori miraton → krijim ashensori, certifikatë dhe QR",
   "Refuzim ose kthim për korrigjim te roli i caktuar",
 ] as const;
 
@@ -123,7 +130,7 @@ export const ROLE_PLAYBOOK = [
       "Ndryshim, përditësim, çregjistrim, modernizim, transferim pronësie",
       "Caktim instaluesi, certifikuesit dhe kompanisë së mirëmbajtjes",
       "Dosja e ashensorit, afatet, certifikatat, QR",
-      "Parashtrimi final te ISHMT",
+      "Aplikim për rregjistrim te ISHMT",
     ],
   },
   {
@@ -162,25 +169,14 @@ export const ROLE_PLAYBOOK = [
     ],
   },
   {
-    code: ROLE_CODES.SECTOR_SPECIALIST,
-    label: ROLE_LABELS[ROLE_CODES.SECTOR_SPECIALIST],
-    portal: "Portali ISHMT",
-    summary: "Shqyrtim administrativ i aplikimeve.",
-    actions: [
-      "Marrja e aplikimeve në shqyrtim",
-      "Verifikim dosjeje dhe dokumentesh",
-      "Dërgesë te kryeinspektori ose kthim për korrigjim",
-      "Kërkesë verifikimi fizik në terren (kur nevojitet)",
-    ],
-  },
-  {
     code: ROLE_CODES.SECTOR_HEAD,
     label: ROLE_LABELS[ROLE_CODES.SECTOR_HEAD],
     portal: "Portali ISHMT",
-    summary: "Mbikëqyrje e sektorit dhe shqyrtime.",
+    summary: "Caktim inspektorësh dhe raport drejt drejtorit.",
     actions: [
-      "Shqyrtim aplikimesh",
-      "Caktim inspektori terreni",
+      "Caktim inspektorësh për shqyrtim dosjeje",
+      "Raport dhe dërgim te drejtori i drejtorisë",
+      "Caktim inspektimi terreni",
       "Raportimet e qytetarëve",
     ],
   },
@@ -198,9 +194,9 @@ export const ROLE_PLAYBOOK = [
   {
     code: ROLE_CODES.ISHMT_DIRECTOR,
     label: ROLE_LABELS[ROLE_CODES.ISHMT_DIRECTOR],
-    portal: "Portali ISHMT - Drejtor Teknik",
-    summary: "Mbikëqyrje operacionale.",
-    actions: ["Miratime, caktim inspektimesh terreni, dashboard"],
+    portal: "Portali ISHMT - Drejtor i Drejtorisë",
+    summary: "Delegim dhe raport drejt kryeinspektorit.",
+    actions: ["Delegim te përgjegjësi sektori", "Raport dhe dërgim te kryeinspektori", "Caktim inspektimesh terreni"],
   },
   {
     code: ROLE_CODES.FIELD_INSPECTOR,
@@ -271,7 +267,7 @@ export const UX_HIGHLIGHTS = [
   },
   {
     title: "Checklist dokumentesh",
-    text: "Çdo fazë tregon dokumentet e detyrueshme; parashtrimi bllokohet nëse mungon diçka.",
+    text: "Çdo fazë tregon dokumentet e detyrueshme; aplikimi për regjistrim bllokohet nëse mungon diçka.",
   },
   {
     title: "Afatet ligjore",

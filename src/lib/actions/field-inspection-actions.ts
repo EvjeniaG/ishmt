@@ -82,6 +82,7 @@ export async function completeFieldInspectionAction(
     });
     revalidatePath("/ishmt/my-field-inspections");
     revalidatePath("/ishmt/field-inspections");
+    revalidatePath("/ishmt/review");
     return { success: true };
   } catch (error) {
     return fail(error);

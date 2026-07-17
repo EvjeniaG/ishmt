@@ -1,3 +1,6 @@
+/** Faqja e unifikuar: përmbledhje ditore + kontrata & afatet. */
+export const ISHMT_COMPLIANCE_MONITOR_PATH = "/ishmt/compliance-digest";
+
 export type ContractIssueSeverity = "critical" | "warning" | "info";
 
 export type ContractIssueCategory = "missing" | "expired" | "expiring" | "pending";
@@ -96,7 +99,9 @@ export function buildContractsFilterHref(
   if (merged.page && merged.page > 1) query.set("page", String(merged.page));
 
   const qs = query.toString();
-  return qs ? `/ishmt/contracts?${qs}` : "/ishmt/contracts";
+  return qs
+    ? `${ISHMT_COMPLIANCE_MONITOR_PATH}?${qs}`
+    : ISHMT_COMPLIANCE_MONITOR_PATH;
 }
 
 export function buildContractsExportHref(filters: ContractIssueListFilters): string {

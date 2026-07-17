@@ -12,7 +12,6 @@ export const ROLE_CODES = {
   CHIEF_INSPECTOR: "CHIEF_INSPECTOR",
   ISHMT_DIRECTOR: "ISHMT_DIRECTOR",
   SECTOR_HEAD: "SECTOR_HEAD",
-  SECTOR_SPECIALIST: "SECTOR_SPECIALIST",
   FIELD_INSPECTOR: "FIELD_INSPECTOR",
   ADMIN: "ADMIN",
   /** Drejtoria e Politikave (MPB) - regjistrim kompanish, jo stafi operativ ISHMT */

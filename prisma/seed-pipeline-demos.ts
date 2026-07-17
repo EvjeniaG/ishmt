@@ -34,16 +34,16 @@ async function main() {
     );
   }
 
-  const [maintenanceUser, certifierUser, fieldInspectorUser, specialistUser, ownerUser] =
+  const [maintenanceUser, certifierUser, fieldInspectorUser, sectorHeadUser, ownerUser] =
     await Promise.all([
     prisma.authUser.findFirst({ where: { email: "mirembajtje@servisashensore.al" } }),
     prisma.authUser.findFirst({ where: { email: "cert@omicert.al" } }),
     prisma.authUser.findFirst({ where: { email: "terren@ishmt.gov.al" } }),
-    prisma.authUser.findFirst({ where: { email: "specialist@ishmt.gov.al" } }),
+    prisma.authUser.findFirst({ where: { email: "shef@ishmt.gov.al" } }),
     prisma.authUser.findFirst({ where: { email: "personi përgjegjës i ashensorit@example.al" } }),
   ]);
 
-  if (!maintenanceUser || !certifierUser || !fieldInspectorUser || !specialistUser || !ownerUser) {
+  if (!maintenanceUser || !certifierUser || !fieldInspectorUser || !sectorHeadUser || !ownerUser) {
     throw new Error("Përdoruesit demo mungojnë. Ekzekutoni `npm run db:seed:demo`.");
   }
 
@@ -72,7 +72,7 @@ async function main() {
     maintenanceUserId: maintenanceUser.id,
     certifierUserId: certifierUser.id,
     fieldInspectorUserId: fieldInspectorUser.id,
-    specialistUserId: specialistUser.id,
+    sectorHeadUserId: sectorHeadUser.id,
     maintenanceOrgId: maintenanceOrg.id,
     certifierOrgId: certifierOrg.id,
   });

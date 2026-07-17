@@ -16,6 +16,16 @@ export function serializeApplicationDataForClient<
 
     if (
       typeof value === "object" &&
+      value !== null &&
+      (value.constructor?.name === "Decimal" ||
+        ("d" in value && "e" in value && "s" in value && "toFixed" in value))
+    ) {
+      out[key] = Number(String(value));
+      continue;
+    }
+
+    if (
+      typeof value === "object" &&
       "toFixed" in value &&
       typeof (value as { toFixed: (n: number) => string }).toFixed === "function" &&
       !(value instanceof Date)

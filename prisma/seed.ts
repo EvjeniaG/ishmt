@@ -128,10 +128,9 @@ async function seedRolesAndPermissions() {
     { code: ROLE_CODES.CERTIFIER, name: "Kompani Certifikimi / OMI", description: "Organizëm certifikimi" },
     { code: ROLE_CODES.MAINTENANCE, name: "Kompani Mirëmbajtjeje", description: "Kompani mirëmbajtjeje" },
     { code: ROLE_CODES.INSPECTOR, name: "Inspektor ISHMT (legacy)", description: "Rol i vjetër - specialist + terren" },
-    { code: ROLE_CODES.FIELD_INSPECTOR, name: "Inspektor terreni", description: "Inspektim fizik në objekt" },
-    { code: ROLE_CODES.SECTOR_SPECIALIST, name: "Specialist sektori", description: "Monitorim i situatës, raportime qytetarësh dhe shqyrtim aplikimesh" },
-    { code: ROLE_CODES.SECTOR_HEAD, name: "Përgjegjës i Sektorit të Produkteve Mekanike", description: "Menaxhim sektori dhe caktim inspektimi terreni" },
-    { code: ROLE_CODES.ISHMT_DIRECTOR, name: "Drejtor Teknik", description: "Miratim final dhe caktim inspektimi terreni" },
+    { code: ROLE_CODES.FIELD_INSPECTOR, name: "Inspektor", description: "Shqyrtim dosjeje aplikimi dhe inspektim fizik në objekt" },
+    { code: ROLE_CODES.SECTOR_HEAD, name: "Përgjegjës sektori", description: "Caktim inspektorësh dhe raport drejt drejtorit" },
+    { code: ROLE_CODES.ISHMT_DIRECTOR, name: "Drejtor i Drejtorisë", description: "Delegim dhe raport drejt kryeinspektorit" },
     { code: ROLE_CODES.CHIEF_INSPECTOR, name: "Kryeinspektor", description: "Miratimi final i regjistrimit" },
     { code: ROLE_CODES.ADMIN, name: "Administrator ISHMT", description: "Administrator sistemi" },
     { code: ROLE_CODES.DIRECTORATE, name: "Drejtoria e Politikave", description: "Drejtoria e Politikave të Tregut të Brendshëm" },
@@ -463,8 +462,8 @@ async function seedDevUsers(ctx: Awaited<ReturnType<typeof seedOrganizations>>) 
     { email: "kryeinspektor@ishmt.gov.al", firstName: "Edison", lastName: "Konomi", role: ROLE_CODES.CHIEF_INSPECTOR, org: ishmtt, nid: "I90505005E" },
     { email: "drejtori@ishmt.gov.al", firstName: "Erion", lastName: "Prifti", role: ROLE_CODES.ISHMT_DIRECTOR, org: ishmtt, nid: "I90606006F" },
     { email: "shef@ishmt.gov.al", firstName: "Albert", lastName: "Shqalshi", role: ROLE_CODES.SECTOR_HEAD, org: ishmtt, nid: "I90707007G" },
-    { email: "specialist@ishmt.gov.al", firstName: "Specialist", lastName: "Sektori", role: ROLE_CODES.SECTOR_SPECIALIST, org: ishmtt, nid: "I90808008H" },
     { email: "terren@ishmt.gov.al", firstName: "Inspektor", lastName: "Terreni", role: ROLE_CODES.FIELD_INSPECTOR, org: ishmtt, nid: "I90909009I" },
+    { email: "terren2@ishmt.gov.al", firstName: "Inspektor", lastName: "Demo 2", role: ROLE_CODES.FIELD_INSPECTOR, org: ishmtt, nid: "I90909010J" },
     { email: "drejtoria@ishmt.gov.al", firstName: "Drejtori", lastName: "MPB", role: ROLE_CODES.DIRECTORATE, org: directorate, nid: "I90303003C" },
     { email: "owner@example.al", firstName: "Personi", lastName: "Shembull", role: ROLE_CODES.OWNER, org: ownerOrg, nid: "I90404004D" },
     { email: "installer@example.al", firstName: "Instalues", lastName: "Shembull", role: ROLE_CODES.INSTALLER, org: installer1 },
@@ -478,6 +477,8 @@ async function seedDevUsers(ctx: Awaited<ReturnType<typeof seedOrganizations>>) 
   for (const u of users) {
     const roleId = roleIdMap.get(u.role);
     if (!roleId) continue;
+
+    await releaseNidForSeed(u.email, u.nid);
 
     const user = await prisma.authUser.upsert({
       where: { email: u.email },
@@ -576,13 +577,29 @@ async function seedDocumentTemplates(adminUserId: string) {
   console.log(`✓ Document templates: ${templates.length}`);
 }
 
-async function removeLegacyInspectorUser() {
-  const legacyNid = "I90202002B";
-  const user = await prisma.authUser.findFirst({
-    where: {
-      OR: [{ nid: legacyNid }, { email: "inspector@ishmt.gov.al" }],
-    },
+/** Lë NID-in të lirë kur seed-i ri-përdor numra personalë nga demo e mëparshme. */
+async function releaseNidForSeed(email: string, nid?: string | null) {
+  if (!nid) return;
+  const cleared = await prisma.authUser.updateMany({
+    where: { nid, email: { not: email } },
+    data: { nid: null },
   });
+  if (cleared.count > 0) {
+    console.log(`✓ NID ${nid} u lirua nga ${cleared.count} përdorues(e) të vjetër`);
+  }
+}
+
+async function removeLegacyDemoUser(options: {
+  email?: string;
+  nid?: string;
+  label: string;
+}) {
+  const or: { email?: string; nid?: string }[] = [];
+  if (options.email) or.push({ email: options.email });
+  if (options.nid) or.push({ nid: options.nid });
+  if (or.length === 0) return;
+
+  const user = await prisma.authUser.findFirst({ where: { OR: or } });
   if (!user) return;
 
   await prisma.orgMembership.deleteMany({ where: { userId: user.id } });
@@ -594,12 +611,29 @@ async function removeLegacyInspectorUser() {
       data: { isActive: false, deletedAt: new Date(), nid: null },
     });
   }
-  console.log(`✓ Legacy INSPECTOR demo user removed (${legacyNid})`);
+  console.log(`✓ Legacy ${options.label} demo user removed`);
+}
+
+async function removeLegacyInspectorUser() {
+  await removeLegacyDemoUser({
+    email: "inspector@ishmt.gov.al",
+    nid: "I90202002B",
+    label: "INSPECTOR",
+  });
+}
+
+async function removeLegacySpecialistUser() {
+  await removeLegacyDemoUser({
+    email: "specialist@ishmt.gov.al",
+    nid: "I90808008H",
+    label: "SECTOR_SPECIALIST",
+  });
 }
 
 async function main() {
   console.log("Seeding ISHMT Elevator Registry...\n");
   await removeLegacyInspectorUser();
+  await removeLegacySpecialistUser();
   await seedGeography();
   const { roleIdMap } = await seedRolesAndPermissions();
   await seedSystemConfig();

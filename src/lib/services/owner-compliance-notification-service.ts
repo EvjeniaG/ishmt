@@ -219,6 +219,38 @@ export class OwnerComplianceNotificationService {
     ])[0]!;
   }
 
+  static async notifyStakeholdersForQrGaps(
+    rows: Array<{ ownerOrgId: string; elevatorId: string; registryNumber: string }>,
+  ) {
+    const byOrg = new Map<string, OwnerComplianceAlert[]>();
+
+    for (const row of rows) {
+      const alert = this.alertsFromDeadlineItems([
+        {
+          type: "qr_placement",
+          label: "Mungon fotografia e vendosjes së QR",
+          elevatorId: row.elevatorId,
+          registryNumber: row.registryNumber,
+        },
+      ])[0];
+      if (!alert) continue;
+
+      const existing = byOrg.get(row.ownerOrgId) ?? [];
+      if (!existing.some((item) => item.dedupeKey === alert.dedupeKey)) {
+        existing.push(alert);
+        byOrg.set(row.ownerOrgId, existing);
+      }
+    }
+
+    let created = 0;
+    for (const [orgId, alerts] of byOrg) {
+      const result = await this.syncForOrganization(orgId, alerts);
+      created += result.created;
+    }
+
+    return { organizations: byOrg.size, created };
+  }
+
   static alertsFromDeadlineItems(
     items: {
       type: string;

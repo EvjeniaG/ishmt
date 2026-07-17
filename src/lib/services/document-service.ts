@@ -60,7 +60,7 @@ export class DocumentService {
     if (entityType === "application") {
       const { ApplicationService } = await import("@/lib/services/application-service");
       const app = await db.application.findFirst({ where: { id: entityId, deletedAt: null } });
-      if (app && ApplicationService.canAccess(ctx, app)) return;
+      if (app && (await ApplicationService.canViewApplication(ctx, app))) return;
       throw new Error("Nuk keni leje për të ngarkuar dokumente në këtë aplikim.");
     }
 
@@ -293,7 +293,7 @@ export class DocumentService {
       if (link.entityType === "application") {
         const { ApplicationService } = await import("@/lib/services/application-service");
         const app = await db.application.findUnique({ where: { id: link.entityId } });
-        if (app && ApplicationService.canAccess(ctx, app)) {
+        if (app && (await ApplicationService.canViewApplication(ctx, app))) {
           return { allowed: true as const, doc };
         }
       }

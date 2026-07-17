@@ -408,7 +408,7 @@ export default async function ApplicationDetailPage({
                   applicationId={id}
                   applicationType={application.type}
                   uploadedPurposes={uploadedPurposes}
-                  summaryData={data}
+                  summaryData={clientApplicationData}
                   orgs={{
                     owner: application.ownerOrg.name,
                     installer: application.installerOrg?.name,

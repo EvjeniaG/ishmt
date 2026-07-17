@@ -64,9 +64,9 @@ describe("Workflow table integrity", () => {
     expect(ambiguous).toEqual([]);
   });
 
-  it("never lets a transition keep the same status (no self-loops)", () => {
+  it("only allows SUBMIT_FIELD_REPORT to remain in the same status", () => {
     const selfLoops = APPLICATION_TRANSITIONS.filter((rule) => rule.from === rule.to);
-    expect(selfLoops).toEqual([]);
+    expect(selfLoops.every((rule) => rule.action === "SUBMIT_FIELD_REPORT")).toBe(true);
   });
 });
 
@@ -104,30 +104,36 @@ describe("Approval authority is exclusive to the chief inspector", () => {
     }
   });
 
-  it("inspectors can only forward or recommend rejection, never approve", () => {
+  it("sector head forwards to director after field review; field inspector cannot approve", () => {
     expect(
       assertTransition(
         ApplicationType.NEW_REGISTRATION,
-        ApplicationStatus.UNDER_REVIEW,
-        "FORWARD_TO_CHIEF",
-        ROLE_CODES.INSPECTOR,
+        ApplicationStatus.PENDING_FIELD_REVIEW,
+        "FORWARD_TO_DIRECTOR",
+        ROLE_CODES.SECTOR_HEAD,
       ),
-    ).toBe(ApplicationStatus.PENDING_CHIEF_INSPECTOR);
+    ).toBe(ApplicationStatus.PENDING_DIRECTOR_REPORT);
 
     expect(() =>
       assertTransition(
         ApplicationType.NEW_REGISTRATION,
         ApplicationStatus.PENDING_CHIEF_INSPECTOR,
         "APPROVE",
-        ROLE_CODES.INSPECTOR,
+        ROLE_CODES.FIELD_INSPECTOR,
       ),
     ).toThrow(WorkflowError);
   });
 });
 
 describe("Owner authority boundaries", () => {
-  it("owners cannot pick up review, forward, approve or reject", () => {
-    const forbidden: WorkflowAction[] = ["PICKUP_REVIEW", "FORWARD_TO_CHIEF", "APPROVE", "REJECT"];
+  it("owners cannot delegate, forward, approve or reject", () => {
+    const forbidden: WorkflowAction[] = [
+      "DELEGATE_TO_DIRECTOR",
+      "DELEGATE_TO_SECTOR_HEAD",
+      "FORWARD_TO_CHIEF",
+      "APPROVE",
+      "REJECT",
+    ];
     for (const type of SUPPORTED_TYPES) {
       for (const status of Object.values(ApplicationStatus)) {
         for (const action of forbidden) {
@@ -167,7 +173,9 @@ describe("Post-approval asset pipeline is inspector-only", () => {
   });
 
   it("non-inspector roles cannot drive the post-approval pipeline", () => {
-    const others = ALL_ROLES.filter((r) => r !== ROLE_CODES.INSPECTOR);
+    const others = ALL_ROLES.filter(
+      (r) => r !== ROLE_CODES.INSPECTOR && r !== ROLE_CODES.FIELD_INSPECTOR,
+    );
     for (const [from, action] of pipeline) {
       for (const role of others) {
         expect(
@@ -180,18 +188,17 @@ describe("Post-approval asset pipeline is inspector-only", () => {
 
 describe("RETURN handling", () => {
   it("requires an explicit return target when the rule is target-specific", () => {
-    // Without a target, the ambiguous inspector RETURN must not resolve.
     expect(
       findTransition(
         ApplicationType.NEW_REGISTRATION,
-        ApplicationStatus.UNDER_REVIEW,
+        ApplicationStatus.PENDING_CHIEF_INSPECTOR,
         "RETURN",
-        ROLE_CODES.INSPECTOR,
+        ROLE_CODES.CHIEF_INSPECTOR,
       ),
     ).toBeUndefined();
   });
 
-  it("resolves the correct destination per target", () => {
+  it("resolves the correct destination per target from chief approval stage", () => {
     for (const target of [
       ReturnTargetRole.OWNER,
       ReturnTargetRole.INSTALLER,
@@ -199,9 +206,9 @@ describe("RETURN handling", () => {
     ]) {
       const rule = findTransition(
         ApplicationType.NEW_REGISTRATION,
-        ApplicationStatus.UNDER_REVIEW,
+        ApplicationStatus.PENDING_CHIEF_INSPECTOR,
         "RETURN",
-        ROLE_CODES.INSPECTOR,
+        ROLE_CODES.CHIEF_INSPECTOR,
         { returnTarget: target },
       );
       expect(rule?.to).toBe(ApplicationStatus.RETURNED);

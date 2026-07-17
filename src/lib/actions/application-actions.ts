@@ -18,6 +18,12 @@ function revalidateApplicationPaths(id: string) {
   revalidatePath(`/portal/applications/${id}`);
   revalidatePath("/ishmt/review");
   revalidatePath(`/ishmt/review/${id}`);
+  revalidatePath("/ishmt/chief/inbox");
+  revalidatePath("/ishmt/chief/approvals");
+  revalidatePath("/ishmt/director/review");
+  revalidatePath("/ishmt/my-application-reviews");
+  revalidatePath("/ishmt/my-field-inspections");
+  revalidatePath("/ishmt/field-inspections");
 }
 
 export async function createApplicationAction() {
@@ -151,61 +157,151 @@ export async function submitApplicationAction(applicationId: string) {
   } catch (error) {
     return {
       success: false as const,
-      error: error instanceof Error ? error.message : "Parashtrimi dështoi",
+      error: error instanceof Error ? error.message : "Dërgimi për rregjistrim dështoi",
     };
   }
 }
 
-export async function pickupReviewAction(applicationId: string) {
+export async function delegateToDirectorAction(
+  applicationId: string,
+  input: {
+    noteText?: string;
+    requiredInspectorCount?: number;
+    inspectorIds?: string[];
+    requiresFieldVerification?: boolean;
+  },
+) {
   try {
-    const ctx = await requirePermission(PERMISSIONS.APPLICATIONS_REVIEW);
-    await ApplicationService.pickupForReview(ctx, applicationId);
+    const ctx = await requirePermission(PERMISSIONS.APPLICATIONS_APPROVE);
+    await ApplicationService.delegateToDirector(ctx, applicationId, input);
     revalidateApplicationPaths(applicationId);
     return { success: true as const };
   } catch (error) {
     return {
       success: false as const,
-      error: error instanceof Error ? error.message : "Marrja në shqyrtim dështoi",
+      error: error instanceof Error ? error.message : "Delegimi te drejtori dështoi",
     };
   }
 }
 
+export async function delegateToSectorHeadAction(
+  applicationId: string,
+  input: { noteText?: string; inspectorIds?: string[]; requiresFieldVerification?: boolean },
+) {
+  try {
+    const ctx = await requirePermission(PERMISSIONS.APPLICATIONS_REVIEW);
+    await ApplicationService.delegateToSectorHead(ctx, applicationId, input);
+    revalidateApplicationPaths(applicationId);
+    return { success: true as const };
+  } catch (error) {
+    return {
+      success: false as const,
+      error: error instanceof Error ? error.message : "Delegimi te përgjegjësi i sektorit dështoi",
+    };
+  }
+}
+
+export async function assignFieldInspectorsAction(
+  applicationId: string,
+  input: { inspectorIds?: string[]; noteText?: string; requiresFieldVerification?: boolean },
+) {
+  try {
+    const ctx = await requirePermission(PERMISSIONS.APPLICATIONS_REVIEW);
+    await ApplicationService.assignFieldInspectors(ctx, applicationId, input);
+    revalidateApplicationPaths(applicationId);
+    return { success: true as const };
+  } catch (error) {
+    return {
+      success: false as const,
+      error: error instanceof Error ? error.message : "Caktimi i inspektorëve dështoi",
+    };
+  }
+}
+
+export async function submitFieldReportAction(
+  assignmentId: string,
+  reportText: string,
+  options?: { submit?: boolean },
+) {
+  if (options?.submit !== false && !reportText.trim()) {
+    return { success: false as const, error: "Raporti i inspektorit është i detyrueshëm" };
+  }
+  try {
+    const ctx = await requirePermission(PERMISSIONS.APPLICATIONS_REVIEW);
+    await ApplicationService.submitFieldReport(ctx, assignmentId, reportText, options);
+    revalidatePath("/ishmt/my-application-reviews");
+    revalidatePath("/ishmt/review");
+    return { success: true as const };
+  } catch (error) {
+    return {
+      success: false as const,
+      error: error instanceof Error ? error.message : "Dorëzimi i raportit dështoi",
+    };
+  }
+}
+
+export async function forwardToDirectorAction(applicationId: string, reportText: string) {
+  if (!reportText.trim()) {
+    return { success: false as const, error: "Raporti i përgjegjësit të sektorit është i detyrueshëm" };
+  }
+  try {
+    const ctx = await requirePermission(PERMISSIONS.APPLICATIONS_REVIEW);
+    await ApplicationService.forwardToDirectorFromSectorHead(ctx, applicationId, reportText);
+    revalidateApplicationPaths(applicationId);
+    return { success: true as const };
+  } catch (error) {
+    return {
+      success: false as const,
+      error: error instanceof Error ? error.message : "Dërgimi te drejtori dështoi",
+    };
+  }
+}
+
+export async function forwardToChiefAction(applicationId: string, reportText: string) {
+  if (!reportText.trim()) {
+    return { success: false as const, error: "Raporti i drejtorit është i detyrueshëm" };
+  }
+  try {
+    const ctx = await requirePermission(PERMISSIONS.APPLICATIONS_REVIEW);
+    await ApplicationService.forwardToChiefFromDirector(ctx, applicationId, reportText);
+    revalidateApplicationPaths(applicationId);
+    return { success: true as const };
+  } catch (error) {
+    return {
+      success: false as const,
+      error: error instanceof Error ? error.message : "Dërgimi te kryeinspektori dështoi",
+    };
+  }
+}
+
+/** @deprecated */
+export async function pickupReviewAction(applicationId: string) {
+  return {
+    success: false as const,
+    error: "Marrja në shqyrtim nga specialisti nuk mbështetet më.",
+  };
+}
+
+/** @deprecated */
 export async function forwardToAdminAction(
   applicationId: string,
-  options?: { requiresPhysicalInspection?: boolean; comment?: string },
+  _options?: { requiresPhysicalInspection?: boolean; comment?: string },
 ) {
-  try {
-    const ctx = await requirePermission(PERMISSIONS.APPLICATIONS_REVIEW);
-    await ApplicationService.forwardToAdmin(ctx, applicationId, options);
-    revalidateApplicationPaths(applicationId);
-    return { success: true as const };
-  } catch (error) {
-    return {
-      success: false as const,
-      error: error instanceof Error ? error.message : "Dërgimi te administratori dështoi",
-    };
-  }
+  return {
+    success: false as const,
+    error: "Dërgimi te administratori nuk mbështetet më.",
+  };
 }
 
+/** @deprecated */
 export async function recommendRejectionAction(
   applicationId: string,
-  input: { reason: string; requiresPhysicalInspection?: boolean },
+  _input: { reason: string; requiresPhysicalInspection?: boolean },
 ) {
-  if (!input.reason.trim()) {
-    return { success: false as const, error: "Arsyeja e rekomandimit është e detyrueshme" };
-  }
-
-  try {
-    const ctx = await requirePermission(PERMISSIONS.APPLICATIONS_REVIEW);
-    await ApplicationService.recommendRejection(ctx, applicationId, input);
-    revalidateApplicationPaths(applicationId);
-    return { success: true as const };
-  } catch (error) {
-    return {
-      success: false as const,
-      error: error instanceof Error ? error.message : "Rekomandimi i refuzimit dështoi",
-    };
-  }
+  return {
+    success: false as const,
+    error: "Rekomandimi i refuzimit nga specialisti nuk mbështetet më.",
+  };
 }
 
 export async function approveApplicationAction(

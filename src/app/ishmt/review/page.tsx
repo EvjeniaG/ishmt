@@ -13,8 +13,18 @@ import { ApplicationService } from "@/lib/services/application-service";
 import { PERMISSIONS } from "@/lib/permissions/codes";
 import { roleHasPermission } from "@/lib/permissions/matrix";
 import { canApproveApplications, canReviewApplications } from "@/lib/permissions/ishmt-roles";
+import type { ReviewQueueBucket } from "@/lib/services/application-participation";
+import { currentPhaseLabel } from "@/lib/services/application-participation";
 
-export default async function ReviewQueuePage() {
+export default async function ReviewQueuePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ tab?: string }>;
+}) {
+  const { tab } = await searchParams;
+  const queueBucket: ReviewQueueBucket =
+    tab === "waiting" ? "waiting" : tab === "completed" ? "completed" : "needs_action";
+
   const session = await getAuthSession();
   if (!session?.user) redirect("/auth/login");
 
@@ -36,27 +46,46 @@ export default async function ReviewQueuePage() {
     activeOrgName: session.user.activeOrgName,
     roleCode: session.user.roleCode,
     permissions: session.user.permissions,
-  });
+  }, { queueBucket });
 
   const urgentCount = applications.filter(
     (app) =>
       app.submittedAt &&
-      ["SUBMITTED", "UNDER_REVIEW", "PENDING_CHIEF_INSPECTOR"].includes(app.status),
+      ["SUBMITTED", "PENDING_DIRECTOR", "PENDING_SECTOR_HEAD", "PENDING_FIELD_REVIEW", "PENDING_DIRECTOR_REPORT", "PENDING_CHIEF_INSPECTOR"].includes(app.status),
   ).length;
 
   return (
     <AppShell>
       <StandardPageLayout
         eyebrow="ISHMT · Shqyrtim administrativ"
-        title="Radha e shqyrtimit"
+        title="Aplikime në shqyrtim"
         description={
           isApprover
-            ? "Dosjet e dërguara për vendimin final të miratimit."
+            ? "Dosjet e Aplikimeve për Registrim — vendimi final nga kryeinspektori."
             : isReviewer
-              ? "Aplikimet e parashtruara në pritje të shqyrtimit administrativ dhe rekomandimit."
+              ? "Delegim, caktim inspektorësh, raporte dhe ndjekje e dosjes."
               : "Pamje e përgjithshme e aplikimeve në proces."
         }
       >
+        <div className="mb-4 flex flex-wrap gap-2">
+          {(
+            [
+              ["needs_action", "Kërkon veprimin tim"],
+              ["waiting", "Në shqyrtim nga hallka tjetër"],
+              ["completed", "Të përfunduara"],
+            ] as const
+          ).map(([key, label]) => (
+            <Link
+              key={key}
+              href={`/ishmt/review?tab=${key}`}
+              className={`rounded-md border px-3 py-1.5 text-sm ${
+                queueBucket === key ? "border-primary bg-primary/5 font-medium" : "hover:bg-muted"
+              }`}
+            >
+              {label}
+            </Link>
+          ))}
+        </div>
         <div className="portal-kpi-grid sm:grid-cols-2 lg:grid-cols-3">
           <MetricCard label="Në radhë" value={applications.length} accent="primary" subtitle="Aplikime aktive" />
           <MetricCard
@@ -91,6 +120,8 @@ export default async function ReviewQueuePage() {
                     <th>Nr. aplikimit</th>
                     <th>Lloji</th>
                     <th>Vendndodhja / Personi përgjegjës i ashensorit</th>
+                    <th>Hallka aktuale</th>
+                    <th>Progresi</th>
                     <th>Statusi</th>
                     <th>Afati</th>
                     <th></th>
@@ -107,6 +138,24 @@ export default async function ReviewQueuePage() {
                       <td>
                         <p>{app.data?.municipality?.nameSq ?? app.targetElevator?.registryNumber ?? "-"}</p>
                         <p className="text-xs font-normal text-muted-foreground">{app.ownerOrg.name}</p>
+                      </td>
+                      <td>
+                        <p className="text-sm">{currentPhaseLabel(app.status)}</p>
+                        {app.currentAssignee ? (
+                          <p className="text-xs text-muted-foreground">
+                            {app.currentAssignee.firstName} {app.currentAssignee.lastName}
+                          </p>
+                        ) : null}
+                      </td>
+                      <td className="text-sm text-muted-foreground">
+                        {app.fieldReviewAssignments.length > 0
+                          ? (() => {
+                              const p = ApplicationService.getFieldReviewProgressSummary(
+                                app.fieldReviewAssignments,
+                              );
+                              return `${p.completed} nga ${p.total} raporte`;
+                            })()
+                          : "—"}
                       </td>
                       <td>
                         <ApplicationStatusBadge

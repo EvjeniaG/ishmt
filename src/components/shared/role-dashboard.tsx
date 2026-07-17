@@ -43,39 +43,30 @@ const DASHBOARD_CONTENT: Record<
     ],
   },
   [ROLE_CODES.FIELD_INSPECTOR]: {
-    title: "Inspektor terreni",
-    description: "Detyrat e caktuara për inspektim fizik",
+    title: "Inspektor",
+    description: "Shqyrtim dosjeje aplikimi dhe inspektim në terren",
     items: [
-      "Shihni caktimet e reja nga shefi/kryeinspektori",
+      "Shqyrtoni dosjet e caktuara nga përgjegjësi i sektorit",
+      "Dorëzoni raportin e shqyrtimit",
       "Regjistroni rezultatin e inspektimit në objekt",
-      "Hapni dosjen digjitale të ashensorit",
-    ],
-  },
-  [ROLE_CODES.SECTOR_SPECIALIST]: {
-    title: "Specialist sektori",
-    description: "Shqyrtim administrativ i aplikimeve",
-    items: [
-      "Merrni aplikimet në shqyrtim",
-      "Rekomandoni miratim ose refuzim te drejtori/kryeinspektori",
-      "Ndiqni inspektimet e planifikuara në terren",
     ],
   },
   [ROLE_CODES.SECTOR_HEAD]: {
-    title: "Përgjegjës i Sektorit të Produkteve Mekanike",
-    description: "Menaxhim sektori dhe caktim inspektimi",
+    title: "Përgjegjës sektori",
+    description: "Caktim inspektorësh dhe raport drejt drejtorit",
     items: [
-      "Shqyrtoni aplikimet e sektorit",
-      "Caktoni inspektorin që shkon në terren",
-      "Anuloni ose ndiqni detyrat e inspektimit",
+      "Caktoni inspektorët për shqyrtim dosjeje",
+      "Dërgoni raportin te drejtori i drejtorisë",
+      "Menaxhoni inspektimet në terren",
     ],
   },
   [ROLE_CODES.ISHMT_DIRECTOR]: {
-    title: "Drejtor Teknik",
-    description: "Mbikëqyrje operacionale e regjistrit kombëtar",
+    title: "Drejtor i Drejtorisë",
+    description: "Delegim dhe raport drejt kryeinspektorit",
     items: [
-      "Miratoni ose refuzoni aplikimet e shqyrtuara",
-      "Caktoni inspektim në terren dhe inspektorin",
-      "Ndiqni hartën kombëtare dhe regjistrin e ashensorëve",
+      "Delegoni te përgjegjësi i sektorit",
+      "Dërgoni dosjen te kryeinspektori pas raportit",
+      "Caktoni inspektim në terren",
     ],
   },
   [ROLE_CODES.INSPECTOR]: {

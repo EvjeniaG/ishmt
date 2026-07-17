@@ -5,6 +5,7 @@ import {
 import { executeLicenseExpiryJobWithLogging, LICENSE_EXPIRY_JOB_TYPE } from "@/lib/jobs/license-expiry-job";
 import { ComplianceService } from "@/lib/services/compliance-service";
 import { InvitationService } from "@/lib/services/invitation-service";
+import { IshmtComplianceDigestService } from "@/lib/services/ishmt-compliance-digest-service";
 import { IshmtOverdueNotificationService } from "@/lib/services/ishmt-overdue-notification-service";
 import { OwnerDashboardService } from "@/lib/services/owner-dashboard-service";
 import { ReminderSchedulerService } from "@/lib/services/reminder-scheduler-service";
@@ -17,6 +18,7 @@ export const CRON_JOB_TYPES = [
   "REMINDERS",
   "OWNER_COMPLIANCE_NOTIFICATIONS",
   "ISHMT_OVERDUE_NOTIFICATIONS",
+  "ISHMT_COMPLIANCE_DIGEST",
 ] as const;
 
 export type CronJobType = (typeof CRON_JOB_TYPES)[number];
@@ -57,6 +59,10 @@ export async function runScheduledJobs(jobTypes?: string[]) {
 
   if (shouldRun("ISHMT_OVERDUE_NOTIFICATIONS")) {
     results.ISHMT_OVERDUE_NOTIFICATIONS = await IshmtOverdueNotificationService.syncOverdueAlerts();
+  }
+
+  if (shouldRun("ISHMT_COMPLIANCE_DIGEST")) {
+    results.ISHMT_COMPLIANCE_DIGEST = await IshmtComplianceDigestService.syncDailyDigest();
   }
 
   return results;

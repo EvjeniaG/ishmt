@@ -21,9 +21,11 @@ type Municipality = { id: string; nameSq: string; regionId: string };
 export function ChiefGeoFilters({
   regions,
   municipalities,
+  basePath = "/ishmt/chief/map",
 }: {
   regions: Region[];
   municipalities: Municipality[];
+  basePath?: string;
 }) {
   const router = useRouter();
   const params = useSearchParams();
@@ -35,7 +37,7 @@ export function ChiefGeoFilters({
 
   function push(next: URLSearchParams) {
     const qs = next.toString();
-    router.push(qs ? `/ishmt/chief/map?${qs}` : "/ishmt/chief/map");
+    router.push(qs ? `${basePath}?${qs}` : basePath);
   }
 
   function update(key: string, value: string) {
@@ -118,7 +120,7 @@ export function ChiefGeoFilters({
 
       {hasFilters && (
         <div className="flex justify-end border-t border-border/80 pt-3">
-          <Button type="button" variant="outline" size="sm" onClick={() => router.push("/ishmt/chief/map")}>
+          <Button type="button" variant="outline" size="sm" onClick={() => router.push(basePath)}>
             Pastro filtrat
           </Button>
         </div>

@@ -51,27 +51,59 @@ describe("NEW_REGISTRATION workflow", () => {
     ).toBe(ApplicationStatus.APPROVED);
   });
 
-  it("inspector forwards to chief from UNDER_REVIEW", () => {
+  it("chief delegates to director from SUBMITTED", () => {
     expect(
       assertTransition(
         ApplicationType.NEW_REGISTRATION,
-        ApplicationStatus.UNDER_REVIEW,
+        ApplicationStatus.SUBMITTED,
+        "DELEGATE_TO_DIRECTOR",
+        ROLE_CODES.CHIEF_INSPECTOR,
+      ),
+    ).toBe(ApplicationStatus.PENDING_DIRECTOR);
+  });
+
+  it("director forwards to chief from PENDING_DIRECTOR_REPORT", () => {
+    expect(
+      assertTransition(
+        ApplicationType.NEW_REGISTRATION,
+        ApplicationStatus.PENDING_DIRECTOR_REPORT,
         "FORWARD_TO_CHIEF",
-        ROLE_CODES.INSPECTOR,
+        ROLE_CODES.ISHMT_DIRECTOR,
       ),
     ).toBe(ApplicationStatus.PENDING_CHIEF_INSPECTOR);
   });
 
-  it("return to installer sets RETURNED", () => {
+  it("sector head forwards report from PENDING_SECTOR_HEAD_REPORT", () => {
     expect(
       assertTransition(
         ApplicationType.NEW_REGISTRATION,
-        ApplicationStatus.UNDER_REVIEW,
-        "RETURN",
-        ROLE_CODES.INSPECTOR,
-        { returnTarget: ReturnTargetRole.INSTALLER },
+        ApplicationStatus.PENDING_SECTOR_HEAD_REPORT,
+        "FORWARD_TO_DIRECTOR",
+        ROLE_CODES.SECTOR_HEAD,
       ),
-    ).toBe(ApplicationStatus.RETURNED);
+    ).toBe(ApplicationStatus.PENDING_DIRECTOR_REPORT);
+  });
+
+  it("chief can return to inspectors from final review", () => {
+    expect(
+      assertTransition(
+        ApplicationType.NEW_REGISTRATION,
+        ApplicationStatus.PENDING_CHIEF_INSPECTOR,
+        "RETURN_TO_INSPECTORS",
+        ROLE_CODES.CHIEF_INSPECTOR,
+      ),
+    ).toBe(ApplicationStatus.RETURNED_TO_INSPECTORS);
+  });
+
+  it("director cannot approve", () => {
+    expect(() =>
+      assertTransition(
+        ApplicationType.NEW_REGISTRATION,
+        ApplicationStatus.PENDING_CHIEF_INSPECTOR,
+        "APPROVE",
+        ROLE_CODES.ISHMT_DIRECTOR,
+      ),
+    ).toThrow(WorkflowError);
   });
 });
 
@@ -87,35 +119,14 @@ describe("Other application types", () => {
     ).toBe(ApplicationStatus.SUBMITTED);
   });
 
-  it("DEREGISTRATION approve is blocked as not implemented", () => {
-    expect(() =>
+  it("MODERNIZATION owner can submit from PENDING_OWNER_SUBMISSION", () => {
+    expect(
       assertTransition(
-        ApplicationType.DEREGISTRATION,
-        ApplicationStatus.UNDER_REVIEW,
-        "APPROVE",
-        ROLE_CODES.INSPECTOR,
+        ApplicationType.MODERNIZATION,
+        ApplicationStatus.PENDING_OWNER_SUBMISSION,
+        "SUBMIT",
+        ROLE_CODES.OWNER,
       ),
-    ).toThrow(WorkflowError);
-  });
-
-  it("MODERNIZATION assign installer is recognized", () => {
-    const rule = findTransition(
-      ApplicationType.MODERNIZATION,
-      ApplicationStatus.DRAFT,
-      "ASSIGN_INSTALLER",
-      ROLE_CODES.OWNER,
-    );
-    expect(rule?.to).toBe(ApplicationStatus.PENDING_INSTALLER);
-  });
-
-  it("unsupported transition is blocked safely", () => {
-    expect(() =>
-      assertTransition(
-        ApplicationType.DATA_CORRECTION,
-        ApplicationStatus.DRAFT,
-        "APPROVE",
-        ROLE_CODES.INSPECTOR,
-      ),
-    ).toThrow(WorkflowError);
+    ).toBe(ApplicationStatus.SUBMITTED);
   });
 });

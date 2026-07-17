@@ -33,6 +33,7 @@ export default async function ChiefApprovalsPage() {
   };
 
   const applications = await ApplicationService.listForContext(ctx, {
+    queueBucket: "needs_action",
     status: ApplicationStatus.PENDING_CHIEF_INSPECTOR,
   });
 
@@ -42,7 +43,7 @@ export default async function ChiefApprovalsPage() {
         <PageHeader
           eyebrow="ISHMT"
           title="Aplikime për miratim"
-          description="Dosjet e shqyrtuara nga specialistët, në pritje të vendimit të miratimit ose refuzimit."
+          description="Dosjet e shqyrtuara nga zinxhiri hierarkik, në pritje të vendimit final të miratimit ose refuzimit."
         />
 
         <SectionCard

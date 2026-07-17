@@ -12,7 +12,6 @@ export type DemoLoginCredential = {
     | "CHIEF_INSPECTOR"
     | "ISHMT_DIRECTOR"
     | "SECTOR_HEAD"
-    | "SECTOR_SPECIALIST"
     | "FIELD_INSPECTOR"
     | "DIRECTORATE";
   identifier: string;
@@ -31,19 +30,15 @@ export const DEMO_LOGIN_CREDENTIALS: DemoLoginCredential[] = [
   { role: "Mirëmbajtje - Servis Lift 24", level: "MAINTENANCE", identifier: "N30000001A" },
   { role: "Admin ISHMT", level: "ADMIN", identifier: "I90101001A" },
   { role: "Kryeinspektor - Edison Konomi", level: "CHIEF_INSPECTOR", identifier: "I90505005E" },
-  { role: "Drejtor Teknik - Erion Prifti", level: "ISHMT_DIRECTOR", identifier: "I90606006F" },
-  {
-    role: "Përgjegjës i Sektorit të Produkteve Mekanike - Albert Shqalshi",
-    level: "SECTOR_HEAD",
-    identifier: "I90707007G",
-  },
-  { role: "Specialist sektori", level: "SECTOR_SPECIALIST", identifier: "I90808008H" },
-  { role: "Inspektor terreni", level: "FIELD_INSPECTOR", identifier: "I90909009I" },
+  { role: "Drejtor i Drejtorisë - Erion Prifti", level: "ISHMT_DIRECTOR", identifier: "I90606006F" },
+  { role: "Përgjegjës sektori - Albert Shqalshi", level: "SECTOR_HEAD", identifier: "I90707007G" },
+  { role: "Inspektor - Flamur Terreni", level: "FIELD_INSPECTOR", identifier: "I90909009I" },
+  { role: "Inspektor - Demo 2", level: "FIELD_INSPECTOR", identifier: "I90909010J" },
   { role: "Drejtoria e Politikave", level: "DIRECTORATE", identifier: "I90303003C" },
 ];
 
 export const DEMO_DATASET_SUMMARY = [
-  "16 përdorues (pronar, 3 instalues, 3 certifikues, 2 mirëmbajtje, 7 ISHMT/MPB)",
+  "16 përdorues (pronar, 3 instalues, 3 certifikues, 2 mirëmbajtje, 2 inspektorë, 6 ISHMT/MPB)",
   "5 aplikime regjistrimi në status «të dhëna bazë»",
   "2 ashensorë të regjistruar (KN-2025-884512, SCH-2024-553120)",
   "Raportime qytetarësh, mirëmbajtje, inspektime për pipeline demo",

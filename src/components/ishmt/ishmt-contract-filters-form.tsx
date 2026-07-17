@@ -9,6 +9,7 @@ import {
   CONTRACT_ISSUE_CATEGORY_OPTIONS,
   CONTRACT_ISSUE_FILTER_OPTIONS,
   CONTRACT_SEVERITY_OPTIONS,
+  ISHMT_COMPLIANCE_MONITOR_PATH,
   type ContractIssueListFilters,
 } from "@/lib/ishmt/contract-issue-filters";
 
@@ -32,7 +33,7 @@ function buildHrefFromFormData(formData: FormData): string {
   if (expiringWithin) query.set("expiringWithin", expiringWithin);
 
   const qs = query.toString();
-  return qs ? `/ishmt/contracts?${qs}` : "/ishmt/contracts";
+  return qs ? `${ISHMT_COMPLIANCE_MONITOR_PATH}?${qs}` : ISHMT_COMPLIANCE_MONITOR_PATH;
 }
 
 export function IshmtContractFiltersForm({
@@ -147,7 +148,7 @@ export function IshmtContractFiltersForm({
           Apliko filtrat
         </button>
         <Link
-          href="/ishmt/contracts"
+          href={ISHMT_COMPLIANCE_MONITOR_PATH}
           scroll={false}
           className="inline-flex h-10 items-center rounded-md border px-4 text-sm font-medium hover:bg-muted/50"
         >

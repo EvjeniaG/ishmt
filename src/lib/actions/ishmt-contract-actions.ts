@@ -40,7 +40,7 @@ export async function notifyOwnerForContractIssueAction(input: {
       dueDate: input.dueDate ? new Date(input.dueDate) : null,
     });
 
-    revalidatePath("/ishmt/contracts");
+    revalidatePath("/ishmt/compliance-digest");
     return { success: true, created: result.created, organizations: 1 };
   } catch (error) {
     return {
@@ -70,7 +70,7 @@ export async function notifyFilteredContractOwnersAction(
     }
 
     const result = await OwnerComplianceNotificationService.notifyStakeholdersForContractIssues(rows);
-    revalidatePath("/ishmt/contracts");
+    revalidatePath("/ishmt/compliance-digest");
     return {
       success: true,
       created: result.created,

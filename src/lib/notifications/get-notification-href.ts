@@ -19,6 +19,9 @@ export function getNotificationHref(
   if (entityType === "elevator" || entityType === "compliance_alert" || entityType === "ishmt_compliance_alert") {
     return isIshmt ? `/ishmt/elevators/${entityId}` : `/portal/elevators/${entityId}`;
   }
+  if (entityType === "ishmt_compliance_digest") {
+    return isIshmt ? "/ishmt/compliance-digest" : null;
+  }
 
   return null;
 }
