@@ -19,6 +19,7 @@ import {
   FIELD_INSPECTION_STATUS_TONE,
 } from "@/lib/ishmt/field-inspection-labels";
 import type { FieldInspectionAssignmentRow } from "@/components/ishmt/field-inspection-panels";
+import { InspectorCitizenReportsTable, type InspectorCitizenReportRow } from "@/components/ishmt/inspector-citizen-reports-table";
 import type {
   InspectorDocumentReviewRow,
   InspectorWorkloadSummary,
@@ -248,6 +249,7 @@ export function FieldInspectorDashboard({
   pendingDocumentReviews,
   completedDocumentReviews,
   fieldInspections,
+  assignedCitizenReports,
   alarms,
   roleCode,
 }: {
@@ -255,12 +257,14 @@ export function FieldInspectorDashboard({
   pendingDocumentReviews: InspectorDocumentReviewRow[];
   completedDocumentReviews: InspectorDocumentReviewRow[];
   fieldInspections: FieldInspectionAssignmentRow[];
+  assignedCitizenReports: InspectorCitizenReportRow[];
   alarms: IshmtAlarm[];
   roleCode: string;
 }) {
   const grouped = groupIshmtAlarmsByPriority(alarms);
   const activeFieldCount =
     summary.pendingFieldInspections + summary.inProgressFieldInspections;
+  const pendingCitizenReports = assignedCitizenReports.length;
 
   return (
     <StandardPageLayout
@@ -274,6 +278,12 @@ export function FieldInspectorDashboard({
           value={summary.pendingDocumentReviews}
           accent={summary.pendingDocumentReviews > 0 ? "warning" : "success"}
           subtitle="Dosje në pritje të raportit"
+        />
+        <MetricCard
+          label="Raportime qytetarësh"
+          value={pendingCitizenReports}
+          accent={pendingCitizenReports > 0 ? "warning" : "primary"}
+          subtitle="Të caktuara për hetim"
         />
         <MetricCard
           label="Detyra në terren"
@@ -291,12 +301,6 @@ export function FieldInspectorDashboard({
           accent="success"
           subtitle="Historiku i shqyrtimeve tuaja"
         />
-        <MetricCard
-          label="Inspektime terreni"
-          value={summary.completedFieldInspections}
-          accent="primary"
-          subtitle="Verifikime të kryera"
-        />
       </div>
 
       {grouped.all.length > 0 ? (
@@ -312,6 +316,26 @@ export function FieldInspectorDashboard({
           <IshmtAlarmBoard alarms={alarms} />
         </SectionCard>
       ) : null}
+
+      <SectionCard
+        title="Raportime nga qytetarët"
+        subtitle="Raportime publike të caktuara për hetim në terren"
+        meta={
+          <Link
+            href="/ishmt/my-citizen-reports"
+            className="text-sm font-medium text-gov-primary hover:underline"
+          >
+            Shiko të gjitha →
+          </Link>
+        }
+        padded
+      >
+        <InspectorCitizenReportsTable
+          rows={assignedCitizenReports}
+          variant="active"
+          emptyMessage="Nuk keni raportime aktive nga qytetarët."
+        />
+      </SectionCard>
 
       <SectionCard
         title="Shqyrtim dokumentacioni"

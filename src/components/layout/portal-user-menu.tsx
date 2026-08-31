@@ -40,6 +40,8 @@ function menuForRole(roleCode: RoleCode): MenuItem[] {
     case ROLE_CODES.FIELD_INSPECTOR:
       return [
         { href: dashboard, label: "Detyrat e mia" },
+        { href: "/ishmt/my-citizen-reports", label: "Raportime nga qytetarët" },
+        { href: "/ishmt/my-application-reviews", label: "Shqyrtim aplikimesh" },
         { href: "/ishmt/search", label: "Kërko ashensor" },
         { href: "/portal/raportet", label: "Gjenero raport" },
         { href: profile, label: "Profili" },

@@ -19,6 +19,10 @@ import {
   isFieldInspectorRole,
 } from "@/lib/permissions/ishmt-roles";
 import {
+  CITIZEN_REPORT_ACTIVE_STATUSES,
+  CITIZEN_REPORT_CLOSED_STATUSES,
+} from "@/lib/ishmt/citizen-report-queue";
+import {
   buildPublicCitizenReportStatus,
   isValidCitizenReportNumber,
   normalizeCitizenReportNumber,
@@ -165,6 +169,46 @@ export class CitizenReportService {
 
     if (!report) return null;
     return serializePublicCitizenReportStatus(buildPublicCitizenReportStatus(report));
+  }
+
+  /** Raportime qytetarësh të caktuara te një inspektor terreni. */
+  static async listAssignedToInspector(
+    inspectorId: string,
+    options?: { activeOnly?: boolean; closedOnly?: boolean },
+  ) {
+    const where: Prisma.CitizenReportWhereInput = {
+      assignedInspectorId: inspectorId,
+    };
+
+    if (options?.activeOnly) {
+      where.status = { in: CITIZEN_REPORT_ACTIVE_STATUSES };
+    } else if (options?.closedOnly) {
+      where.status = { in: CITIZEN_REPORT_CLOSED_STATUSES };
+    }
+
+    return db.citizenReport.findMany({
+      where,
+      include: {
+        elevator: { select: { id: true, registryNumber: true } },
+        municipality: { select: { nameSq: true } },
+      },
+      orderBy: options?.closedOnly
+        ? [{ resolvedAt: "desc" }, { createdAt: "desc" }]
+        : [{ priority: "desc" }, { createdAt: "desc" }],
+    });
+  }
+
+  static async countAssignedToInspector(
+    inspectorId: string,
+    options?: { activeOnly?: boolean },
+  ) {
+    const where: Prisma.CitizenReportWhereInput = {
+      assignedInspectorId: inspectorId,
+    };
+    if (options?.activeOnly) {
+      where.status = { in: CITIZEN_REPORT_ACTIVE_STATUSES };
+    }
+    return db.citizenReport.count({ where });
   }
 
   static async listForReview(filters?: {

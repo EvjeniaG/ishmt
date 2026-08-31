@@ -54,6 +54,7 @@ export const ROUTE_RULES: RouteRule[] = [
   { prefix: "/portal/elevators", roles: [...PORTAL_COMPANY_ROLES, ...ISHMT_STAFF_ROLES, ROLE_CODES.DIRECTORATE] },
   { prefix: "/ishmt/chief", roles: [...ISHMT_APPROVER_ROLES] },
   { prefix: "/ishmt/field-inspections", roles: [...ISHMT_STAFF_ROLES] },
+  { prefix: "/ishmt/my-citizen-reports", roles: [ROLE_CODES.FIELD_INSPECTOR] },
   { prefix: "/ishmt/my-field-inspections", roles: [ROLE_CODES.FIELD_INSPECTOR] },
   { prefix: "/ishmt/admin/qkb-validation", roles: [ROLE_CODES.ADMIN] },
   { prefix: "/ishmt/admin", roles: [ROLE_CODES.ADMIN] },

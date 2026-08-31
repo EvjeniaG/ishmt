@@ -126,6 +126,7 @@ const FIELD_INSPECTOR_NAV: NavGroup[] = [
     items: [
       { href: "/ishmt/inspector/dashboard", label: "Paneli", icon: LayoutDashboard },
       { href: "/ishmt/my-application-reviews", label: "Shqyrtimi i aplikimeve", icon: ClipboardList },
+      { href: "/ishmt/my-citizen-reports", label: "Raportime nga qytetarët", icon: FileText },
       { href: "/ishmt/my-field-inspections", label: "Detyrat e mia në terren", icon: ClipboardCheck },
       { href: "/ishmt/search", label: "Kërko ashensor", icon: Search },
       ISHMT_NOTIFICATIONS_NAV,

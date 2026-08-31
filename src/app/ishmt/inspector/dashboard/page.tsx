@@ -5,6 +5,7 @@ import { getAuthSession } from "@/lib/auth";
 import { isFieldInspectorRole } from "@/lib/permissions/ishmt-roles";
 import { FieldInspectorWorkloadService } from "@/lib/services/field-inspector-workload-service";
 import { IshmtAlarmService } from "@/lib/services/ishmt-alarm-service";
+import { CitizenReportService } from "@/lib/services/citizen-report-service";
 
 export default async function FieldInspectorDashboardPage() {
   const session = await getAuthSession();
@@ -23,12 +24,13 @@ export default async function FieldInspectorDashboardPage() {
     permissions: session.user.permissions,
   };
 
-  const [summary, pipelineDocumentReviews, closedDocumentReviews, fieldInspections, alarms] =
+  const [summary, pipelineDocumentReviews, closedDocumentReviews, fieldInspections, assignedCitizenReports, alarms] =
     await Promise.all([
       FieldInspectorWorkloadService.getSummary(ctx),
       FieldInspectorWorkloadService.listRegistrationPipelineDocumentReviews(ctx),
       FieldInspectorWorkloadService.listClosedDocumentReviews(ctx),
       FieldInspectorWorkloadService.listFieldInspections(ctx),
+      CitizenReportService.listAssignedToInspector(session.user.id, { activeOnly: true }),
       IshmtAlarmService.getAlarms(ctx),
     ]);
 
@@ -39,6 +41,7 @@ export default async function FieldInspectorDashboardPage() {
         pendingDocumentReviews={pipelineDocumentReviews}
         completedDocumentReviews={closedDocumentReviews}
         fieldInspections={fieldInspections}
+        assignedCitizenReports={assignedCitizenReports}
         alarms={alarms}
         roleCode={session.user.roleCode}
       />

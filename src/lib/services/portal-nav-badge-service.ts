@@ -13,6 +13,7 @@ import { PERMISSIONS } from "@/lib/permissions/codes";
 import { roleHasPermission } from "@/lib/permissions/matrix";
 import { isFieldInspectorRole, isIshmtInternalRole } from "@/lib/permissions/ishmt-roles";
 import { buildIshmtApplicationRegistryWhere } from "@/lib/services/application-participation";
+import { CitizenReportService } from "@/lib/services/citizen-report-service";
 
 /** Numra sipas href-it të sidebar-it (vetëm > 0). */
 export type PortalNavBadges = Partial<Record<string, number>>;
@@ -26,8 +27,9 @@ export class PortalNavBadgeService {
       this.countActiveApplications(ctx),
       this.countActiveCitizenReports(ctx),
       this.countPendingDocumentReviews(ctx),
+      this.countAssignedCitizenReports(ctx),
     ]);
-    const [activeApplications, activeReports, pendingDocReviews] = counts;
+    const [activeApplications, activeReports, pendingDocReviews, assignedCitizenReports] = counts;
 
     if (role === ROLE_CODES.SECTOR_HEAD && activeApplications > 0) {
       badges["/ishmt/review"] = activeApplications;
@@ -47,6 +49,10 @@ export class PortalNavBadgeService {
 
     if (isFieldInspectorRole(role) && pendingDocReviews > 0) {
       badges["/ishmt/my-application-reviews"] = pendingDocReviews;
+    }
+
+    if (isFieldInspectorRole(role) && assignedCitizenReports > 0) {
+      badges["/ishmt/my-citizen-reports"] = assignedCitizenReports;
     }
 
     return badges;
@@ -80,5 +86,10 @@ export class PortalNavBadgeService {
         },
       },
     });
+  }
+
+  private static async countAssignedCitizenReports(ctx: AuthContext): Promise<number> {
+    if (!isFieldInspectorRole(ctx.roleCode)) return 0;
+    return CitizenReportService.countAssignedToInspector(ctx.userId, { activeOnly: true });
   }
 }
