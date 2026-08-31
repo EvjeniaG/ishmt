@@ -1,12 +1,13 @@
 import {
   ApplicationFieldReviewAssignmentStatus,
   ApplicationStatus,
+  ApplicationType,
   FieldInspectionAssignmentStatus,
-  type ApplicationType,
 } from "@prisma/client";
 import { db } from "@/lib/db";
 import type { AuthContext } from "@/lib/permissions/guards";
 import { isFieldInspectorRole } from "@/lib/permissions/ishmt-roles";
+import { isTerminalApplicationStatus } from "@/lib/services/application-participation";
 import type { FieldInspectionAssignmentRow } from "@/components/ishmt/field-inspection-panels";
 import { IshmtFieldInspectionService } from "@/lib/services/ishmt-field-inspection-service";
 
@@ -92,6 +93,109 @@ export class FieldInspectorWorkloadService {
       completedDocumentReviews,
       completedFieldInspections,
     };
+  }
+
+  static async listRegistrationPipelineDocumentReviews(
+    ctx: AuthContext,
+  ): Promise<InspectorDocumentReviewRow[]> {
+    this.assertInspector(ctx);
+
+    const rows = await db.applicationFieldReviewAssignment.findMany({
+      where: {
+        inspectorId: ctx.userId,
+        status: { not: ApplicationFieldReviewAssignmentStatus.REPLACED },
+        application: {
+          deletedAt: null,
+          type: ApplicationType.NEW_REGISTRATION,
+          submittedAt: { not: null },
+          status: { notIn: [ApplicationStatus.CANCELLED] },
+        },
+      },
+      include: {
+        application: {
+          select: {
+            id: true,
+            applicationNumber: true,
+            type: true,
+            status: true,
+            requiresFieldVerification: true,
+            data: {
+              select: {
+                buildingAddress: true,
+                municipality: { select: { nameSq: true } },
+              },
+            },
+          },
+        },
+      },
+      orderBy: { createdAt: "asc" },
+    });
+
+    return rows
+      .filter((row) => !isTerminalApplicationStatus(row.application.status))
+      .map((row) => ({
+        assignmentId: row.id,
+        applicationId: row.application.id,
+        applicationNumber: row.application.applicationNumber,
+        type: row.application.type,
+        status: row.application.status,
+        requiresFieldVerification: row.application.requiresFieldVerification,
+        reviewStatus: row.status,
+        completedAt: row.completedAt,
+        buildingAddress: row.application.data?.buildingAddress ?? null,
+        municipalityName: row.application.data?.municipality?.nameSq ?? null,
+        assignedAt: row.createdAt,
+      }));
+  }
+
+  static async listClosedDocumentReviews(ctx: AuthContext): Promise<InspectorDocumentReviewRow[]> {
+    this.assertInspector(ctx);
+
+    const rows = await db.applicationFieldReviewAssignment.findMany({
+      where: {
+        inspectorId: ctx.userId,
+        status: ApplicationFieldReviewAssignmentStatus.COMPLETED,
+        application: {
+          deletedAt: null,
+          type: ApplicationType.NEW_REGISTRATION,
+        },
+      },
+      include: {
+        application: {
+          select: {
+            id: true,
+            applicationNumber: true,
+            type: true,
+            status: true,
+            requiresFieldVerification: true,
+            data: {
+              select: {
+                buildingAddress: true,
+                municipality: { select: { nameSq: true } },
+              },
+            },
+          },
+        },
+      },
+      orderBy: { completedAt: "desc" },
+      take: 50,
+    });
+
+    return rows
+      .filter((row) => isTerminalApplicationStatus(row.application.status))
+      .map((row) => ({
+        assignmentId: row.id,
+        applicationId: row.application.id,
+        applicationNumber: row.application.applicationNumber,
+        type: row.application.type,
+        status: row.application.status,
+        requiresFieldVerification: row.application.requiresFieldVerification,
+        reviewStatus: row.status,
+        completedAt: row.completedAt,
+        buildingAddress: row.application.data?.buildingAddress ?? null,
+        municipalityName: row.application.data?.municipality?.nameSq ?? null,
+        assignedAt: row.createdAt,
+      }));
   }
 
   static async listPendingDocumentReviews(ctx: AuthContext): Promise<InspectorDocumentReviewRow[]> {

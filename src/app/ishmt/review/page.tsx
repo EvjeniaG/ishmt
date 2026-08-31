@@ -23,7 +23,13 @@ export default async function ReviewQueuePage({
 }) {
   const { tab } = await searchParams;
   const queueBucket: ReviewQueueBucket =
-    tab === "waiting" ? "waiting" : tab === "completed" ? "completed" : "needs_action";
+    tab === "needs_action"
+      ? "needs_action"
+      : tab === "waiting"
+        ? "waiting"
+        : tab === "completed"
+          ? "completed"
+          : "active_pipeline";
 
   const session = await getAuthSession();
   if (!session?.user) redirect("/auth/login");
@@ -61,18 +67,19 @@ export default async function ReviewQueuePage({
         title="Aplikime në shqyrtim"
         description={
           isApprover
-            ? "Dosjet e Aplikimeve për Registrim - vendimi final nga kryeinspektori."
+            ? "Dosjet e aplikimeve për regjistrim - vendimi final nga kryeinspektori."
             : isReviewer
-              ? "Delegim, caktim inspektorësh, raporte dhe ndjekje e dosjes."
+              ? "Dosjet mbeten të dukshme me statusin aktual deri te regjistrimi nga kryeinspektori."
               : "Pamje e përgjithshme e aplikimeve në proces."
         }
       >
         <div className="mb-4 flex flex-wrap gap-2">
           {(
             [
+              ["active_pipeline", "Në proces"],
               ["needs_action", "Kërkon veprimin tim"],
-              ["waiting", "Në shqyrtim nga hallka tjetër"],
-              ["completed", "Të përfunduara"],
+              ["waiting", "Në hallkën tjetër"],
+              ["completed", "Të mbyllura"],
             ] as const
           ).map(([key, label]) => (
             <Link
@@ -104,7 +111,7 @@ export default async function ReviewQueuePage({
 
         <SectionCard
           title="Regjistri i aplikimeve"
-          subtitle="Lista zyrtare e dosjeve në pritje të shqyrtimit"
+          subtitle="Dosjet aktive deri te vendimi i kryeinspektorit"
           meta={
             <span className="portal-badge-neutral tabular-nums">{applications.length} regjistrime</span>
           }

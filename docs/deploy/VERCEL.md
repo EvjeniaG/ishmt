@@ -30,7 +30,7 @@ Udhëzues hap-pas-hapi për **IQMT Digital Elevator Registry** - Neon PostgreSQL
 2. **Configuration → S3** → Enable → **Generate access key**.
 3. Ruaj **saktësisht** nga faqja S3:
    - Endpoint: `https://<PROJECT_REF>.storage.supabase.co/storage/v1/s3`
-   - **Region** (kopjoje te `STORAGE_REGION` — jo supozime)
+   - **Region** (kopjoje te `STORAGE_REGION` - jo supozime)
    - Access Key ID
    - Secret Access Key
 4. Bucket-i **`ishmtt-documents`** duhet të ekzistojë te **Storage → Buckets** (private). Pa bucket, upload jep `NoSuchBucket`.
@@ -117,7 +117,7 @@ Projekti ka `vercel.json`:
 
 Vercel dërgon automatikisht `Authorization: Bearer <CRON_SECRET>` kur `CRON_SECRET` është vendosur.
 
-**Plan Hobby (falas):** lejohet vetëm **1 cron ditor** — riprovimi i PDF/QR bëhet çdo ditë në 05:00 UTC (përfshihet në `/api/cron/jobs`). Riprovim i menjëhershëm: hap dosjen e ashensorit ose «Riprovo gjenerimin» te aplikimi.
+**Plan Hobby (falas):** lejohet vetëm **1 cron ditor** - riprovimi i PDF/QR bëhet çdo ditë në 05:00 UTC (përfshihet në `/api/cron/jobs`). Riprovim i menjëhershëm: hap dosjen e ashensorit ose «Riprovo gjenerimin» te aplikimi.
 
 **Plan Pro:** mund të shtosh cron çdo 15 min te `vercel.json` (`/api/cron/asset-generation`, `*/15 * * * *`).
 

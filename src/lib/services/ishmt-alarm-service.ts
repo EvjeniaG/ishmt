@@ -429,8 +429,8 @@ export class IshmtAlarmService {
   private static buildChiefAlarms(s: AlarmSnapshot): IshmtAlarm[] {
     return [
       ...this.applicationPipelineAlarms(s, {
-        submitted: "/ishmt/chief/inbox",
-        underReview: "/ishmt/review",
+        submitted: "/ishmt/chief/applications",
+        underReview: "/ishmt/chief/applications",
       }),
       ...this.contractAlarms(s),
       {
@@ -439,7 +439,7 @@ export class IshmtAlarmService {
         label: "Vendim final i papërfunduar",
         hint: "Dosje të shqyrtuara që presin miratimin e kryeinspektorit",
         count: s.pendingChief,
-        href: "/ishmt/chief/approvals",
+        href: "/ishmt/chief/applications",
       },
       {
         id: "procedure-overdue",
@@ -447,7 +447,7 @@ export class IshmtAlarmService {
         label: "Afat procedural i tejkaluar",
         hint: "Aplikime jashtë afatit 10-ditor të shqyrtimit administrativ",
         count: s.procedureOverdue,
-        href: "/ishmt/chief/approvals",
+        href: "/ishmt/chief/applications",
       },
       {
         id: "red-compliance",
@@ -463,7 +463,7 @@ export class IshmtAlarmService {
         label: "Afat procedural në skadim",
         hint: "Maksimumi 3 ditë pune deri në përfundimin e afatit procedural",
         count: s.procedureUrgent,
-        href: "/ishmt/chief/approvals",
+        href: "/ishmt/chief/applications",
       },
       {
         id: "recommended-rejection",
@@ -565,7 +565,7 @@ export class IshmtAlarmService {
         label: "Në pritje të vendimit final",
         hint: "Dosje të dërguara te kryeinspektorit për miratim",
         count: s.pendingChief,
-        href: "/ishmt/chief/approvals",
+        href: "/ishmt/chief/applications",
       },
     ];
 
@@ -591,7 +591,7 @@ export class IshmtAlarmService {
         id: "my-document-reviews",
         priority: "critical",
         label: "Dosje për shqyrtim dokumentacioni",
-        hint: "Dosje të reja të caktuara — shqyrtoni dokumentacionin dhe përgatisni raportin",
+        hint: "Dosje të reja të caktuara - shqyrtoni dokumentacionin dhe përgatisni raportin",
         count: s.myPendingDocumentReviews,
         href: "/ishmt/my-application-reviews",
       });

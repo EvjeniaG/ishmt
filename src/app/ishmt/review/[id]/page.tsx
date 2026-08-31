@@ -466,6 +466,8 @@ export default async function ReviewDetailPage({
               initialRequiresFieldVerification={application.requiresFieldVerification}
               fieldVerificationRequestedBy={application.fieldVerificationRequestedBy}
               fieldVerificationCanApprove={fieldVerificationStatus.canApprove}
+              fieldVerificationCompletedCount={fieldVerificationStatus.completedCount}
+              fieldVerificationRequiredCount={fieldVerificationStatus.requiredInspectorCount}
               fieldReviewAssignments={fieldReviewAssignments.map((a) => ({
                 id: a.id,
                 inspectorId: a.inspectorId,

@@ -17,7 +17,7 @@ const STAFF_EMAILS = [
   "drejtoria@ishmt.gov.al",
 ] as const;
 
-/** Email-et e 17 llogarive demo — burim i vetëm për pastrim. */
+/** Email-et e 17 llogarive demo - burim i vetëm për pastrim. */
 export function canonicalDemoUserEmails(): string[] {
   return [
     ...DEMO_OWNER_PROFILES.map((p) => p.email),

@@ -55,7 +55,7 @@ export function DirectorateActivityList({
                 </Link>
               </td>
               <td className="font-mono text-sm text-gov-primary">
-                {elevator?.registryNumber ?? "—"}
+                {elevator?.registryNumber ?? "-"}
               </td>
               <td>{labelApplicationType(app.type)}</td>
               <td>
@@ -75,7 +75,7 @@ export function DirectorateActivityList({
                     {app.installerOrg.name}
                   </Link>
                 ) : (
-                  "—"
+                  "-"
                 )}
               </td>
               <td>
@@ -87,10 +87,10 @@ export function DirectorateActivityList({
                     {app.certifierOrg.name}
                   </Link>
                 ) : (
-                  "—"
+                  "-"
                 )}
               </td>
-              <td>{app.data?.municipality?.nameSq ?? "—"}</td>
+              <td>{app.data?.municipality?.nameSq ?? "-"}</td>
               <td className="whitespace-nowrap tabular-nums text-muted-foreground">
                 {formatDateTime(app.updatedAt)}
               </td>

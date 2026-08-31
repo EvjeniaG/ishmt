@@ -175,7 +175,7 @@ export class LicenseService {
 
     const now = new Date();
     if (existing.expiryDate < now) {
-      throw new Error("Licenca ka skaduar — gjeneroni licencë të re.");
+      throw new Error("Licenca ka skaduar - gjeneroni licencë të re.");
     }
 
     OrganizationService.assertCanManageLicenseType(ctx, existing.licenseType);

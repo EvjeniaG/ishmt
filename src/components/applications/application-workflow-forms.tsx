@@ -925,6 +925,8 @@ export function IshmtReviewActions({
   initialRequiresFieldVerification,
   fieldVerificationRequestedBy,
   fieldVerificationCanApprove,
+  fieldVerificationCompletedCount,
+  fieldVerificationRequiredCount,
 }: {
   applicationId: string;
   status: ApplicationStatus;
@@ -935,6 +937,8 @@ export function IshmtReviewActions({
   initialRequiresFieldVerification?: boolean;
   fieldVerificationRequestedBy?: string | null;
   fieldVerificationCanApprove?: boolean;
+  fieldVerificationCompletedCount?: number;
+  fieldVerificationRequiredCount?: number;
   fieldReviewAssignments?: {
     id: string;
     inspectorId: string;
@@ -957,6 +961,8 @@ export function IshmtReviewActions({
         status={status}
         upstreamReview={directorReview}
         fieldVerificationCanApprove={fieldVerificationCanApprove ?? true}
+        fieldVerificationCompletedCount={fieldVerificationCompletedCount}
+        fieldVerificationRequiredCount={fieldVerificationRequiredCount}
       />
     );
   }
@@ -1724,6 +1730,8 @@ export function AdminReviewActions({
   status,
   upstreamReview,
   fieldVerificationCanApprove = true,
+  fieldVerificationCompletedCount = 0,
+  fieldVerificationRequiredCount = 0,
 }: {
   applicationId: string;
   status: ApplicationStatus;
@@ -1731,6 +1739,8 @@ export function AdminReviewActions({
     comment: string | null;
   };
   fieldVerificationCanApprove?: boolean;
+  fieldVerificationCompletedCount?: number;
+  fieldVerificationRequiredCount?: number;
 }) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
@@ -1769,6 +1779,18 @@ export function AdminReviewActions({
     return null;
   }
 
+  const fieldVerificationRequired = fieldVerificationRequiredCount > 0;
+  const allFieldVerificationsCompleted =
+    !fieldVerificationRequired ||
+    fieldVerificationCompletedCount >= fieldVerificationRequiredCount;
+  const fieldVerificationApproveHint = fieldVerificationRequired
+    ? !allFieldVerificationsCompleted
+      ? `Miratimi bllokohet deri sa të gjithë inspektorët të përfundojnë verifikimin në terren (${fieldVerificationCompletedCount}/${fieldVerificationRequiredCount}).`
+      : !fieldVerificationCanApprove
+        ? "Miratimi kërkon rezultat konform nga të gjithë inspektorët. Nëse ka mospërputhje, përdorni «Kthe» për ta rikthyer aplikimin."
+        : null
+    : null;
+
   return (
     <Card className={REVIEW_ACTIONS_CARD_CLASS}>
       <CardHeader className={cn(REVIEW_ACTIONS_HEADER_CLASS, "space-y-3 !pb-0")}>
@@ -1792,10 +1814,7 @@ export function AdminReviewActions({
               Pas miratimit gjenerohen numri i regjistrit dhe certifikata.
             </p>
             {!fieldVerificationCanApprove ? (
-              <p className="text-sm text-muted-foreground">
-                Miratimi është bllokuar deri sa të gjithë inspektorët të përfundojnë verifikimin në terren me
-                rezultat konform (PASS).
-              </p>
+              <p className="text-sm text-muted-foreground">{fieldVerificationApproveHint}</p>
             ) : null}
             <Button
               onClick={approve}

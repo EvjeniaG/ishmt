@@ -15,6 +15,7 @@ export type ApplicationFieldVerificationStatus = {
   requestedBy: string | null;
   canApprove: boolean;
   requiredInspectorCount: number;
+  completedCount: number;
   completedPassCount: number;
   assignments: {
     id: string;
@@ -68,6 +69,7 @@ export async function getApplicationFieldVerificationStatus(
       requestedBy: null,
       canApprove: true,
       requiredInspectorCount: 0,
+      completedCount: 0,
       completedPassCount: 0,
       assignments: [],
     };
@@ -140,6 +142,17 @@ export async function getApplicationFieldVerificationStatus(
           conductedDate: a.conductedDate,
         }));
 
+  const completedCount =
+    requiredInspectorIds.length > 0
+      ? requiredInspectorIds.filter((inspectorId) =>
+          assignments.some(
+            (a) =>
+              a.assigneeId === inspectorId &&
+              a.status === FieldInspectionAssignmentStatus.COMPLETED,
+          ),
+        ).length
+      : assignments.filter((a) => a.status === FieldInspectionAssignmentStatus.COMPLETED).length;
+
   const completedPassCount =
     requiredInspectorIds.length > 0
       ? requiredInspectorIds.filter((inspectorId) =>
@@ -171,6 +184,7 @@ export async function getApplicationFieldVerificationStatus(
     requestedBy: application.fieldVerificationRequestedBy,
     canApprove,
     requiredInspectorCount: requiredInspectorIds.length,
+    completedCount,
     completedPassCount,
     assignments: displayAssignments,
   };
@@ -194,13 +208,13 @@ export async function assertFieldVerificationCompleteForApproval(applicationId: 
   );
   if (pending.length > 0) {
     throw new Error(
-      `Verifikimi në terren nuk është përfunduar nga të gjithë inspektorët (${status.completedPassCount}/${status.requiredInspectorCount}).`,
+      `Verifikimi në terren nuk është përfunduar nga të gjithë inspektorët (${status.completedCount}/${status.requiredInspectorCount}).`,
     );
   }
 
   if (!status.canApprove) {
     throw new Error(
-      "Verifikimi në terren nuk ka rezultat pozitiv (PASS) nga të gjithë inspektorët. Miratimi nuk lejohet.",
+      "Verifikimi në terren nuk ka rezultat konform nga të gjithë inspektorët. Përdorni kthimin e aplikimit për korrigjim.",
     );
   }
 }

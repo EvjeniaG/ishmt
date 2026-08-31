@@ -17,7 +17,7 @@ function locationLabel(
   municipalityName: string | null | undefined,
 ) {
   const parts = [buildingAddress, municipalityName].filter(Boolean);
-  return parts.length ? parts.join(" · ") : "—";
+  return parts.length ? parts.join(" · ") : "-";
 }
 
 export default async function MyApplicationReviewsPage() {
@@ -37,9 +37,9 @@ export default async function MyApplicationReviewsPage() {
     permissions: session.user.permissions,
   };
 
-  const [pending, completed] = await Promise.all([
-    FieldInspectorWorkloadService.listPendingDocumentReviews(ctx),
-    FieldInspectorWorkloadService.listCompletedDocumentReviews(ctx),
+  const [pending, closed] = await Promise.all([
+    FieldInspectorWorkloadService.listRegistrationPipelineDocumentReviews(ctx),
+    FieldInspectorWorkloadService.listClosedDocumentReviews(ctx),
   ]);
 
   return (
@@ -47,7 +47,7 @@ export default async function MyApplicationReviewsPage() {
       <StandardPageLayout
         eyebrow="IQMT · Inspektor"
         title="Shqyrtimi i aplikimeve"
-        description="Dosjet e caktuara për shqyrtim dokumentacioni dhe historiku i punës suaj."
+        description="Dosjet e caktuara mbeten këtu me statusin aktual deri te regjistrimi nga kryeinspektori."
         actions={
           <Link
             href="/ishmt/inspector/dashboard"
@@ -58,8 +58,8 @@ export default async function MyApplicationReviewsPage() {
         }
       >
         <SectionCard
-          title="Detyrat aktive"
-          subtitle="Dosje në pritje të raportit tuaj"
+          title="Dosjet në proces"
+          subtitle="Shqyrtim dokumentacioni - statusi i aplikimit përditësohet deri te miratimi"
           meta={
             <span className="workflow-status-outline tabular-nums">
               {pending.length} aktive
@@ -67,7 +67,7 @@ export default async function MyApplicationReviewsPage() {
           }
         >
           {pending.length === 0 ? (
-            <PortalEmptyState>Nuk keni aplikime të caktuara për shqyrtim.</PortalEmptyState>
+            <PortalEmptyState>Nuk keni aplikime për regjistrim në proces.</PortalEmptyState>
           ) : (
             <>
               <PortalTableWrap>
@@ -76,6 +76,7 @@ export default async function MyApplicationReviewsPage() {
                     <th className="w-12">#</th>
                     <th>Nr. aplikimit</th>
                     <th>Lloji</th>
+                    <th>Statusi i aplikimit</th>
                     <th>Vendndodhja</th>
                     <th>Terren</th>
                     <th>Caktuar</th>
@@ -90,6 +91,13 @@ export default async function MyApplicationReviewsPage() {
                         <RegistryNumber>{app.applicationNumber}</RegistryNumber>
                       </td>
                       <td>{APPLICATION_TYPE_LABELS[app.type] ?? app.type}</td>
+                      <td>
+                        <ApplicationStatusBadge
+                          status={app.status}
+                          type={app.type}
+                          roleCode={session.user.roleCode}
+                        />
+                      </td>
                       <td className="max-w-[14rem] truncate text-muted-foreground">
                         {locationLabel(app.buildingAddress, app.municipalityName)}
                       </td>
@@ -118,17 +126,16 @@ export default async function MyApplicationReviewsPage() {
         </SectionCard>
 
         <SectionCard
-          title="Historiku"
-          subtitle="Dosjet e shqyrtuara — dosja e plotë mbetet e hapur edhe pas regjistrimit"
+          title="Të mbyllura"
           meta={
             <span className="workflow-status-outline tabular-nums">
-              {completed.length} përfunduar
+              {closed.length} regjistruar ose mbyllur
             </span>
           }
         >
-          {completed.length === 0 ? (
+          {closed.length === 0 ? (
             <PortalEmptyState>
-              Ende nuk keni përfunduar shqyrtime. Pas dorëzimit të raportit, dosjet do të shfaqen këtu.
+              Dosjet do të shfaqen këtu pasi kryeinspektori të miratojë ose refuzojë aplikimin.
             </PortalEmptyState>
           ) : (
             <>
@@ -144,7 +151,7 @@ export default async function MyApplicationReviewsPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {completed.map((app, index) => (
+                  {closed.map((app, index) => (
                     <tr key={app.assignmentId}>
                       <td className="tabular-nums text-muted-foreground">{index + 1}</td>
                       <td>
@@ -159,7 +166,7 @@ export default async function MyApplicationReviewsPage() {
                         />
                       </td>
                       <td className="tabular-nums text-muted-foreground">
-                        {app.completedAt ? formatDateSq(app.completedAt) : "—"}
+                        {app.completedAt ? formatDateSq(app.completedAt) : "-"}
                       </td>
                       <td>
                         <Link href={`/ishmt/review/${app.applicationId}`} className="portal-table-link">
@@ -170,7 +177,7 @@ export default async function MyApplicationReviewsPage() {
                   ))}
                 </tbody>
               </PortalTableWrap>
-              <OfficialTableFooter total={completed.length} label="dosje" />
+              <OfficialTableFooter total={closed.length} label="dosje" />
             </>
           )}
         </SectionCard>

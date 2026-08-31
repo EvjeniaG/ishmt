@@ -5,7 +5,6 @@ import { AccountSecurityPanel } from "@/components/account/account-security-pane
 import { StaffProfileForm } from "@/components/account/staff-profile-form";
 import { CompanyProfileForm } from "@/components/company/company-profile-form";
 import { OwnerProfileForm } from "@/components/owner/owner-profile-form";
-import { OwnerDocumentGuide } from "@/components/owner/owner-document-guide";
 import { ServiceProviderDocumentGuide } from "@/components/service-provider/service-provider-document-guide";
 import { getAuthSession } from "@/lib/auth";
 import { OWNER_TERM } from "@/lib/constants/owner-labels";
@@ -92,7 +91,6 @@ export default async function ProfilePage() {
             description="Të dhënat e subjektit dhe personit përgjegjës - si në regjistrim"
           >
             <OwnerProfileForm data={profile} />
-            <OwnerDocumentGuide />
             {securityPanel}
           </StandardPageLayout>
         </div>

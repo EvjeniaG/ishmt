@@ -69,7 +69,7 @@ function menuForRole(roleCode: RoleCode): MenuItem[] {
         { href: dashboard, label: "Paneli" },
         { href: profile, label: "Profili" },
         { href: notifications, label: "Njoftimet" },
-        { href: "/ishmt/chief/approvals", label: "Aplikime për miratim" },
+        { href: "/ishmt/chief/applications", label: "Aplikime për regjistrim" },
         { href: "/ishmt/field-inspections", label: "Cakto inspektim terreni" },
         { href: "/ishmt/search", label: "Regjistri i ashensorëve" },
       ];

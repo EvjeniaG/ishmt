@@ -73,6 +73,7 @@ import {
   fieldReviewProgress,
   hasIshmtApplicationParticipation,
   setActiveAssigneeParticipation,
+  buildRegistrationPipelineWhere,
   upsertParticipation,
   type ReviewQueueBucket,
   currentPhaseLabel,
@@ -695,6 +696,26 @@ export class ApplicationService {
     assignments: { status: ApplicationFieldReviewAssignmentStatus }[],
   ) {
     return fieldReviewProgress(assignments);
+  }
+
+  /** Dosjet e regjistrimit në proces - deri te miratimi/refuzimi nga kryeinspektori. */
+  static async listRegistrationPipeline(ctx: AuthContext) {
+    const chiefView = ctx.roleCode === ROLE_CODES.CHIEF_INSPECTOR;
+    const where = buildRegistrationPipelineWhere(chiefView ? undefined : ctx.userId);
+
+    return db.application.findMany({
+      where,
+      include: {
+        data: { include: { municipality: true } },
+        ownerOrg: true,
+        currentAssignee: { select: { id: true, firstName: true, lastName: true } },
+        fieldReviewAssignments: {
+          where: { status: { not: ApplicationFieldReviewAssignmentStatus.REPLACED } },
+          select: { id: true, status: true, inspectorId: true },
+        },
+      },
+      orderBy: [{ submittedAt: "asc" }, { updatedAt: "desc" }],
+    });
   }
 
   static async updateLocationData(

@@ -18,6 +18,7 @@ function revalidateApplicationPaths(id: string) {
   revalidatePath(`/portal/applications/${id}`);
   revalidatePath("/ishmt/review");
   revalidatePath(`/ishmt/review/${id}`);
+  revalidatePath("/ishmt/chief/applications");
   revalidatePath("/ishmt/chief/inbox");
   revalidatePath("/ishmt/chief/approvals");
   revalidatePath("/ishmt/director/review");

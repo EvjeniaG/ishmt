@@ -229,7 +229,7 @@ export function LicenseRowActions({
   const notExpired = expiryDate >= new Date();
 
   if (status === OrgStatus.REVOKED) {
-    return <span className="text-xs text-muted-foreground">—</span>;
+    return <span className="text-xs text-muted-foreground">-</span>;
   }
 
   const canSuspend = status === OrgStatus.ACTIVE && notExpired;
@@ -237,7 +237,7 @@ export function LicenseRowActions({
   const canRevoke = (status === OrgStatus.ACTIVE || status === OrgStatus.SUSPENDED) && notExpired;
 
   if (!canSuspend && !canReinstate && !canRevoke) {
-    return <span className="text-xs text-muted-foreground">—</span>;
+    return <span className="text-xs text-muted-foreground">-</span>;
   }
 
   async function onConfirm(action: EnforcementAction, reason: string) {

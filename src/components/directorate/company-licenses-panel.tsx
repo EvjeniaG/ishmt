@@ -106,7 +106,7 @@ export function CompanyLicenseOverview({ licenses }: { licenses: LicenseRow[] })
 
   function cardProps(license: LicenseRow | null) {
     if (!license) {
-      return { value: "—", accent: "warning" as const, subtitle: "Nuk ka licencë të regjistruar" };
+      return { value: "-", accent: "warning" as const, subtitle: "Nuk ka licencë të regjistruar" };
     }
     if (license.status === OrgStatus.ACTIVE) {
       return {

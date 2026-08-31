@@ -23,11 +23,11 @@ export default async function FieldInspectorDashboardPage() {
     permissions: session.user.permissions,
   };
 
-  const [summary, pendingDocumentReviews, completedDocumentReviews, fieldInspections, alarms] =
+  const [summary, pipelineDocumentReviews, closedDocumentReviews, fieldInspections, alarms] =
     await Promise.all([
       FieldInspectorWorkloadService.getSummary(ctx),
-      FieldInspectorWorkloadService.listPendingDocumentReviews(ctx),
-      FieldInspectorWorkloadService.listCompletedDocumentReviews(ctx),
+      FieldInspectorWorkloadService.listRegistrationPipelineDocumentReviews(ctx),
+      FieldInspectorWorkloadService.listClosedDocumentReviews(ctx),
       FieldInspectorWorkloadService.listFieldInspections(ctx),
       IshmtAlarmService.getAlarms(ctx),
     ]);
@@ -36,8 +36,8 @@ export default async function FieldInspectorDashboardPage() {
     <AppShell title="Paneli im">
       <FieldInspectorDashboard
         summary={summary}
-        pendingDocumentReviews={pendingDocumentReviews}
-        completedDocumentReviews={completedDocumentReviews}
+        pendingDocumentReviews={pipelineDocumentReviews}
+        completedDocumentReviews={closedDocumentReviews}
         fieldInspections={fieldInspections}
         alarms={alarms}
         roleCode={session.user.roleCode}

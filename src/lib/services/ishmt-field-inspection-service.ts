@@ -28,6 +28,8 @@ const assignmentInclude = {
     select: {
       id: true,
       applicationNumber: true,
+      type: true,
+      status: true,
       inspectorAssignmentLockedBy: true,
       fieldVerificationRequestedBy: true,
       data: {

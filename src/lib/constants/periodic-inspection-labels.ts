@@ -1,4 +1,4 @@
-/** Inspektimi periodik OM (çdo 6 muaj / 1 vit) — jo kontrolli periodik mujor i mirëmbajtjes. */
+/** Inspektimi periodik OM (çdo 6 muaj / 1 vit) - jo kontrolli periodik mujor i mirëmbajtjes. */
 export const PERIODIC_INSPECTION_LABEL = "Inspektim periodik";
 export const PERIODIC_INSPECTIONS_LABEL = "Inspektime periodike";
 export const PERIODIC_INSPECTION_CONTRACT_LABEL = "Kontrata e inspektimit periodik";

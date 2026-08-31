@@ -175,9 +175,8 @@ const CHIEF_INSPECTOR_NAV: NavGroup[] = [
     label: "Kryeinspektor",
     items: [
       { href: "/ishmt/chief/dashboard", label: "Paneli", icon: LayoutDashboard },
-      { href: "/ishmt/chief/inbox", label: "Aplikime të reja", icon: ClipboardList },
+      { href: "/ishmt/chief/applications", label: "Aplikime për regjistrim", icon: ClipboardList },
       ISHMT_DIGEST_NAV,
-      { href: "/ishmt/chief/approvals", label: "Miratimet & vendimet", icon: ClipboardCheck },
       { href: "/ishmt/field-inspections", label: "Cakto inspektim terreni", icon: ShieldCheck },
       { href: "/ishmt/search", label: "Regjistri i ashensorëve", icon: Building2 },
       { href: "/ishmt/chief/map", label: "Harta sipas bashkive", icon: Map },

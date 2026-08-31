@@ -1,5 +1,5 @@
 import type { Prisma } from "@prisma/client";
-import { ApplicationStatus } from "@prisma/client";
+import { ApplicationStatus, ApplicationType } from "@prisma/client";
 import { ROLE_CODES, type RoleCode } from "@/lib/constants/roles";
 import { db } from "@/lib/db";
 
@@ -13,7 +13,7 @@ const TERMINAL_STATUSES: ApplicationStatus[] = [
   ApplicationStatus.EXPIRED,
 ];
 
-export type ReviewQueueBucket = "needs_action" | "waiting" | "completed";
+export type ReviewQueueBucket = "needs_action" | "waiting" | "completed" | "active_pipeline";
 
 export function isTerminalApplicationStatus(status: ApplicationStatus) {
   return TERMINAL_STATUSES.includes(status);
@@ -94,10 +94,30 @@ export async function addParticipants(
   }
 }
 
+/** Aplikime për regjistrim që nuk janë miratuar/refuzuar ende - deri te vendimi i kryeinspektorit. */
+export function buildRegistrationPipelineWhere(userId?: string): Prisma.ApplicationWhereInput {
+  const where: Prisma.ApplicationWhereInput = {
+    deletedAt: null,
+    type: ApplicationType.NEW_REGISTRATION,
+    submittedAt: { not: null },
+    status: { notIn: TERMINAL_STATUSES },
+  };
+
+  if (userId) {
+    where.participations = { some: { userId, leftAt: null } };
+  }
+
+  return where;
+}
+
 export function buildParticipationQueueWhere(
   userId: string,
   bucket: ReviewQueueBucket,
 ): Prisma.ApplicationWhereInput {
+  if (bucket === "active_pipeline") {
+    return buildRegistrationPipelineWhere(userId);
+  }
+
   if (bucket === "completed") {
     return {
       participations: { some: { userId } },

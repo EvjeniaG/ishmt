@@ -4,7 +4,7 @@ import Link from "next/link";
 import { formatDateSq } from "@/lib/format-date";
 import { useRouter } from "@/lib/navigation/use-app-router";
 import { useEffect, useMemo, useState } from "react";
-import { FieldInspectionAssignmentStatus } from "@prisma/client";
+import { FieldInspectionAssignmentStatus, ApplicationStatus, ApplicationType } from "@prisma/client";
 import {
   Ban,
   CheckCircle2,
@@ -36,7 +36,8 @@ import {
   FIELD_INSPECTION_STATUS_TONE,
   INSPECTION_RESULT_LABELS,
 } from "@/lib/ishmt/field-inspection-labels";
-import { WorkflowStatusChip } from "@/components/applications/application-status-badge";
+import { WorkflowStatusChip, ApplicationStatusBadge } from "@/components/applications/application-status-badge";
+import { APPLICATION_TYPE_LABELS } from "@/lib/constants/application-labels";
 import type { FieldInspectorOption } from "@/lib/services/ishmt-field-inspection-service";
 import type { StatusTone } from "@/lib/registration/status-presentation";
 import { isChiefLockedFieldVerification } from "@/lib/services/application-field-verification";
@@ -53,6 +54,8 @@ export type FieldInspectionAssignmentRow = {
   application: {
     id: string;
     applicationNumber: string;
+    type: ApplicationType;
+    status: ApplicationStatus;
     inspectorAssignmentLockedBy?: string | null;
     fieldVerificationRequestedBy?: string | null;
     data: {
@@ -739,7 +742,7 @@ function ConductInspectionPanel({
             {assignment.status === FieldInspectionAssignmentStatus.SCHEDULED && (
               <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border/60 bg-muted/15 px-4 py-3.5">
                 <p className="text-sm text-muted-foreground">
-                  Konfirmoni nisjen para shkimit në objekt.
+                  Konfirmoni nisjen para se të shkoni në objekt.
                 </p>
                 <Button type="button" variant="outline" size="sm" className="rounded-lg" onClick={() => void start()}>
                   Nis në terren
@@ -831,9 +834,11 @@ function ConductInspectionPanel({
 export function MyFieldInspectionsList({
   assignments,
   highlightApplicationId = null,
+  roleCode,
 }: {
   assignments: FieldInspectionAssignmentRow[];
   highlightApplicationId?: string | null;
+  roleCode: string;
 }) {
   const highlightedAssignment = useMemo(() => {
     if (!highlightApplicationId) return null;
@@ -843,13 +848,7 @@ export function MyFieldInspectionsList({
   }, [assignments, highlightApplicationId]);
 
   const [expandedId, setExpandedId] = useState<string | null>(highlightedAssignment?.id ?? null);
-  const [filter, setFilter] = useState<"active" | "completed" | "all">(
-    highlightedAssignment &&
-      (highlightedAssignment.status === FieldInspectionAssignmentStatus.SCHEDULED ||
-        highlightedAssignment.status === FieldInspectionAssignmentStatus.IN_PROGRESS)
-      ? "active"
-      : "active",
-  );
+  const [filter, setFilter] = useState<"active" | "completed" | "all">("all");
 
   useEffect(() => {
     if (highlightedAssignment) {
@@ -956,6 +955,19 @@ export function MyFieldInspectionsList({
                           <RegistryNumber>{assignmentLabel(assignment)}</RegistryNumber>
                         )}
                         <AssignmentStatusCell assignment={assignment} />
+                        {assignment.application ? (
+                          <>
+                            <span className="text-xs text-muted-foreground">
+                              {APPLICATION_TYPE_LABELS[assignment.application.type] ??
+                                assignment.application.type}
+                            </span>
+                            <ApplicationStatusBadge
+                              status={assignment.application.status}
+                              type={assignment.application.type}
+                              roleCode={roleCode as RoleCode}
+                            />
+                          </>
+                        ) : null}
                       </div>
                       <p className="mt-1.5 flex items-start gap-1.5 text-sm text-muted-foreground">
                         <MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />

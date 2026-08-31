@@ -27,22 +27,3 @@ export function FieldInspectorReviewBriefing({
   );
 }
 
-export function FieldInspectionTaskBriefing() {
-  return (
-    <div className="reg-wizard-panel overflow-hidden">
-      <div className="border-b border-border/60 bg-muted/20 px-4 py-3.5 sm:px-5">
-        <p className="text-sm font-semibold text-foreground">Si funksionon verifikimi në terren</p>
-        <p className="mt-0.5 text-xs text-muted-foreground">
-          Hapat e detyrës nga nisja deri te regjistrimi i rezultatit.
-        </p>
-      </div>
-      <div className="reg-wizard-body">
-        <InspectorTaskList>
-          <li>Konfirmoni nisjen dhe shkoni në objekt sipas udhëzimeve të caktimit.</li>
-          <li>Verifikoni përputhjen e të dhënave të aplikimit me gjendjen reale në terren.</li>
-          <li>Plotësoni rezultatin, ngarkoni raportin dhe ruajeni.</li>
-        </InspectorTaskList>
-      </div>
-    </div>
-  );
-}

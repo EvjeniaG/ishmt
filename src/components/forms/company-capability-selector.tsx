@@ -15,7 +15,7 @@ const CAPABILITY_OPTIONS = [
   {
     name: "capOm",
     label: "OM (kontroll periodik)",
-    description: "Kontroll dhe certifikim periodik — pa instalim të detyrueshëm.",
+    description: "Kontroll dhe certifikim periodik - pa instalim të detyrueshëm.",
   },
 ] as const;
 
@@ -25,7 +25,7 @@ export function CompanyCapabilitySelector({
   selected,
   onChange,
   legend = "Funksionet e kompanisë *",
-  hint = "Instalim dhe OM janë funksione të ndara — kompania mund të regjistrohet vetëm për instalim, vetëm për OM (kontroll periodik), ose për të dyja.",
+  hint = "Instalim dhe OM janë funksione të ndara - kompania mund të regjistrohet vetëm për instalim, vetëm për OM (kontroll periodik), ose për të dyja.",
   excludeCapabilities = [],
 }: {
   selected: CompanyCapabilityName[];

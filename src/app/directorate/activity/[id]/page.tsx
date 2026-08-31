@@ -60,7 +60,7 @@ export default async function DirectorateActivityDossierPage({
     <AppShell title={`Dosja · ${application.applicationNumber}`}>
       <DirectoratePageShell
         title={application.applicationNumber}
-        description="Dosja e plotë e aplikimit — të dhëna, dokumente dhe historik si te IQMT (lexim)."
+        description="Dosja e plotë e aplikimit - të dhëna, dokumente dhe historik si te IQMT (lexim)."
         actions={
           <div className="flex flex-wrap items-center gap-3">
             <ApplicationStatusBadge

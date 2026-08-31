@@ -16,6 +16,7 @@ export function ApplicationFieldVerificationCard({
     requestedBy: string | null;
     canApprove: boolean;
     requiredInspectorCount?: number;
+    completedCount?: number;
     completedPassCount?: number;
     assignments: {
       id: string;
@@ -32,7 +33,7 @@ export function ApplicationFieldVerificationCard({
 
   const requestedBy = status.requestedBy ? roleLabelSq(status.requestedBy as RoleCode) : null;
   const requiredCount = status.requiredInspectorCount ?? status.assignments.length;
-  const completedCount = status.completedPassCount ?? 0;
+  const completedCount = status.completedCount ?? 0;
 
   return (
     <section className="workflow-section">
@@ -41,10 +42,11 @@ export function ApplicationFieldVerificationCard({
         {requestedBy ? (
           <p className="workflow-section-desc">Kërkuar nga {requestedBy}.</p>
         ) : null}
-        {requiredCount > 1 ? (
+        {requiredCount > 0 ? (
           <p className="workflow-section-desc mt-1">
-            Çdo inspektor i caktuar duhet të përfundojë verifikimin me rezultat konform (
-            {completedCount}/{requiredCount}).
+            Çdo inspektor i caktuar duhet të përfundojë verifikimin në terren ({completedCount}/
+            {requiredCount}). Kryeinspektori shqyrton rezultatet dhe mund ta kthejë aplikimin nëse
+            nuk janë konforme.
           </p>
         ) : null}
       </div>

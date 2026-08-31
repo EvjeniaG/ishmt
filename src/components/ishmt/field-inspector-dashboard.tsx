@@ -24,24 +24,23 @@ import type {
   InspectorWorkloadSummary,
 } from "@/lib/services/field-inspector-workload-service";
 import { WorkflowStatusChip } from "@/components/applications/application-status-badge";
-import { FieldInspectionAssignmentStatus } from "@prisma/client";
 
 function locationLabel(row: InspectorDocumentReviewRow) {
   const parts = [row.buildingAddress, row.municipalityName].filter(Boolean);
-  return parts.length ? parts.join(" · ") : "—";
+  return parts.length ? parts.join(" · ") : "-";
 }
 
 function fieldLocationLabel(a: FieldInspectionAssignmentRow) {
-  const address = a.elevator?.buildingAddress ?? a.application?.data?.buildingAddress ?? "—";
+  const address = a.elevator?.buildingAddress ?? a.application?.data?.buildingAddress ?? "-";
   const municipality =
-    a.elevator?.municipality?.nameSq ?? a.application?.data?.municipality?.nameSq ?? "—";
+    a.elevator?.municipality?.nameSq ?? a.application?.data?.municipality?.nameSq ?? "-";
   return `${address} · ${municipality}`;
 }
 
 function fieldTargetLabel(a: FieldInspectionAssignmentRow) {
   if (a.elevator) return a.elevator.registryNumber;
   if (a.application) return a.application.applicationNumber;
-  return "—";
+  return "-";
 }
 
 function fieldDetailHref(a: FieldInspectionAssignmentRow) {
@@ -50,7 +49,13 @@ function fieldDetailHref(a: FieldInspectionAssignmentRow) {
   return "/ishmt/my-field-inspections";
 }
 
-function ActiveDocumentReviewsTable({ rows }: { rows: InspectorDocumentReviewRow[] }) {
+function ActiveDocumentReviewsTable({
+  rows,
+  roleCode,
+}: {
+  rows: InspectorDocumentReviewRow[];
+  roleCode: string;
+}) {
   if (rows.length === 0) {
     return (
       <PortalEmptyState>Nuk keni dosje aktive për shqyrtim dokumentacioni.</PortalEmptyState>
@@ -65,6 +70,7 @@ function ActiveDocumentReviewsTable({ rows }: { rows: InspectorDocumentReviewRow
             <th className="w-12">#</th>
             <th>Nr. aplikimit</th>
             <th>Lloji</th>
+            <th>Statusi i aplikimit</th>
             <th>Vendndodhja</th>
             <th>Terren</th>
             <th></th>
@@ -78,6 +84,13 @@ function ActiveDocumentReviewsTable({ rows }: { rows: InspectorDocumentReviewRow
                 <RegistryNumber>{row.applicationNumber}</RegistryNumber>
               </td>
               <td>{APPLICATION_TYPE_LABELS[row.type] ?? row.type}</td>
+              <td>
+                <ApplicationStatusBadge
+                  status={row.status}
+                  type={row.type}
+                  roleCode={roleCode as RoleCode}
+                />
+              </td>
               <td className="max-w-[14rem] truncate text-muted-foreground">{locationLabel(row)}</td>
               <td>
                 {row.requiresFieldVerification ? (
@@ -100,15 +113,15 @@ function ActiveDocumentReviewsTable({ rows }: { rows: InspectorDocumentReviewRow
   );
 }
 
-function ActiveFieldInspectionsTable({ rows }: { rows: FieldInspectionAssignmentRow[] }) {
-  const active = rows.filter(
-    (a) =>
-      a.status === FieldInspectionAssignmentStatus.SCHEDULED ||
-      a.status === FieldInspectionAssignmentStatus.IN_PROGRESS,
-  );
-
-  if (active.length === 0) {
-    return <PortalEmptyState>Nuk keni detyra aktive në terren.</PortalEmptyState>;
+function FieldInspectionsTable({
+  rows,
+  roleCode,
+}: {
+  rows: FieldInspectionAssignmentRow[];
+  roleCode: string;
+}) {
+  if (rows.length === 0) {
+    return <PortalEmptyState>Nuk keni detyra në terren.</PortalEmptyState>;
   }
 
   return (
@@ -118,18 +131,35 @@ function ActiveFieldInspectionsTable({ rows }: { rows: FieldInspectionAssignment
           <tr>
             <th className="w-12">#</th>
             <th>Referenca</th>
+            <th>Statusi i aplikimit</th>
             <th>Vendndodhja</th>
             <th>Data</th>
-            <th>Statusi</th>
+            <th>Detyra</th>
             <th></th>
           </tr>
         </thead>
         <tbody>
-          {active.map((row, index) => (
+          {rows.map((row, index) => (
             <tr key={row.id}>
               <td className="tabular-nums text-muted-foreground">{index + 1}</td>
               <td>
                 <RegistryNumber>{fieldTargetLabel(row)}</RegistryNumber>
+                {row.application ? (
+                  <p className="mt-0.5 text-xs text-muted-foreground">
+                    {APPLICATION_TYPE_LABELS[row.application.type] ?? row.application.type}
+                  </p>
+                ) : null}
+              </td>
+              <td>
+                {row.application ? (
+                  <ApplicationStatusBadge
+                    status={row.application.status}
+                    type={row.application.type}
+                    roleCode={roleCode as RoleCode}
+                  />
+                ) : (
+                  <span className="text-sm text-muted-foreground">-</span>
+                )}
               </td>
               <td className="max-w-[14rem] truncate text-muted-foreground">{fieldLocationLabel(row)}</td>
               <td className="tabular-nums text-muted-foreground">{formatDateSq(row.scheduledDate)}</td>
@@ -148,7 +178,7 @@ function ActiveFieldInspectionsTable({ rows }: { rows: FieldInspectionAssignment
           ))}
         </tbody>
       </PortalTableWrap>
-      <OfficialTableFooter total={active.length} />
+      <OfficialTableFooter total={rows.length} />
     </>
   );
 }
@@ -197,7 +227,7 @@ function HistoryDocumentReviewsTable({
                 />
               </td>
               <td className="tabular-nums text-muted-foreground">
-                {row.completedAt ? formatDateSq(row.completedAt) : "—"}
+                {row.completedAt ? formatDateSq(row.completedAt) : "-"}
               </td>
               <td>
                 <Link href={`/ishmt/review/${row.applicationId}`} className="portal-table-link">
@@ -285,7 +315,7 @@ export function FieldInspectorDashboard({
 
       <SectionCard
         title="Shqyrtim dokumentacioni"
-        subtitle="Dosjet e plota të caktuara nga përgjegjësi i sektorit"
+        subtitle="Dosjet aktive deri te regjistrimi nga kryeinspektori"
         meta={
           <Link
             href="/ishmt/my-application-reviews"
@@ -295,12 +325,12 @@ export function FieldInspectorDashboard({
           </Link>
         }
       >
-        <ActiveDocumentReviewsTable rows={pendingDocumentReviews} />
+        <ActiveDocumentReviewsTable rows={pendingDocumentReviews} roleCode={roleCode} />
       </SectionCard>
 
       <SectionCard
         title="Detyrat në terren"
-        subtitle="Verifikime në objekt — aplikime ose ashensorë"
+        subtitle="Verifikime në objekt - aplikimi dhe statusi i tij mbeten të dukshëm"
         meta={
           <Link
             href="/ishmt/my-field-inspections"
@@ -310,13 +340,10 @@ export function FieldInspectorDashboard({
           </Link>
         }
       >
-        <ActiveFieldInspectionsTable rows={fieldInspections} />
+        <FieldInspectionsTable rows={fieldInspections} roleCode={roleCode} />
       </SectionCard>
 
-      <SectionCard
-        title="Historiku i shqyrtimeve"
-        subtitle="Dosjet që keni përfunduar — dosja e plotë mbetet e hapur edhe pas regjistrimit"
-      >
+      <SectionCard title="Të mbyllura">
         <HistoryDocumentReviewsTable
           rows={completedDocumentReviews}
           roleCode={roleCode as RoleCode}

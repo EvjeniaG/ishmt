@@ -3,7 +3,6 @@ import { AppShell } from "@/components/layout/app-shell";
 import { StandardPageLayout } from "@/components/layout/standard-page-layout";
 import { IshmtAlarmBoard } from "@/components/ishmt/ishmt-alarm-board";
 import { MyFieldInspectionsList } from "@/components/ishmt/field-inspection-panels";
-import { FieldInspectionTaskBriefing } from "@/components/applications/field-inspector-review-briefing";
 import { SectionCard } from "@/components/shared/institutional";
 import { MetricCard } from "@/components/shared/metric-card";
 import { getAuthSession } from "@/lib/auth";
@@ -56,10 +55,8 @@ export default async function MyFieldInspectionsPage({
       <StandardPageLayout
         eyebrow="IQMT · Inspektor"
         title="Detyrat e mia në terren"
-        description="Verifikime në objekt të caktuara nga IQMT — konfirmoni nisjen, plotësoni rezultatin dhe ngarkoni raportin."
+        description="Verifikime në objekt të caktuara nga IQMT - konfirmoni nisjen, plotësoni rezultatin dhe ngarkoni raportin."
       >
-        <FieldInspectionTaskBriefing />
-
         <div className="portal-kpi-grid">
           <MetricCard
             label="Aktive"
@@ -112,6 +109,7 @@ export default async function MyFieldInspectionsPage({
           <MyFieldInspectionsList
             assignments={assignments}
             highlightApplicationId={applicationId ?? null}
+            roleCode={session.user.roleCode}
           />
         </SectionCard>
       </StandardPageLayout>

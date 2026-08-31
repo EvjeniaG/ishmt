@@ -73,7 +73,7 @@ export class MaintenanceContractService {
     return result.count;
   }
 
-  /** Kush e ndërpreu/refuzoi kontratën — lexohet nga audit log. */
+  /** Kush e ndërpreu/refuzoi kontratën - lexohet nga audit log. */
   static async loadTerminationMeta(
     contractIds: string[],
   ): Promise<Map<string, ContractTerminationMeta>> {
