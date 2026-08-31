@@ -62,6 +62,26 @@ export type PublicQrProfile = {
   lastInspectionResult: string | null;
 };
 
+function resolvePublicAppBaseUrl(): string {
+  const candidates = [
+    process.env.NEXT_PUBLIC_APP_URL,
+    process.env.NEXTAUTH_URL,
+    process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null,
+    process.env.NEXT_PUBLIC_QR_BASE_URL,
+    "http://localhost:3000",
+  ].filter((value): value is string => Boolean(value?.trim()));
+
+  for (const raw of candidates) {
+    let base = raw.trim().replace(/\/+$/, "");
+    while (/\/q$/i.test(base)) {
+      base = base.replace(/\/q$/i, "");
+    }
+    if (base) return base;
+  }
+
+  return "http://localhost:3000";
+}
+
 export class QrService {
   static async createQrSkeleton(
     elevatorId: string,
@@ -101,13 +121,7 @@ export class QrService {
   }
 
   static buildPublicUrl(code: string) {
-    const rawBase =
-      process.env.NEXT_PUBLIC_QR_BASE_URL ??
-      process.env.NEXT_PUBLIC_APP_URL ??
-      "http://localhost:3000";
-    // Legacy env values sometimes included `/q`; the path is always appended here.
-    const base = rawBase.replace(/\/+$/, "").replace(/\/q$/i, "");
-    return `${base}/q/${code.toUpperCase()}`;
+    return `${resolvePublicAppBaseUrl()}/q/${code.toUpperCase()}`;
   }
 
   static async generateQrImageBuffer(code: string) {
