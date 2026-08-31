@@ -66,7 +66,7 @@ Kopjo nga `.env.vercel.example`. **Production** për të gjitha:
 | `NEXTAUTH_SECRET` | `openssl rand -base64 32` |
 | `NEXTAUTH_URL` | `https://<projekti>.vercel.app` (pas deploy-it të parë) |
 | `NEXT_PUBLIC_APP_URL` | i njëjti URL |
-| `NEXT_PUBLIC_QR_BASE_URL` | `https://<projekti>.vercel.app/q` |
+| `NEXT_PUBLIC_QR_BASE_URL` | `https://<projekti>.vercel.app` (pa `/q` në fund; sistemi e shton vetë) |
 | `NEXT_PUBLIC_APP_NAME` | `IQMT Digital Elevator Registry` |
 | `STORAGE_PROVIDER` | `s3` |
 | `STORAGE_ENDPOINT` | Supabase S3 endpoint |

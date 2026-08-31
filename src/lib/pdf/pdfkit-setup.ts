@@ -1,11 +1,11 @@
-import { createRequire } from "module";
 import path from "path";
-
-const nodeRequire = createRequire(path.join(process.cwd(), "package.json"));
 
 /** Resolved pdfkit data dir (Helvetica.afm etc.) - works when package is not bundled. */
 export function getPdfkitDataDir(): string {
-  const pkgJson = nodeRequire.resolve("pdfkit/package.json");
+  // Runtime require: Turbopack can stub top-level `import { createRequire } from "module"`,
+  // which breaks module-load resolution during Next.js server actions.
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const pkgJson = require.resolve("pdfkit/package.json") as string;
   return path.join(path.dirname(pkgJson), "js", "data");
 }
 

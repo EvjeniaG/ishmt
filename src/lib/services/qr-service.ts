@@ -101,8 +101,13 @@ export class QrService {
   }
 
   static buildPublicUrl(code: string) {
-    const base = process.env.NEXT_PUBLIC_QR_BASE_URL ?? process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
-    return `${base}/q/${code}`;
+    const rawBase =
+      process.env.NEXT_PUBLIC_QR_BASE_URL ??
+      process.env.NEXT_PUBLIC_APP_URL ??
+      "http://localhost:3000";
+    // Legacy env values sometimes included `/q`; the path is always appended here.
+    const base = rawBase.replace(/\/+$/, "").replace(/\/q$/i, "");
+    return `${base}/q/${code.toUpperCase()}`;
   }
 
   static async generateQrImageBuffer(code: string) {

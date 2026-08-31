@@ -99,7 +99,20 @@ export default async function ElevatorQrPrintPage({
                     data-print-qr="true"
                     className="rounded border print:rounded-none print:border print:border-black"
                   />
-                ) : null}
+                ) : (
+                  <img
+                    src={`/api/qr/${data.qrCode}/image`}
+                    alt={`QR ${data.registryNumber}`}
+                    width={280}
+                    height={280}
+                    loading="eager"
+                    decoding="sync"
+                    data-print-qr="true"
+                    className="rounded border print:rounded-none print:border print:border-black"
+                  />
+                )}
+                <p className="font-mono text-lg font-bold tracking-widest">{data.qrCode}</p>
+                <p className="text-xs text-muted-foreground print:text-black">Kodi QR</p>
                 <div className="text-sm">
                   <p className="text-xl font-bold">{data.registryNumber}</p>
                   <p>{data.buildingAddress}</p>
