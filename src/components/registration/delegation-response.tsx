@@ -1,6 +1,6 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { useRouter } from "@/lib/navigation/use-app-router";
 import { useState } from "react";
 import {
   respondCertifierDelegationAction,
@@ -59,7 +59,7 @@ export function DelegationResponse({
               Ftesë e re
             </p>
             <h2 className="mt-0.5 text-lg font-semibold text-gov-primary">
-              {isInstaller ? "Instalim ashensori" : "Certifikim OMI"}
+              {isInstaller ? "Instalim ashensori" : "Certifikim OM"}
             </h2>
             <p className="mt-1 text-sm text-muted-foreground">
               Ju është dërguar një ftesë për të marrë pjesë në procesin e regjistrimit.

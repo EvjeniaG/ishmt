@@ -1,6 +1,6 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { useRouter } from "@/lib/navigation/use-app-router";
 import { useState } from "react";
 import { FlaskConical } from "lucide-react";
 import { fillApplicationDemoStepAction } from "@/lib/actions/demo-registration-actions";
@@ -10,11 +10,18 @@ import {
 } from "@/lib/demo/application-demo-steps";
 import { isDemoToolsEnabled } from "@/lib/demo/demo-data-mode";
 
-function applyOrgPrefill(field: "installerOrgId" | "certifierOrgId", orgId: string) {
-  const select = document.querySelector(`select[name="${field}"]`) as HTMLSelectElement | null;
-  if (select) {
-    select.value = orgId;
-    select.dispatchEvent(new Event("change", { bubbles: true }));
+function applyOrgPrefill(
+  field: "installerOrgId" | "certifierOrgId",
+  orgId: string,
+  query?: string,
+) {
+  if (field === "installerOrgId" || field === "certifierOrgId") {
+    const select = document.querySelector(`select[name="${field}"]`) as HTMLSelectElement | null;
+    if (select) {
+      select.value = orgId;
+      select.dispatchEvent(new Event("change", { bubbles: true }));
+    }
+    return;
   }
 }
 
@@ -46,7 +53,7 @@ export function DemoStepFillButton({
     }
 
     if (result.prefilledOrgField && result.prefilledOrgId) {
-      applyOrgPrefill(result.prefilledOrgField, result.prefilledOrgId);
+      applyOrgPrefill(result.prefilledOrgField, result.prefilledOrgId, result.prefilledOrgQuery);
       setHint("U plotësua. Kontrolloni dhe vazhdoni.");
       return;
     }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { useRouter } from "@/lib/navigation/use-app-router";
 import { useState } from "react";
 import { Send } from "lucide-react";
 import { submitApplicationAction } from "@/lib/actions/application-actions";

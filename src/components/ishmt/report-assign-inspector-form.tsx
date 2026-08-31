@@ -1,6 +1,6 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { useRouter } from "@/lib/navigation/use-app-router";
 import { useState } from "react";
 import { assignReportInspectorAction } from "@/lib/actions/citizen-report-actions";
 import type { FieldInspectorOption } from "@/lib/services/ishmt-field-inspection-service";

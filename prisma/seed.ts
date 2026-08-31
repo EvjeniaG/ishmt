@@ -5,13 +5,14 @@ import {
   QkbValidationStatus,
   TemplateType,
 } from "@prisma/client";
-import { PdfService } from "../src/lib/services/pdf-service";
+import { seedDemoLicensedClaimPools } from "./lib/seed-demo-om-claim-pool";
 import bcrypt from "bcryptjs";
 import { readFileSync } from "fs";
 import { join } from "path";
 import { ALL_PERMISSION_CODES } from "../src/lib/permissions/codes";
 import { ROLE_PERMISSION_MATRIX } from "../src/lib/permissions/matrix";
 import { ROLE_CODES } from "../src/lib/constants/roles";
+import { PdfService } from "../src/lib/services/pdf-service";
 
 const prisma = new PrismaClient();
 
@@ -125,14 +126,14 @@ async function seedRolesAndPermissions() {
     { code: ROLE_CODES.PUBLIC, name: "Qytetar Publik", description: "Përdorues i paautentifikuar" },
     { code: ROLE_CODES.OWNER, name: "Personi përgjegjës i ashensorit", description: "Personi përgjegjës i ashensorit ose administrator ndërtese" },
     { code: ROLE_CODES.INSTALLER, name: "Kompani Instalimi", description: "Kompani e licencuar e instalimit" },
-    { code: ROLE_CODES.CERTIFIER, name: "Kompani Certifikimi / OMI", description: "Organizëm certifikimi" },
+    { code: ROLE_CODES.CERTIFIER, name: "Kompani Certifikimi / OM", description: "Organizëm certifikimi" },
     { code: ROLE_CODES.MAINTENANCE, name: "Kompani Mirëmbajtjeje", description: "Kompani mirëmbajtjeje" },
-    { code: ROLE_CODES.INSPECTOR, name: "Inspektor ISHMT (legacy)", description: "Rol i vjetër - specialist + terren" },
+    { code: ROLE_CODES.INSPECTOR, name: "Inspektor IQMT (legacy)", description: "Rol i vjetër - specialist + terren" },
     { code: ROLE_CODES.FIELD_INSPECTOR, name: "Inspektor", description: "Shqyrtim dosjeje aplikimi dhe inspektim fizik në objekt" },
     { code: ROLE_CODES.SECTOR_HEAD, name: "Përgjegjës sektori", description: "Caktim inspektorësh dhe raport drejt drejtorit" },
     { code: ROLE_CODES.ISHMT_DIRECTOR, name: "Drejtor i Drejtorisë", description: "Delegim dhe raport drejt kryeinspektorit" },
     { code: ROLE_CODES.CHIEF_INSPECTOR, name: "Kryeinspektor", description: "Miratimi final i regjistrimit" },
-    { code: ROLE_CODES.ADMIN, name: "Administrator ISHMT", description: "Administrator sistemi" },
+    { code: ROLE_CODES.ADMIN, name: "Administrator IQMT", description: "Administrator sistemi" },
     { code: ROLE_CODES.DIRECTORATE, name: "Drejtoria e Politikave", description: "Drejtoria e Politikave të Tregut të Brendshëm" },
   ];
 
@@ -199,7 +200,7 @@ async function seedSystemConfig() {
           ISHMT_LEGACY: "{seq:6} {munLegacyCode}",
         },
       },
-      description: "Formati aktiv i regjistrit ISHMT (000001 TR); ELV_MODERN opsional",
+      description: "Formati aktiv i regjistrit IQMT (000001 TR); ELV_MODERN opsional",
     },
     {
       key: "certificate_number_format",
@@ -268,7 +269,7 @@ async function seedOrganizations(roleIdMap: Map<string, string>) {
     update: {},
     create: {
       type: OrgType.ISHMT,
-      name: "ISHMT - Inspektorati Shtetëror i Tregut të Brendshëm",
+      name: "IQMT - Inspektorati Qendror i Mbikeqyrjes së Tregut",
       nipt: "ISHMT-GOV-0001",
       status: OrgStatus.ACTIVE,
       municipalityId,
@@ -323,7 +324,7 @@ async function seedOrganizations(roleIdMap: Map<string, string>) {
     update: {},
     create: {
       type: OrgType.CERTIFIER,
-      name: "OMI Certifikime Sh.p.k.",
+      name: "OM Certifikime Sh.p.k.",
       nipt: "M11111111C",
       status: OrgStatus.ACTIVE_AUTHORIZED,
       municipalityId,
@@ -344,18 +345,35 @@ async function seedOrganizations(roleIdMap: Map<string, string>) {
     },
   });
 
-  const ownerOrg = await prisma.organization.upsert({
-    where: { nipt: "O33333333E" },
-    update: {},
-    create: {
-      type: OrgType.OWNER,
-      name: "Ndërtesa Shembull Sh.p.k.",
-      nipt: "O33333333E",
-      status: OrgStatus.ACTIVE,
-      municipalityId,
-      address: "Rruga Myslym Shyri, Tiranë",
-    },
-  });
+  const licenseExpiry = new Date();
+  licenseExpiry.setFullYear(licenseExpiry.getFullYear() + 2);
+
+  /** Pa llogari OM - pool 20 licence për regjistrim demo (OM-DEMO-REG-001 … 020). */
+  await seedDemoLicensedClaimPools(prisma, municipalityId, licenseExpiry);
+
+  const { DEMO_OWNER_ADMINISTRATOR, DEMO_OWNER_EMAIL, DEMO_OWNER_ORG_NAME } = await import("./lib/demo-owner");
+
+  const ownerOrg =
+    (await prisma.organization.findFirst({
+      where: {
+        type: OrgType.OWNER,
+        OR: [{ name: DEMO_OWNER_ORG_NAME }, { email: DEMO_OWNER_EMAIL }],
+        deletedAt: null,
+      },
+    })) ??
+    (await prisma.organization.create({
+      data: {
+        type: OrgType.OWNER,
+        name: DEMO_OWNER_ADMINISTRATOR.orgName,
+        nipt: DEMO_OWNER_ADMINISTRATOR.nipt,
+        ownerBuildingRole: DEMO_OWNER_ADMINISTRATOR.ownerBuildingRole,
+        representativeName: DEMO_OWNER_ADMINISTRATOR.representativeName,
+        status: OrgStatus.ACTIVE,
+        municipalityId,
+        email: DEMO_OWNER_ADMINISTRATOR.email,
+        phone: DEMO_OWNER_ADMINISTRATOR.phone,
+      },
+    }));
 
   const maintenanceValidated = await prisma.organization.upsert({
     where: { nipt: "M44444444F" },
@@ -386,14 +404,11 @@ async function seedOrganizations(roleIdMap: Map<string, string>) {
     },
   });
 
-  const licenseExpiry = new Date();
-  licenseExpiry.setFullYear(licenseExpiry.getFullYear() + 2);
-
   for (const [org, licenseNumber, licenseType] of [
     [installer1, "INST-2024-001", "INSTALLATION"] as const,
     [installer2, "INST-2024-002", "INSTALLATION"] as const,
-    [certifier1, "OMI-2024-001", "CERTIFICATION"] as const,
-    [certifier2, "OMI-2024-002", "CERTIFICATION"] as const,
+    [certifier1, "OM-2024-001", "CERTIFICATION"] as const,
+    [certifier2, "OM-2024-002", "CERTIFICATION"] as const,
   ]) {
     const existing = await prisma.organizationLicense.findFirst({
       where: { organizationId: org.id, licenseNumber },
@@ -454,18 +469,20 @@ async function seedDevUsers(ctx: Awaited<ReturnType<typeof seedOrganizations>>) 
     email: string;
     firstName: string;
     lastName: string;
+    fatherName?: string;
+    phone?: string;
+    birthDate?: string;
     role: string;
     org: { id: string };
     nid?: string;
   }[] = [
-    { email: "admin@ishmt.gov.al", firstName: "Admin", lastName: "ISHMT", role: ROLE_CODES.ADMIN, org: ishmtt, nid: "I90101001A" },
+    { email: "admin@ishmt.gov.al", firstName: "Admin", lastName: "IQMT", role: ROLE_CODES.ADMIN, org: ishmtt, nid: "I90101001A" },
     { email: "kryeinspektor@ishmt.gov.al", firstName: "Edison", lastName: "Konomi", role: ROLE_CODES.CHIEF_INSPECTOR, org: ishmtt, nid: "I90505005E" },
     { email: "drejtori@ishmt.gov.al", firstName: "Erion", lastName: "Prifti", role: ROLE_CODES.ISHMT_DIRECTOR, org: ishmtt, nid: "I90606006F" },
     { email: "shef@ishmt.gov.al", firstName: "Albert", lastName: "Shqalshi", role: ROLE_CODES.SECTOR_HEAD, org: ishmtt, nid: "I90707007G" },
-    { email: "terren@ishmt.gov.al", firstName: "Inspektor", lastName: "Terreni", role: ROLE_CODES.FIELD_INSPECTOR, org: ishmtt, nid: "I90909009I" },
-    { email: "terren2@ishmt.gov.al", firstName: "Inspektor", lastName: "Demo 2", role: ROLE_CODES.FIELD_INSPECTOR, org: ishmtt, nid: "I90909010J" },
+    { email: "terren@ishmt.gov.al", firstName: "Dritan", lastName: "Gjoka", role: ROLE_CODES.FIELD_INSPECTOR, org: ishmtt, nid: "I90909009I" },
+    { email: "terren2@ishmt.gov.al", firstName: "Elona", lastName: "Marku", role: ROLE_CODES.FIELD_INSPECTOR, org: ishmtt, nid: "I90909010J" },
     { email: "drejtoria@ishmt.gov.al", firstName: "Drejtori", lastName: "MPB", role: ROLE_CODES.DIRECTORATE, org: directorate, nid: "I90303003C" },
-    { email: "owner@example.al", firstName: "Personi", lastName: "Shembull", role: ROLE_CODES.OWNER, org: ownerOrg, nid: "I90404004D" },
     { email: "installer@example.al", firstName: "Instalues", lastName: "Shembull", role: ROLE_CODES.INSTALLER, org: installer1 },
     { email: "installer2@example.al", firstName: "Instalues", lastName: "Albania", role: ROLE_CODES.INSTALLER, org: installer2 },
     { email: "certifier@example.al", firstName: "Certifikues", lastName: "Shembull", role: ROLE_CODES.CERTIFIER, org: certifier1 },
@@ -486,6 +503,9 @@ async function seedDevUsers(ctx: Awaited<ReturnType<typeof seedOrganizations>>) 
         passwordHash,
         firstName: u.firstName,
         lastName: u.lastName,
+        fatherName: u.fatherName ?? null,
+        phone: u.phone ?? null,
+        birthDate: u.birthDate ? new Date(u.birthDate) : null,
         nid: u.nid ?? null,
         isActive: true,
         emailVerified: true,
@@ -495,6 +515,9 @@ async function seedDevUsers(ctx: Awaited<ReturnType<typeof seedOrganizations>>) 
         passwordHash,
         firstName: u.firstName,
         lastName: u.lastName,
+        fatherName: u.fatherName ?? null,
+        phone: u.phone ?? null,
+        birthDate: u.birthDate ? new Date(u.birthDate) : null,
         nid: u.nid ?? null,
         isActive: true,
         emailVerified: true,
@@ -517,6 +540,13 @@ async function seedDevUsers(ctx: Awaited<ReturnType<typeof seedOrganizations>>) 
         isPrimary: true,
       },
     });
+  }
+
+  const ownerRoleId = roleIdMap.get(ROLE_CODES.OWNER);
+  const tirana = await prisma.geoMunicipality.findUnique({ where: { code: "TIA" } });
+  if (ownerRoleId && tirana) {
+    const { seedDemoOwnerProfiles } = await import("./lib/demo-owner");
+    await seedDemoOwnerProfiles(prisma, passwordHash, tirana.id, ownerRoleId);
   }
 
   const pendingUser = await prisma.authUser.findUnique({
@@ -547,7 +577,7 @@ async function seedDevUsers(ctx: Awaited<ReturnType<typeof seedOrganizations>>) 
 async function seedDocumentTemplates(adminUserId: string) {
   const templates = [
     {
-      name: "Certifikatë Regjistrimi ISHMT",
+      name: "Certifikatë Regjistrimi IQMT",
       type: TemplateType.CERTIFICATE,
       content: PdfService.defaultRegistrationCertificateTemplate(),
     },
@@ -630,15 +660,29 @@ async function removeLegacySpecialistUser() {
   });
 }
 
+async function removeLegacyOwnerUser() {
+  await removeLegacyDemoUser({
+    email: "owner@example.al",
+    label: "owner@example.al (duplicate demo owner)",
+  });
+}
+
 async function main() {
-  console.log("Seeding ISHMT Elevator Registry...\n");
+  console.log("Seeding IQMT Elevator Registry...\n");
   await removeLegacyInspectorUser();
   await removeLegacySpecialistUser();
+  await removeLegacyOwnerUser();
   await seedGeography();
   const { roleIdMap } = await seedRolesAndPermissions();
   await seedSystemConfig();
   const orgCtx = await seedOrganizations(roleIdMap);
   await seedDevUsers(orgCtx);
+
+  const { consolidateDemoOwner, DEMO_OWNER_EMAIL, DEMO_OWNER_NID } = await import("./lib/demo-owner");
+  const ownerFix = await consolidateDemoOwner(prisma);
+  if (ownerFix.changed) {
+    console.log(`✓ Demo owner u harmonizua (NID ${DEMO_OWNER_NID} → ${DEMO_OWNER_EMAIL})`);
+  }
 
   const admin = await prisma.authUser.findUnique({ where: { email: "admin@ishmtt.gov.al" } });
   if (admin) {

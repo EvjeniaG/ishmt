@@ -32,7 +32,6 @@ export default async function ReportsExportPage() {
       <StandardPageLayout
         eyebrow="Sistemi i regjistrimit"
         title="Gjenerimi i raporteve"
-        description="Raporte të gatshme me filtra - shkarkim CSV ose PDF sipas të dhënave që keni leje të shihni."
       >
         <ReportExportPanel reports={reports} municipalities={municipalities} />
       </StandardPageLayout>

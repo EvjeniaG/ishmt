@@ -41,7 +41,7 @@ export default async function IshmtDashboardPage() {
   ]);
 
   return (
-    <AppShell title="ISHMT">
+    <AppShell title="IQMT">
       <IshmtDashboard alarms={alarms} metrics={metrics} roleCode={role} />
     </AppShell>
   );

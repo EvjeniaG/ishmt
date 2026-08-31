@@ -22,7 +22,7 @@ export default async function DirectorMapPage({
   return (
     <AppShell title="Harta sipas bashkive">
       <IshmtGeoMapPageContent
-        eyebrow="ISHMT · Drejtor i Drejtorisë"
+        eyebrow="IQMT · Drejtor i Drejtorisë"
         filters={filters}
         mapBasePath="/ishmt/director/map"
       />

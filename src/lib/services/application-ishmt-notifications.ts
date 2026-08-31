@@ -54,19 +54,19 @@ export const ISHMT_NOTIFICATION_COPY = {
       `Është dorëzuar një Aplikim i ri për Regjistrim (${applicationNumber}). Aplikimi është në pritje të delegimit tuaj.`,
   },
   chiefToDirector: {
-    title: "Aplikim për Regjistrim — delegim",
+    title: "Aplikim për Regjistrim - delegim",
     body: (applicationNumber: string) =>
       `Kryeinspektori ju ka deleguar një Aplikim për Regjistrim (${applicationNumber}). Aplikimi është në pritje të shqyrtimit dhe delegimit tuaj.`,
   },
   directorToSectorHead: {
-    title: "Aplikim për Regjistrim — delegim",
+    title: "Aplikim për Regjistrim - delegim",
     body: (applicationNumber: string) =>
       `Drejtori i Drejtorisë ju ka deleguar një Aplikim për Regjistrim (${applicationNumber}). Aplikimi është në pritje të delegimit te inspektorët.`,
   },
   sectorHeadToInspectors: {
-    title: "Aplikim për Regjistrim — shqyrtim",
+    title: "Aplikim për Regjistrim - shqyrtim dokumentacioni",
     body: (applicationNumber: string) =>
-      `Ju është deleguar një Aplikim për Regjistrim (${applicationNumber}) për shqyrtim. Ju lutemi shqyrtoni dosjen dhe plotësoni raportin tuaj.`,
+      `Ju është deleguar ${applicationNumber} për shqyrtim të plotë të dokumentacionit. Shqyrtoni dosjen, kryeni verifikimin në terren nëse kërkohet, dhe dorëzoni raportin e detajuar te përgjegjësi i sektorit.`,
   },
   inspectorsToSectorHead: {
     title: "Raportet e inspektorëve u përfunduan",

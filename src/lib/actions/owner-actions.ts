@@ -2,9 +2,14 @@
 
 import { ApplicationType } from "@prisma/client";
 import { revalidatePath } from "next/cache";
-import { updateAccountProfileAction } from "@/lib/actions/account-actions";
+import { updateOwnerContactProfileAction } from "@/lib/actions/account-actions";
 import { ApplicationService } from "@/lib/services/application-service";
 import { MaintenanceAssignmentService } from "@/lib/services/maintenance-assignment-service";
+import {
+  resolveDemoMaintenanceOrganization,
+  resolveDemoCertifierOrganization,
+} from "@/lib/demo/demo-seed-orgs";
+import { isDemoToolsEnabled } from "@/lib/demo/demo-data-mode";
 import { OrganizationService } from "@/lib/services/organization-service";
 import { requirePermission, requireRole } from "@/lib/permissions/guards";
 import { PERMISSIONS } from "@/lib/permissions/codes";
@@ -31,6 +36,7 @@ function revalidateOwnerPaths() {
   revalidatePath("/portal/certificates");
   revalidatePath("/portal/qr-codes");
   revalidatePath("/portal/maintenance");
+  revalidatePath("/portal/kontroll-periodik");
   revalidatePath("/portal/inspections");
   revalidatePath("/portal/history");
   revalidatePath("/portal/settings/organization");
@@ -221,15 +227,6 @@ export async function updateOwnerOrganizationAction(formData: FormData) {
   const parsed = ownerOrgProfileSchema.safeParse({
     name: formData.get("name"),
     nipt: formData.get("nipt"),
-    legalForm: formData.get("legalForm") || undefined,
-    address: formData.get("address"),
-    municipalityId: formData.get("municipalityId"),
-    email: formData.get("email"),
-    phone: formData.get("phone"),
-    representativeName: formData.get("representativeName") || undefined,
-    representativeNid: formData.get("representativeNid") || undefined,
-    representativePhone: formData.get("representativePhone") || undefined,
-    representativeEmail: formData.get("representativeEmail") || undefined,
     ownerBuildingRole: formData.get("ownerBuildingRole") || undefined,
   });
 
@@ -330,9 +327,17 @@ export async function requestMaintenanceAssignmentAction(elevatorId: string, for
       elevatorId,
       maintenance,
       inspection,
+      maintenanceTerminationReason: maintenanceEnabled
+        ? String(formData.get("maintenanceTerminationReason") ?? "").trim() || undefined
+        : undefined,
+      inspectionTerminationReason: inspectionEnabled
+        ? String(formData.get("inspectionTerminationReason") ?? "").trim() || undefined
+        : undefined,
     });
     revalidatePath(`/portal/elevators/${elevatorId}`);
-    revalidatePath(`/portal/elevators/${elevatorId}/maintenance/change`);
+    revalidatePath(`/portal/elevators/${elevatorId}`);
+    revalidatePath("/portal/maintenance");
+    revalidatePath("/portal/kontroll-periodik");
     return { success: true as const };
   } catch (error) {
     return {
@@ -342,6 +347,72 @@ export async function requestMaintenanceAssignmentAction(elevatorId: string, for
   }
 }
 
+export async function prefillMaintenanceAssignmentDemoAction() {
+  try {
+    if (!isDemoToolsEnabled()) {
+      return { success: false as const, error: "Mjetet demo nuk janë të aktivizuara." };
+    }
+    await requirePermission(PERMISSIONS.MAINTENANCE_REQUEST_ASSIGNMENT);
+    const company = await resolveDemoMaintenanceOrganization();
+    if (!company) {
+      return {
+        success: false as const,
+        error:
+          "Nuk u gjet kompani mirëmbajtjeje demo - ekzekutoni seed-demo (Servis Ashensorë ose Servis Lift 24).",
+      };
+    }
+
+    const startDate = new Date();
+    const endDate = new Date(startDate);
+    endDate.setFullYear(endDate.getFullYear() + 1);
+
+    return {
+      success: true as const,
+      query: company.nipt ?? company.name,
+      startDate: startDate.toISOString().slice(0, 10),
+      endDate: endDate.toISOString().slice(0, 10),
+    };
+  } catch (error) {
+    return {
+      success: false as const,
+      error: error instanceof Error ? error.message : "Plotësimi demo dështoi",
+    };
+  }
+}
+
+export async function prefillInspectionAssignmentDemoAction() {
+  try {
+    if (!isDemoToolsEnabled()) {
+      return { success: false as const, error: "Mjetet demo nuk janë të aktivizuara." };
+    }
+    await requirePermission(PERMISSIONS.MAINTENANCE_REQUEST_ASSIGNMENT);
+    const company = await resolveDemoCertifierOrganization();
+    if (!company) {
+      return {
+        success: false as const,
+        error:
+          "Nuk u gjet kompani OM demo - ekzekutoni seed-demo (OM Certifikim, Inspekt OM ose Quality Lift).",
+      };
+    }
+
+    const startDate = new Date();
+    const endDate = new Date(startDate);
+    endDate.setFullYear(endDate.getFullYear() + 1);
+
+    return {
+      success: true as const,
+      orgId: company.id,
+      startDate: startDate.toISOString().slice(0, 10),
+      endDate: endDate.toISOString().slice(0, 10),
+    };
+  } catch (error) {
+    return {
+      success: false as const,
+      error: error instanceof Error ? error.message : "Plotësimi demo dështoi",
+    };
+  }
+}
+
 export async function updateOwnerUserProfileAction(formData: FormData) {
-  return updateAccountProfileAction(formData);
+  return updateOwnerContactProfileAction(formData);
 }

@@ -77,7 +77,7 @@ export function gapToRequiredAction(
   const severity = gap.level === "danger" ? "danger" : gap.level === "warning" ? "warning" : "info";
   const href =
     gap.key.startsWith("missing-maintenance") || gap.key.startsWith("maintenance")
-      ? `/portal/elevators/${elevator.id}/maintenance/change`
+      ? `/portal/elevators/${elevator.id}?tab=maintenance`
       : gap.key.startsWith("missing-inspection") || gap.key.startsWith("inspection")
         ? `/portal/elevators/${elevator.id}?tab=inspections`
         : `/portal/elevators/${elevator.id}`;

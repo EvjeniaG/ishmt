@@ -186,7 +186,7 @@ export class OwnershipTransferService {
     await NotificationService.notifyOrgMembers(application.ownerOrgId, {
       title: accept ? "Transferimi u pranua" : "Transferimi u refuzua",
       body: accept
-        ? `${delegation.organization.name} pranoi transferimin e ashensorit ${application.targetElevator?.registryNumber ?? ""}. Mund të parashtroni te ISHMT.`
+        ? `${delegation.organization.name} pranoi transferimin e ashensorit ${application.targetElevator?.registryNumber ?? ""}. Mund të parashtroni te IQMT.`
         : `${delegation.organization.name} refuzoi transferimin e ashensorit ${application.targetElevator?.registryNumber ?? ""}.`,
       entityType: "application",
       entityId: applicationId,
@@ -214,7 +214,7 @@ export class OwnershipTransferService {
       throw new Error("Marrësi refuzoi transferimin. Zgjidhni marrës tjetër ose anuloni aplikimin.");
     }
     if (delegation.status !== DelegationStatus.ACCEPTED) {
-      throw new Error("Në pritje të pranimit nga marrësi - parashtrimi te ISHMT bllokohet.");
+      throw new Error("Në pritje të pranimit nga marrësi - parashtrimi te IQMT bllokohet.");
     }
   }
 }

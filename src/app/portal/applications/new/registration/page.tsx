@@ -13,8 +13,8 @@ const STEPS = [
   "Zgjidhni instaluesin",
   "Të dhënat teknike (instaluesi)",
   "Zgjidhni certifikuesin",
-  "Certifikimi (OMI)",
-  "Parashtrimi te ISHMT",
+  "Certifikimi (OM)",
+  "Parashtrimi te IQMT",
 ];
 
 async function startRegistration() {
@@ -37,7 +37,7 @@ export default async function NewRegistrationPage() {
             <h1 className="reg-wizard-stepper-title">Regjistrim i ri ashensori</h1>
             <p className="reg-wizard-stepper-desc">
               Si <strong className="font-medium text-foreground">{OWNER_TERM}</strong>, plotësoni 6 hapa të thjeshtë.
-              Ashensori regjistrohet në regjistër vetëm pas miratimit nga ISHMT.
+              Ashensori regjistrohet në regjistër vetëm pas miratimit nga IQMT.
             </p>
           </div>
           <div className="reg-wizard-body">

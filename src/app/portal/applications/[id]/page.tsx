@@ -1,12 +1,17 @@
 import { notFound, redirect } from "next/navigation";
-import { ApplicationStatus, ApplicationType, ConformityResult, DataUpdateType, DelegationStatus, ReturnTargetRole } from "@prisma/client";
+import { ApplicationStatus, ApplicationType, ConformityResult, DataUpdateType, DelegationStatus, DelegationType, ReturnTargetRole } from "@prisma/client";
 import { AppShell } from "@/components/layout/app-shell";
 import {
   CertifierForm,
+  CertifierTechnicalReviewForm,
   InstallerTechnicalForm,
+  InstallerTechnicalReconciliationForm,
 } from "@/components/applications/application-workflow-forms";
 import { ApplicationDocuments } from "@/components/applications/application-documents";
+import { ApplicationDataSummary } from "@/components/applications/application-data-summary";
+import type { ApplicationSummaryData } from "@/components/applications/application-data-summary";
 import { ApplicationDocumentChecklistView } from "@/components/applications/application-document-checklist-view";
+import { WorkflowSection, WorkflowSubsection } from "@/components/applications/workflow-section";
 import { ApplicationWorkflowFooter } from "@/components/applications/application-workflow-layout";
 import { CorrectionApplicationView } from "@/components/applications/correction-application-view";
 import { DataUpdateApplicationView } from "@/components/applications/data-update-application-view";
@@ -18,7 +23,7 @@ import { ApplicationDemoButton } from "@/components/demo/application-demo-button
 import { RegistrationWizard } from "@/components/owner/registration-wizard";
 import { DelegationResponse } from "@/components/registration/delegation-response";
 import { DelegateWorkflowProgress } from "@/components/registration/delegate-workflow-progress";
-import { DelegationCompletePanel } from "@/components/registration/delegation-complete-panel";
+import { DelegationCompletePanel, RevokedDelegationPanel } from "@/components/registration/delegation-complete-panel";
 import { ApplicationPageBanner } from "@/components/applications/application-page-banner";
 import {
   ApplicationElevatorCard,
@@ -27,11 +32,13 @@ import {
 import {
   getCertifierDelegateStepStates,
   getInstallerDelegateStepStates,
+  isOwnerPostSubmitPhase,
   resolveRegistrationPhase,
+  resolveRegistrationContextForCapabilities,
 } from "@/lib/registration/phase-router";
 import { DocumentService } from "@/lib/services/document-service";
 import { PERMISSIONS } from "@/lib/permissions/codes";
-import { roleHasPermission } from "@/lib/permissions/matrix";
+import { canActAsRole } from "@/lib/organizations/org-capabilities";
 import { getAuthSession } from "@/lib/auth";
 import { ApplicationService, ApplicationNotAccessibleError } from "@/lib/services/application-service";
 import { serializeApplicationDataForClient } from "@/lib/application/serialize-application-data";
@@ -45,12 +52,19 @@ import { ROLE_CODES } from "@/lib/constants/roles";
 import { OrgType } from "@prisma/client";
 import { OwnershipTransferService } from "@/lib/services/ownership-transfer-service";
 import { APPLICATION_STATUS_LABELS } from "@/lib/workflows/application-workflow";
-import { getApplicationDocumentSpecs, getMissingRequiredApplicationDocuments, getVisibleApplicationDocumentSpecs } from "@/lib/documents/application-document-checklist";
-import { getReturnToRoles, isReturnedToRole } from "@/lib/workflows/return-targets";
+import { getApplicationDocumentSpecs, getMissingRequiredApplicationDocuments, getPhaseDocumentChecklist, getUploadedDocumentsChecklistForPhase, getVisibleApplicationDocumentSpecs, hasSupplementaryDocuments, type RegistrationDocPhase } from "@/lib/documents/application-document-checklist";
+import { canRoleEditApplicationDocuments } from "@/lib/documents/application-document-editing";
+import { getReturnToRoles, isReturnedToRole, applicationReturnBannerVisible } from "@/lib/workflows/return-targets";
+import { ApplicationReturnBanner } from "@/components/applications/application-workflow-layout";
 import { LegalDeadlineBadge } from "@/components/deadlines/deadline-badge";
 import { ProcedureDeadlineNotice } from "@/components/deadlines/procedure-deadline-notice";
+import { ApplicationIshmtProgress } from "@/components/applications/application-ishmt-progress";
+import { isIshmtOwnerTrackingStatus } from "@/lib/ishmt/owner-ishmt-tracker";
 import { DeadlineService } from "@/lib/deadlines/deadline-service";
 import { displayCertifierOrganizationName } from "@/lib/elevators/format-om-body";
+import { isDelegationRevokedForOrg } from "@/lib/delegation/delegation-revoked";
+import { getInstallerTechnicalReview } from "@/lib/registration/installer-technical-review";
+import { loadOwnerRegistrationPrefill, buildOwnerFieldSuggestions } from "@/lib/registration/owner-registration-prefill";
 
 export default async function ApplicationDetailPage({
   params,
@@ -71,9 +85,10 @@ export default async function ApplicationDetailPage({
     activeOrgName: session.user.activeOrgName,
     roleCode: session.user.roleCode,
     permissions: session.user.permissions,
+    orgCapabilities: session.user.orgCapabilities ?? null,
   };
 
-  if (!roleHasPermission(session.user.roleCode, PERMISSIONS.APPLICATIONS_VIEW_OWN)) {
+  if (!session.user.permissions.includes(PERMISSIONS.APPLICATIONS_VIEW_OWN)) {
     redirect("/unauthorized");
   }
 
@@ -82,26 +97,28 @@ export default async function ApplicationDetailPage({
     throw error;
   });
 
-  const registrationPhase =
+  const registrationContext =
     application.type === ApplicationType.NEW_REGISTRATION
-      ? resolveRegistrationPhase(
-          {
-            id: application.id,
-            type: application.type,
-            status: application.status,
-            returnToRole: application.returnToRole,
-            returnToRoles: application.returnToRoles,
-            installerOrgId: application.installerOrgId,
-            certifierOrgId: application.certifierOrgId,
-            delegations: application.delegations,
-          },
-          session.user.roleCode,
-        )
+      ? resolveRegistrationContextForCapabilities(ctx, {
+          id: application.id,
+          type: application.type,
+          status: application.status,
+          returnToRole: application.returnToRole,
+          returnToRoles: application.returnToRoles,
+          installerOrgId: application.installerOrgId,
+          certifierOrgId: application.certifierOrgId,
+          delegations: application.delegations,
+          registrationExtendedData: application.data?.registrationExtendedData,
+        })
       : null;
+  const registrationPhase = registrationContext?.phase ?? null;
+  const workflowRole = registrationContext?.workflowRole ?? session.user.roleCode;
 
   const municipalities = await getMunicipalities();
-  const installers = await OrganizationService.listActiveSelectableCompanies(OrgType.INSTALLER);
-  const certifiers = await OrganizationService.listActiveSelectableCompanies(OrgType.CERTIFIER);
+  const certifiers = (await OrganizationService.listActiveSelectableCompanies(OrgType.CERTIFIER))
+    .filter((c) => c.id !== application.installerOrgId);
+  const installers = (await OrganizationService.listActiveSelectableCompanies(OrgType.INSTALLER))
+    .filter((c) => c.id !== application.certifierOrgId);
   const { MaintenanceAssignmentService } = await import("@/lib/services/maintenance-assignment-service");
   const maintenanceCompanies = application.type === ApplicationType.DATA_UPDATE
     ? (await MaintenanceAssignmentService.listMaintenanceCompaniesWithQkbStatus())
@@ -145,23 +162,94 @@ export default async function ApplicationDetailPage({
   const documents = linkedDocuments.length > 0
     ? linkedDocuments
     : rawDocuments.map((doc) => ({
+        purpose: undefined as string | undefined,
         ...DocumentService.serializeDocument(doc),
         uploadedAt: doc.createdAt.toISOString(),
       }));
-  const canUpload = roleHasPermission(session.user.roleCode, PERMISSIONS.DOCUMENTS_UPLOAD);
+  const canUpload = session.user.permissions.includes(PERMISSIONS.DOCUMENTS_UPLOAD);
+  const canEditDocuments =
+    canUpload &&
+    canRoleEditApplicationDocuments(workflowRole, application, registrationPhase);
 
   const certifierDisplayName = displayCertifierOrganizationName(
     application.certifierOrg?.name,
     data?.omiNumber,
   );
 
-  const docsChecklistView = (checklist: typeof documentChecklist, title: string, allowDelete = false) => (
+  const applicationSummaryData: ApplicationSummaryData | null = clientApplicationData
+    ? {
+        ...(clientApplicationData as ApplicationSummaryData),
+        municipality: data?.municipalityId
+          ? {
+              nameSq: municipalities.find((m) => m.id === data.municipalityId)?.nameSq ?? "",
+            }
+          : null,
+      }
+    : null;
+
+  const applicationSummaryOrgs = {
+    owner: application.ownerOrg.name,
+    installer: application.installerOrg?.name,
+    certifier: certifierDisplayName,
+  };
+
+  const ownerPrefill =
+    session.user.roleCode === ROLE_CODES.OWNER
+      ? await loadOwnerRegistrationPrefill(session.user.id, session.user.activeOrgId, {
+          excludeApplicationId:
+            application.type === ApplicationType.NEW_REGISTRATION ? id : undefined,
+        })
+      : null;
+  const ownerFieldSuggestions = buildOwnerFieldSuggestions(ownerPrefill);
+
+  const ownerDocsUploaded = getUploadedDocumentsChecklistForPhase({
+    phase: "owner",
+    type: application.type,
+    data,
+    uploadedPurposes,
+  });
+  const installerDocsUploaded = getUploadedDocumentsChecklistForPhase({
+    phase: "installer",
+    type: application.type,
+    data,
+    uploadedPurposes,
+  });
+
+  const readOnlyDocsFor = (
+    checklist: typeof documentChecklist,
+    supplementaryPhase?: RegistrationDocPhase,
+  ) => {
+    const showSupplementary =
+      supplementaryPhase != null && hasSupplementaryDocuments(documents, supplementaryPhase);
+    if (checklist.length === 0 && !showSupplementary) return null;
+    return (
+      <ApplicationDocuments
+        applicationId={id}
+        documents={documents}
+        canUpload={false}
+        currentUserId={session.user.id}
+        checklist={checklist}
+        embedded
+        supplementaryPhase={supplementaryPhase}
+      />
+    );
+  };
+
+  const ownerDocsReadOnly = readOnlyDocsFor(ownerDocsUploaded, "owner");
+  const installerDocsReadOnly = readOnlyDocsFor(installerDocsUploaded, "installer");
+
+  const docsChecklistView = (
+    checklist: typeof documentChecklist,
+    supplementaryPhase?: RegistrationDocPhase,
+    canUpload = false,
+  ) => (
     <ApplicationDocumentChecklistView
-      key={title}
-      title={title}
+      applicationId={id}
       checklist={checklist}
       documents={documents}
-      canDelete={allowDelete && canUpload}
+      currentUserId={session.user.id}
+      supplementaryPhase={supplementaryPhase}
+      canUpload={canUpload}
     />
   );
 
@@ -170,35 +258,98 @@ export default async function ApplicationDetailPage({
 
   const isRegistrationDelegate =
     application.type === ApplicationType.NEW_REGISTRATION &&
-    (session.user.roleCode === ROLE_CODES.INSTALLER || session.user.roleCode === ROLE_CODES.CERTIFIER);
+    (canActAsRole(ctx, ROLE_CODES.INSTALLER) || canActAsRole(ctx, ROLE_CODES.CERTIFIER));
+
+  const installerDelegationRevoked =
+    canActAsRole(ctx, ROLE_CODES.INSTALLER) &&
+    isDelegationRevokedForOrg(application.delegations, ROLE_CODES.INSTALLER, ctx.activeOrgId, application);
+  const certifierDelegationRevoked =
+    canActAsRole(ctx, ROLE_CODES.CERTIFIER) &&
+    isDelegationRevokedForOrg(application.delegations, ROLE_CODES.CERTIFIER, ctx.activeOrgId, application);
+  const revokedReason = installerDelegationRevoked
+    ? application.workflowHistory.find((h) => h.action === "INSTALLER_DELEGATION_REVOKED")?.comment
+    : certifierDelegationRevoked
+      ? application.workflowHistory.find((h) => h.action === "CERTIFIER_DELEGATION_REVOKED")?.comment
+      : null;
+
+  const revokedRoleLabel =
+    installerDelegationRevoked ? ("instalues" as const) : certifierDelegationRevoked ? ("certifikues" as const) : null;
+  const delegationRevokedView = Boolean(revokedRoleLabel);
+
+  const installerTechnicalReview = getInstallerTechnicalReview(data);
 
   const installerFormActive =
-    session.user.roleCode === ROLE_CODES.INSTALLER && registrationPhase === "technical-data";
+    workflowRole === ROLE_CODES.INSTALLER && registrationPhase === "technical-data";
+  const installerReconciliationActive =
+    workflowRole === ROLE_CODES.INSTALLER && registrationPhase === "technical-reconciliation";
+  const certifierReviewActive =
+    workflowRole === ROLE_CODES.CERTIFIER && registrationPhase === "installer-technical-review";
   const certifierFormActive =
-    session.user.roleCode === ROLE_CODES.CERTIFIER && registrationPhase === "certification-data";
+    workflowRole === ROLE_CODES.CERTIFIER && registrationPhase === "certification-data";
 
   // Documents are scoped to the workflow phase that is responsible for them, so each
   // actor uploads only its own documents at its respective step.
   const isRegistration = application.type === ApplicationType.NEW_REGISTRATION;
   const ownerChecklist = isRegistration
-    ? documentChecklist.filter((item) => item.phase === "owner")
-    : documentChecklist;
-  const installerChecklist = documentChecklist.filter((item) => item.phase === "installer");
-  const certifierChecklist = documentChecklist.filter((item) => item.phase === "certifier");
+    ? getPhaseDocumentChecklist({ phase: "owner", type: application.type, data })
+    : documentChecklist.filter((item) => item.phase === "owner");
+  const installerChecklist = isRegistration
+    ? getPhaseDocumentChecklist({ phase: "installer", type: application.type, data })
+    : documentChecklist.filter((item) => item.phase === "installer");
+  const certifierChecklist = isRegistration
+    ? getPhaseDocumentChecklist({ phase: "certifier", type: application.type, data })
+    : documentChecklist.filter((item) => item.phase === "certifier");
 
-  const embeddedDocsFor = (checklist: typeof documentChecklist, slotKey: string) => (
+  const ownerLayoutPlanChecklist = ownerChecklist.filter((item) => item.purpose === "LAYOUT_PLAN");
+  const ownerOtherDocsChecklist = ownerChecklist.filter((item) => item.purpose !== "LAYOUT_PLAN");
+
+  const ownerChecklistWithUploadState = ownerChecklist.map((item) => ({
+    ...item,
+    uploaded: uploadedPurposeSet.has(item.purpose),
+  }));
+
+  const canUploadOwnerDocsAtFinalReview =
+    isOwnerRegistration &&
+    registrationPhase === "final-review" &&
+    canEditDocuments;
+
+  function registrationSupplementaryPhase(roleCode: string): RegistrationDocPhase | undefined {
+    if (roleCode === ROLE_CODES.OWNER) return "owner";
+    if (roleCode === ROLE_CODES.INSTALLER) return "installer";
+    if (roleCode === ROLE_CODES.CERTIFIER) return "certifier";
+    return undefined;
+  }
+
+  const embeddedDocsFor = (
+    checklist: typeof documentChecklist,
+    slotKey: string,
+    docs = documents,
+    options?: { showChecklistSummary?: boolean; supplementaryPhase?: RegistrationDocPhase | null },
+  ) => (
     <ApplicationDocuments
       key={slotKey}
       applicationId={id}
-      documents={documents}
-      canUpload={canUpload}
+      documents={docs}
+      canUpload={canEditDocuments}
+      currentUserId={session.user.id}
       checklist={checklist}
       embedded
+      showChecklistSummary={options?.showChecklistSummary ?? true}
+      supplementaryPhase={
+        options?.supplementaryPhase === null
+          ? undefined
+          : (options?.supplementaryPhase ?? registrationSupplementaryPhase(workflowRole))
+      }
     />
   );
 
   // Document upload is rendered inside the active phase form (not as a detached card below it).
-  const documentsEmbeddedInForm = isOwnerRegistration || installerFormActive || certifierFormActive;
+  const documentsEmbeddedInForm =
+    isOwnerRegistration ||
+    installerFormActive ||
+    installerReconciliationActive ||
+    certifierReviewActive ||
+    certifierFormActive;
 
   const isOwnerModernization =
     session.user.roleCode === ROLE_CODES.OWNER && application.type === ApplicationType.MODERNIZATION;
@@ -211,10 +362,14 @@ export default async function ApplicationDetailPage({
       application.status === ApplicationStatus.CERTIFICATION_COMPLETED_WITH_ISSUES ||
       (application.status === ApplicationStatus.RETURNED && isReturnedToRole(application, ReturnTargetRole.OWNER)));
 
-  const registrationDossier =
-    isOwnerRegistration && registrationPhase === "final-review"
-      ? buildRegistrationDossier(application)
-      : null;
+  const showOwnerRegistrationDossier =
+    isOwnerRegistration &&
+    registrationPhase != null &&
+    (registrationPhase === "final-review" || isOwnerPostSubmitPhase(registrationPhase));
+
+  const registrationDossier = showOwnerRegistrationDossier
+    ? buildRegistrationDossier(application)
+    : null;
 
   const missingSubmissionFields =
     registrationDossier != null
@@ -293,13 +448,21 @@ export default async function ApplicationDetailPage({
   return (
     <AppShell title="Detajet e aplikimit">
       <div className="space-y-6">
+        {delegationRevokedView && revokedRoleLabel ? (
+          <RevokedDelegationPanel
+            roleLabel={revokedRoleLabel}
+            applicationNumber={application.applicationNumber}
+            reason={revokedReason}
+          />
+        ) : (
+          <>
         <ApplicationPageBanner
           applicationNumber={application.applicationNumber}
           type={application.type}
           status={application.status}
           updateType={data?.updateType}
           registrationPhase={registrationPhase}
-          roleCode={session.user.roleCode}
+          roleCode={workflowRole}
           compact={isOwnerRegistration && Boolean(registrationPhase)}
           hasChanges={
             (Array.isArray(data?.correctionFields) && data.correctionFields.length > 0) ||
@@ -310,15 +473,27 @@ export default async function ApplicationDetailPage({
           ownershipAccepted={ownershipDelegation?.status === DelegationStatus.ACCEPTED}
         />
 
-        {isRegistrationDelegate && registrationPhase && (
+        {applicationReturnBannerVisible(application, workflowRole) ? (
+          <ApplicationReturnBanner
+            returnReason={application.returnReason}
+            requiredCorrection={application.requiredCorrection}
+            returnToRoles={getReturnToRoles(application)}
+          />
+        ) : null}
+
+        {isRegistrationDelegate &&
+          registrationPhase &&
+          registrationPhase !== "installer-complete" &&
+          registrationPhase !== "certifier-complete" &&
+          registrationPhase !== "completed" && (
           <DelegateWorkflowProgress
             title={
-              session.user.roleCode === ROLE_CODES.INSTALLER
+              workflowRole === ROLE_CODES.INSTALLER
                 ? "Hapat e instaluesit"
                 : "Hapat e certifikuesit"
             }
             steps={
-              session.user.roleCode === ROLE_CODES.INSTALLER
+              workflowRole === ROLE_CODES.INSTALLER
                 ? getInstallerDelegateStepStates(registrationPhase)
                 : getCertifierDelegateStepStates(registrationPhase)
             }
@@ -330,6 +505,13 @@ export default async function ApplicationDetailPage({
           <ProcedureDeadlineNotice
             submittedAt={application.submittedAt}
             role={session.user.roleCode === ROLE_CODES.OWNER ? "owner" : "ishmt"}
+          />
+        )}
+
+        {isIshmtOwnerTrackingStatus(application.status) && (
+          <ApplicationIshmtProgress
+            status={application.status}
+            submittedAt={application.submittedAt}
           />
         )}
 
@@ -345,21 +527,55 @@ export default async function ApplicationDetailPage({
             data={clientApplicationData}
             municipalities={municipalities}
             adminUnits={adminUnits}
-            installers={installers}
             certifiers={certifiers}
+            installers={installers}
+            installerOrgId={application.installerOrgId}
+            certifierOrgId={application.certifierOrgId}
             installerName={application.installerOrg?.name}
             certifierName={certifierDisplayName}
             canEditOwnerFields={canEditOwnerFields}
-            documentsSlot={embeddedDocsFor(ownerChecklist, "owner-docs")}
-            installerDocsSlot={docsChecklistView(installerChecklist, "Dokumentet e instaluesit")}
-            certifierDocsSlot={docsChecklistView(certifierChecklist, "Dokumentet e certifikuesit (OMI)")}
+            layoutPlanSlot={
+              ownerLayoutPlanChecklist.length > 0
+                ? embeddedDocsFor(
+                    ownerLayoutPlanChecklist,
+                    "owner-layout-plan",
+                    documents.filter((doc) => doc.purpose === "LAYOUT_PLAN"),
+                    { showChecklistSummary: false, supplementaryPhase: null },
+                  )
+                : undefined
+            }
+            documentsSlot={
+              ownerOtherDocsChecklist.length > 0
+                ? embeddedDocsFor(ownerOtherDocsChecklist, "owner-docs")
+                : undefined
+            }
+            ownerDocsSlot={docsChecklistView(
+              ownerChecklistWithUploadState,
+              "owner",
+              canUploadOwnerDocsAtFinalReview,
+            )}
+            installerDocsSlot={docsChecklistView(installerChecklist, "installer")}
+            certifierDocsSlot={docsChecklistView(certifierChecklist, "certifier")}
             blockSubmit={documentBlockSubmit}
             dossierSections={registrationDossier?.sections}
             submissionChecklist={submissionChecklist}
+            ownerPrefill={application.type === ApplicationType.NEW_REGISTRATION ? ownerPrefill : null}
+            canUploadOwnerDocs={canUploadOwnerDocsAtFinalReview}
           />
         ) : isRegistrationDelegate ? (
+          <div className="min-w-0 max-w-full space-y-6 overflow-x-hidden">
           <>
-            {session.user.roleCode === ROLE_CODES.INSTALLER && registrationPhase === "installer-accept" && (
+            {workflowRole === ROLE_CODES.INSTALLER && registrationPhase === "installer-accept" && (
+              <>
+                {applicationSummaryData && (
+                  <ApplicationDataSummary
+                    data={applicationSummaryData}
+                    orgs={applicationSummaryOrgs}
+                    title="Të dhënat e aplikimit"
+                    hideTechnical
+                    hideCertification
+                  />
+                )}
               <DelegationResponse
                 applicationId={id}
                 type="installer"
@@ -368,9 +584,19 @@ export default async function ApplicationDetailPage({
                 municipality={municipalities.find((m) => m.id === data?.municipalityId)?.nameSq}
                 nextPath={`/portal/applications/${id}`}
               />
+              </>
             )}
 
-            {session.user.roleCode === ROLE_CODES.CERTIFIER && registrationPhase === "certifier-accept" && (
+            {workflowRole === ROLE_CODES.CERTIFIER && registrationPhase === "certifier-accept" && (
+              <>
+                {applicationSummaryData && (
+                  <ApplicationDataSummary
+                    data={applicationSummaryData}
+                    orgs={applicationSummaryOrgs}
+                    title="Të dhënat e aplikimit"
+                    hideCertification
+                  />
+                )}
               <DelegationResponse
                 applicationId={id}
                 type="certifier"
@@ -379,14 +605,26 @@ export default async function ApplicationDetailPage({
                 municipality={municipalities.find((m) => m.id === data?.municipalityId)?.nameSq}
                 nextPath={`/portal/applications/${id}`}
               />
+              </>
             )}
 
-            {session.user.roleCode === ROLE_CODES.INSTALLER &&
+            {workflowRole === ROLE_CODES.INSTALLER &&
               registrationPhase === "technical-data" && (
                 <InstallerTechnicalForm
                   applicationId={id}
                   certifiers={certifiers}
                   hideCertifierAssignment
+                  applicationType={application.type}
+                  uploadedPurposes={uploadedPurposes}
+                  summaryData={applicationSummaryData}
+                  orgs={applicationSummaryOrgs}
+                  priorDocumentsSlot={
+                    ownerDocsReadOnly ? (
+                      <WorkflowSubsection title="Personi përgjegjës">
+                        {ownerDocsReadOnly}
+                      </WorkflowSubsection>
+                    ) : undefined
+                  }
                   documentsSlot={embeddedDocsFor(installerChecklist, "installer-docs")}
                   defaults={{
                     elevatorType: data?.elevatorType ?? undefined,
@@ -402,18 +640,97 @@ export default async function ApplicationDetailPage({
                 />
               )}
 
-            {session.user.roleCode === ROLE_CODES.CERTIFIER &&
+            {workflowRole === ROLE_CODES.INSTALLER &&
+              registrationPhase === "technical-reconciliation" && (
+                <InstallerTechnicalReconciliationForm
+                  applicationId={id}
+                  certifierNotes={installerTechnicalReview.certifierNotes}
+                  installerResponse={installerTechnicalReview.installerResponse}
+                  applicationType={application.type}
+                  uploadedPurposes={uploadedPurposes}
+                  summaryData={applicationSummaryData}
+                  orgs={applicationSummaryOrgs}
+                  priorDocumentsSlot={
+                    ownerDocsReadOnly ? (
+                      <WorkflowSubsection title="Personi përgjegjës">
+                        {ownerDocsReadOnly}
+                      </WorkflowSubsection>
+                    ) : undefined
+                  }
+                  documentsSlot={embeddedDocsFor(installerChecklist, "installer-reconcile-docs")}
+                  defaults={{
+                    elevatorType: data?.elevatorType ?? undefined,
+                    manufacturer: data?.manufacturer ?? undefined,
+                    model: data?.model ?? undefined,
+                    serialNumber: data?.serialNumber ?? undefined,
+                    manufacturingYear: data?.manufacturingYear ?? undefined,
+                    capacityKg: data?.capacityKg ?? undefined,
+                    capacityPersons: data?.capacityPersons ?? undefined,
+                    speedMs: data?.speedMs ? Number(data.speedMs) : undefined,
+                    floorsServed: data?.floorsServed ?? undefined,
+                  }}
+                />
+              )}
+
+            {workflowRole === ROLE_CODES.CERTIFIER &&
+              registrationPhase === "installer-technical-review" && (
+                <CertifierTechnicalReviewForm
+                  applicationId={id}
+                  certifierNotes={installerTechnicalReview.certifierNotes}
+                  installerResponse={installerTechnicalReview.installerResponse}
+                  reviewStatus={installerTechnicalReview.status}
+                  summaryData={applicationSummaryData}
+                  orgs={applicationSummaryOrgs}
+                  priorDocumentsSlot={
+                    ownerDocsReadOnly || installerDocsReadOnly ? (
+                      <WorkflowSection title="Dokumentet e instaluesit" description="Dosja e ngarkuar">
+                        <div className="min-w-0 space-y-6">
+                          {ownerDocsReadOnly && (
+                            <WorkflowSubsection key="owner-docs" title="Personi përgjegjës">
+                              {ownerDocsReadOnly}
+                            </WorkflowSubsection>
+                          )}
+                          {installerDocsReadOnly && (
+                            <WorkflowSubsection key="installer-docs" title="Instaluesi">
+                              {installerDocsReadOnly}
+                            </WorkflowSubsection>
+                          )}
+                        </div>
+                      </WorkflowSection>
+                    ) : null
+                  }
+                />
+              )}
+
+            {workflowRole === ROLE_CODES.CERTIFIER &&
               registrationPhase === "certification-data" && (
                 <CertifierForm
                   applicationId={id}
                   applicationType={application.type}
                   uploadedPurposes={uploadedPurposes}
-                  summaryData={clientApplicationData}
-                  orgs={{
-                    owner: application.ownerOrg.name,
-                    installer: application.installerOrg?.name,
-                    certifier: certifierDisplayName,
-                  }}
+                  summaryData={applicationSummaryData}
+                  orgs={applicationSummaryOrgs}
+                  showApplicationSummary={false}
+                  priorDocumentsSlot={
+                    ownerDocsReadOnly || installerDocsReadOnly ? (
+                      <div className="min-w-0 space-y-4 rounded-xl border border-border/60 bg-muted/15 p-4">
+                        <div>
+                          <p className="text-sm font-semibold text-foreground">Dosja e instaluesit dhe personit përgjegjës</p>
+                          <p className="text-xs text-muted-foreground">Dokumentet e ngarkuara nga palët e tjera (vetëm lexim).</p>
+                        </div>
+                        {ownerDocsReadOnly && (
+                          <WorkflowSubsection key="owner-docs" title="Personi përgjegjës">
+                            {ownerDocsReadOnly}
+                          </WorkflowSubsection>
+                        )}
+                        {installerDocsReadOnly && (
+                          <WorkflowSubsection key="installer-docs" title="Instaluesi">
+                            {installerDocsReadOnly}
+                          </WorkflowSubsection>
+                        )}
+                      </div>
+                    ) : null
+                  }
                   documentsSlot={embeddedDocsFor(certifierChecklist, "certifier-docs")}
                   defaults={{
                     installationCertificateNumber: data?.installationCertificateNumber ?? undefined,
@@ -429,22 +746,103 @@ export default async function ApplicationDetailPage({
                 />
               )}
 
-            {registrationPhase === "installer-complete" && session.user.roleCode === ROLE_CODES.INSTALLER && (
-              <DelegationCompletePanel
-                roleLabel="instalues"
-                applicationNumber={application.applicationNumber}
-                description="Të dhënat teknike u plotësuan. Personi përgjegjës i ashensorit vazhdon me caktimin e kompanisë certifikuese."
-              />
+            {(registrationPhase === "installer-complete" || registrationPhase === "completed") &&
+              workflowRole === ROLE_CODES.INSTALLER && (
+              <div className="space-y-6">
+                <DelegationCompletePanel
+                  roleLabel="instalues"
+                  applicationNumber={application.applicationNumber}
+                  description={
+                    registrationPhase === "completed"
+                      ? "Aplikimi u miratua nga IQMT dhe ashensori u regjistrua me sukses."
+                      : "Të dhënat teknike u plotësuan. Personi përgjegjës i ashensorit vazhdon me caktimin e kompanisë certifikuese."
+                  }
+                  approved={registrationPhase === "completed"}
+                  registryNumber={application.targetElevator?.registryNumber}
+                  elevatorId={application.targetElevator?.id}
+                />
+                {applicationSummaryData && (
+                  <ApplicationDataSummary
+                    data={applicationSummaryData}
+                    orgs={applicationSummaryOrgs}
+                    title={
+                      registrationPhase === "completed"
+                        ? "Të dhënat teknike (instaluesi)"
+                        : "Të dhënat e aplikimit"
+                    }
+                    hideCertification
+                  />
+                )}
+                {(ownerDocsReadOnly || installerDocsReadOnly) && (
+                  <WorkflowSection title="Dokumentet" description="Dosja e ngarkuar në aplikim">
+                    <div className="space-y-6">
+                      {ownerDocsReadOnly && (
+                        <WorkflowSubsection key="owner-docs" title="Personi përgjegjës">
+                          {ownerDocsReadOnly}
+                        </WorkflowSubsection>
+                      )}
+                      {installerDocsReadOnly && (
+                        <WorkflowSubsection key="installer-docs" title="Instaluesi">
+                          {installerDocsReadOnly}
+                        </WorkflowSubsection>
+                      )}
+                    </div>
+                  </WorkflowSection>
+                )}
+              </div>
             )}
 
-            {registrationPhase === "certifier-complete" && session.user.roleCode === ROLE_CODES.CERTIFIER && (
-              <DelegationCompletePanel
-                roleLabel="certifikues"
-                applicationNumber={application.applicationNumber}
-                description="Certifikimi u plotësua. Personi përgjegjës i ashensorit rishikon dossier-in dhe parashtron aplikimin te ISHMT."
-              />
+            {(registrationPhase === "certifier-complete" || registrationPhase === "completed") &&
+              workflowRole === ROLE_CODES.CERTIFIER && (
+              <div className="space-y-6">
+                <DelegationCompletePanel
+                  roleLabel="certifikues"
+                  applicationNumber={application.applicationNumber}
+                  description={
+                    registrationPhase === "completed"
+                      ? "Aplikimi u miratua nga IQMT dhe ashensori u regjistrua me sukses."
+                      : "Certifikimi u plotësua. Personi përgjegjës i ashensorit rishikon dossier-in dhe parashtron aplikimin te IQMT."
+                  }
+                  approved={registrationPhase === "completed"}
+                  registryNumber={application.targetElevator?.registryNumber}
+                  elevatorId={application.targetElevator?.id}
+                />
+                {applicationSummaryData && (
+                  <ApplicationDataSummary
+                    data={applicationSummaryData}
+                    orgs={applicationSummaryOrgs}
+                    title={
+                      registrationPhase === "completed"
+                        ? "Të dhënat e certifikimit"
+                        : "Të dhënat e aplikimit"
+                    }
+                  />
+                )}
+                {(ownerDocsReadOnly || installerDocsReadOnly || certifierChecklist.length > 0) && (
+                  <WorkflowSection title="Dokumentet" description="Dosja e ngarkuar në aplikim">
+                    <div className="space-y-6">
+                      {ownerDocsReadOnly && (
+                        <WorkflowSubsection key="owner-docs" title="Personi përgjegjës">
+                          {ownerDocsReadOnly}
+                        </WorkflowSubsection>
+                      )}
+                      {installerDocsReadOnly && (
+                        <WorkflowSubsection key="installer-docs" title="Instaluesi">
+                          {installerDocsReadOnly}
+                        </WorkflowSubsection>
+                      )}
+                      {certifierChecklist.length > 0 && (
+                        <WorkflowSubsection key="certifier-docs" title="Certifikuesi (OM)">
+                          {docsChecklistView(certifierChecklist, "certifier")}
+                        </WorkflowSubsection>
+                      )}
+                    </div>
+                  </WorkflowSection>
+                )}
+              </div>
             )}
           </>
+          </div>
         ) : isOwnerModernization ? (
           <ModernizationWorkflowPanel
             applicationId={id}
@@ -457,8 +855,9 @@ export default async function ApplicationDetailPage({
             certifierName={certifierDisplayName}
             hasInstaller={Boolean(application.installerOrgId)}
             hasCertifier={Boolean(application.certifierOrgId)}
-            installers={installers}
             certifiers={certifiers}
+            installers={installers}
+            installerOrgId={application.installerOrgId}
           />
         ) : (
           <>
@@ -475,6 +874,7 @@ export default async function ApplicationDetailPage({
                 elevatorDefaults={elevatorDefaults}
                 existingChanges={Array.isArray(data?.correctionFields) ? data.correctionFields : []}
                 excludeElevatorId={application.targetElevator.id}
+                suggestedFieldValues={ownerFieldSuggestions}
               />
             )}
 
@@ -527,6 +927,7 @@ export default async function ApplicationDetailPage({
                   existingChanges={Array.isArray(data?.updateFields) ? data.updateFields : []}
                   excludeElevatorId={application.targetElevator.id}
                   maintenanceCompanies={maintenanceCompanies}
+                  suggestedFieldValues={ownerFieldSuggestions}
                 />
               )}
 
@@ -588,9 +989,11 @@ export default async function ApplicationDetailPage({
               <ApplicationDocuments
                 applicationId={id}
                 documents={documents}
-                canUpload={canUpload}
+                canUpload={canEditDocuments}
+                currentUserId={session.user.id}
                 checklist={documentChecklist}
                 embedded
+                supplementaryPhase={registrationSupplementaryPhase(workflowRole) ?? "owner"}
               />
             )}
             <LifecycleSubmitPanel
@@ -603,7 +1006,7 @@ export default async function ApplicationDetailPage({
           </ApplicationWorkflowFooter>
         )}
 
-        {session.user.roleCode === ROLE_CODES.INSTALLER &&
+        {workflowRole === ROLE_CODES.INSTALLER &&
           application.type === ApplicationType.MODERNIZATION &&
           (application.status === ApplicationStatus.PENDING_INSTALLER ||
             (application.status === ApplicationStatus.RETURNED &&
@@ -626,7 +1029,7 @@ export default async function ApplicationDetailPage({
             />
           )}
 
-        {session.user.roleCode === ROLE_CODES.CERTIFIER &&
+        {workflowRole === ROLE_CODES.CERTIFIER &&
           application.type === ApplicationType.MODERNIZATION &&
           (application.status === ApplicationStatus.PENDING_CERTIFIER ||
             (application.status === ApplicationStatus.RETURNED &&
@@ -659,6 +1062,8 @@ export default async function ApplicationDetailPage({
             entries={application.workflowHistory}
             statusLabels={APPLICATION_STATUS_LABELS}
           />
+        )}
+          </>
         )}
       </div>
     </AppShell>

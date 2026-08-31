@@ -63,9 +63,14 @@ export function ApplicationTypeGuide({
 export function ApplicationTypeSteps({ guideKey }: { guideKey: ApplicationGuideKey }) {
   const guide = APPLICATION_TYPE_GUIDE[guideKey];
   return (
-    <ol className="list-decimal space-y-0.5 pl-4 text-xs text-muted-foreground">
-      {guide.steps.map((step) => (
-        <li key={step}>{step}</li>
+    <ol className="space-y-2">
+      {guide.steps.map((step, index) => (
+        <li key={step} className="flex gap-2.5 text-xs leading-relaxed text-muted-foreground">
+          <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-muted text-[10px] font-bold tabular-nums text-foreground">
+            {index + 1}
+          </span>
+          <span className="pt-0.5">{step}</span>
+        </li>
       ))}
     </ol>
   );

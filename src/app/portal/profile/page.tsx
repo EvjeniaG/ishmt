@@ -1,18 +1,22 @@
 import { redirect } from "next/navigation";
 import { AppShell } from "@/components/layout/app-shell";
 import { StandardPageLayout } from "@/components/layout/standard-page-layout";
-import { AccountProfileForm } from "@/components/account/account-profile-form";
 import { AccountSecurityPanel } from "@/components/account/account-security-panel";
+import { StaffProfileForm } from "@/components/account/staff-profile-form";
+import { CompanyProfileForm } from "@/components/company/company-profile-form";
 import { OwnerProfileForm } from "@/components/owner/owner-profile-form";
-import { EditOwnOrgForm } from "@/components/forms/edit-own-org-form";
+import { OwnerDocumentGuide } from "@/components/owner/owner-document-guide";
+import { ServiceProviderDocumentGuide } from "@/components/service-provider/service-provider-document-guide";
 import { getAuthSession } from "@/lib/auth";
-import { getMunicipalities } from "@/lib/data/municipalities";
 import { OWNER_TERM } from "@/lib/constants/owner-labels";
 import { portalEyebrowForRole } from "@/lib/constants/portal-labels";
 import { OwnerPortalService } from "@/lib/services/owner-portal-service";
 import { OrganizationService } from "@/lib/services/organization-service";
 import { ROLE_CODES } from "@/lib/constants/roles";
-import { PORTAL_COMPANY_ROLES } from "@/lib/permissions/nav-paths";
+import { PORTAL_COMPANY_ROLES, ISHMT_STAFF_ROLES } from "@/lib/permissions/nav-paths";
+import { PERMISSIONS } from "@/lib/permissions/codes";
+import { roleHasPermission } from "@/lib/permissions/matrix";
+import { isLicensedServiceProvider } from "@/lib/organizations/org-capabilities";
 import { db } from "@/lib/db";
 
 const COMPANY_ROLES = PORTAL_COMPANY_ROLES.filter((role) => role !== ROLE_CODES.OWNER);
@@ -50,18 +54,6 @@ export default async function ProfilePage() {
   const session = await getAuthSession();
   if (!session?.user) redirect("/auth/login");
 
-  const ctx = {
-    userId: session.user.id,
-    email: session.user.email ?? "",
-    firstName: session.user.firstName,
-    lastName: session.user.lastName,
-    activeOrgId: session.user.activeOrgId,
-    activeOrgType: session.user.activeOrgType,
-    activeOrgName: session.user.activeOrgName,
-    roleCode: session.user.roleCode,
-    permissions: session.user.permissions,
-  };
-
   const security = await getAccountSecurity(session.user.id);
   if (!security) redirect("/auth/login");
 
@@ -78,10 +70,18 @@ export default async function ProfilePage() {
   );
 
   if (session.user.roleCode === ROLE_CODES.OWNER) {
-    const [profile, municipalities] = await Promise.all([
-      OwnerPortalService.getProfileData(ctx),
-      getMunicipalities(),
-    ]);
+    const ctx = {
+      userId: session.user.id,
+      email: session.user.email ?? "",
+      firstName: session.user.firstName,
+      lastName: session.user.lastName,
+      activeOrgId: session.user.activeOrgId,
+      activeOrgType: session.user.activeOrgType,
+      activeOrgName: session.user.activeOrgName,
+      roleCode: session.user.roleCode,
+      permissions: session.user.permissions,
+    };
+    const profile = await OwnerPortalService.getProfileData(ctx);
 
     return (
       <AppShell title={`Profili - ${OWNER_TERM}`}>
@@ -89,9 +89,10 @@ export default async function ProfilePage() {
           <StandardPageLayout
             eyebrow="Portali · Personi përgjegjës i ashensorit"
             title="Profili"
-            description="Të dhënat e llogarisë dhe organizatës suaj"
+            description="Të dhënat e subjektit dhe personit përgjegjës - si në regjistrim"
           >
-            <OwnerProfileForm data={profile} municipalities={municipalities} />
+            <OwnerProfileForm data={profile} />
+            <OwnerDocumentGuide />
             {securityPanel}
           </StandardPageLayout>
         </div>
@@ -99,36 +100,81 @@ export default async function ProfilePage() {
     );
   }
 
-  const isCompanyRole = COMPANY_ROLES.includes(session.user.roleCode as (typeof COMPANY_ROLES)[number]);
-  const [org, municipalities] = isCompanyRole
-    ? await Promise.all([
-        OrganizationService.getById(session.user.activeOrgId),
-        getMunicipalities(),
-      ])
-    : [null, []];
+  if (COMPANY_ROLES.includes(session.user.roleCode as (typeof COMPANY_ROLES)[number])) {
+    const [user, org] = await Promise.all([
+      db.authUser.findUnique({
+        where: { id: session.user.id },
+        select: {
+          firstName: true,
+          lastName: true,
+          email: true,
+          phone: true,
+          nid: true,
+        },
+      }),
+      OrganizationService.getById(session.user.activeOrgId),
+    ]);
+
+    if (!user || !org) redirect("/auth/login");
+
+    const canEditOrg = roleHasPermission(session.user.roleCode, PERMISSIONS.ORG_EDIT_OWN);
+    const orgCaps = session.user.orgCapabilities;
+    const showDocumentGuide = orgCaps && isLicensedServiceProvider({ type: org.type, ...orgCaps });
+
+    return (
+      <AppShell title="Profili">
+        <div className="mx-auto max-w-4xl">
+          <StandardPageLayout
+            eyebrow={portalEyebrowForRole(session.user.roleCode)}
+            title="Profili"
+            description="Të dhënat e kompanisë dhe dokumentacioni i kërkuar sipas funksionit"
+          >
+            <CompanyProfileForm
+              data={{
+                user,
+                org: { name: org.name, nipt: org.nipt },
+                canEditOrg,
+              }}
+            />
+            {showDocumentGuide && orgCaps ? <ServiceProviderDocumentGuide caps={orgCaps} /> : null}
+            {securityPanel}
+          </StandardPageLayout>
+        </div>
+      </AppShell>
+    );
+  }
+
+  const staffUser = await db.authUser.findUnique({
+    where: { id: session.user.id },
+    select: {
+      firstName: true,
+      lastName: true,
+      fatherName: true,
+      email: true,
+      phone: true,
+      nid: true,
+    },
+  });
+
+  if (!staffUser) redirect("/auth/login");
+
+  const isStaff =
+    ISHMT_STAFF_ROLES.includes(session.user.roleCode) ||
+    session.user.roleCode === ROLE_CODES.DIRECTORATE;
 
   return (
     <AppShell title="Profili">
-      <div className="mx-auto max-w-3xl">
+      <div className="mx-auto max-w-4xl">
         <StandardPageLayout
           eyebrow={portalEyebrowForRole(session.user.roleCode)}
           title="Profili"
-          description='Shtypni "Ndrysho" për të modifikuar të dhënat personale, pastaj "Ruaj ndryshimet".'
+          description={
+            isStaff
+              ? "Të dhënat personale të llogarisë suaj"
+              : 'Shtypni "Ndrysho" për të modifikuar të dhënat personale, pastaj "Ruaj ndryshimet".'
+          }
         >
-          <AccountProfileForm
-            firstName={session.user.firstName}
-            lastName={session.user.lastName}
-            email={security.email}
-            roleCode={session.user.roleCode}
-            orgName={session.user.activeOrgName}
-            phone={security.phone}
-            nid={security.nid}
-            lastLoginAt={security.lastLoginAt}
-            hideOrgFields={session.user.roleCode === ROLE_CODES.CERTIFIER}
-          />
-          {isCompanyRole && org && session.user.roleCode !== ROLE_CODES.CERTIFIER && (
-            <EditOwnOrgForm org={org} municipalities={municipalities} />
-          )}
+          <StaffProfileForm data={staffUser} />
           {securityPanel}
         </StandardPageLayout>
       </div>

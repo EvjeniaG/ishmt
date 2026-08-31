@@ -9,7 +9,7 @@ function dedupeKey(userId: string, entityId: string, title: string) {
   return `${userId}:${entityId}:${title}`;
 }
 
-/** Njofton automatikisht stafin operacional të ISHMT për afate të tejkaluara / kritike. */
+/** Njofton automatikisht stafin operacional të IQMT për afate të tejkaluara / kritike. */
 export class IshmtOverdueNotificationService {
   static async syncOverdueAlerts(now = new Date()) {
     const ishmtOrg = await db.organization.findFirst({

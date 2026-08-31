@@ -8,7 +8,7 @@ function parseEnvFlag(value: string | undefined): boolean | null {
   return null;
 }
 
-/** Butonat «Plotëso me të dhëna demo» — aktiv në dev ose me ISHMT_DEMO_TOOLS=true. */
+/** Butonat «Plotëso me të dhëna demo» - aktiv në dev ose me ISHMT_DEMO_TOOLS=true. */
 export function isDemoToolsEnabled(): boolean {
   const explicit =
     parseEnvFlag(process.env.ISHMT_DEMO_TOOLS) ??

@@ -23,7 +23,7 @@ export default async function ModernizationApplicationPage() {
       <StandardPageLayout
         eyebrow="Portali · Personi përgjegjës i ashensorit"
         title="Modernizim ashensori"
-        description="Ndryshime thelbësore teknike me instalues, certifikues dhe ISHMT"
+        description="Ndryshime thelbësore teknike me instalues, certifikues dhe IQMT"
         actions={
           <Link href="/portal/applications/new" className="text-sm text-primary hover:underline">
             ← Kthehu te llojet e aplikimeve

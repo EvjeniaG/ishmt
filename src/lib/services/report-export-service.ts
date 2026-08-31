@@ -352,7 +352,7 @@ export class ReportExportService {
       { key: "result", label: "Rezultati" },
       { key: "conductedDate", label: "Data" },
       { key: "nextInspectionDate", label: "Inspektimi i ardhshëm" },
-      { key: "approvedBody", label: "OMI" },
+      { key: "approvedBody", label: "OM" },
     ];
 
     const where: Prisma.InspectionWhereInput = {
@@ -419,7 +419,7 @@ export class ReportExportService {
 
     const status = filters.status as FieldInspectionAssignmentStatus | undefined;
     const assignments = hasPermission(ctx, PERMISSIONS.INSPECTIONS_FIELD_VIEW_ALL)
-      ? await IshmtFieldInspectionService.listForAssigner(ctx, status)
+      ? await IshmtFieldInspectionService.listForAssigner(ctx, status ? { status } : undefined)
       : await IshmtFieldInspectionService.listMine(ctx);
 
     const filtered = status

@@ -27,7 +27,7 @@ export default async function BuildingDetailPage({
   return (
     <AppShell title="Ndërtesa">
       <StandardPageLayout
-        eyebrow="ISHMT · Ndërtesat"
+        eyebrow="IQMT · Ndërtesat"
         title={building.name ?? building.address}
         description={building.municipality.nameSq}
         actions={

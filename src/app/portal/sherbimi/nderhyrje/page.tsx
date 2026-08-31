@@ -1,24 +1,18 @@
 import Link from "next/link";
-import { redirect } from "next/navigation";
 import { AppShell } from "@/components/layout/app-shell";
 import { StandardPageLayout } from "@/components/layout/standard-page-layout";
 import { SectionCard } from "@/components/shared/institutional";
 import { InterventionForm } from "@/components/maintenance/intervention-form";
-import { getAuthSession } from "@/lib/auth";
-import { requireAuthForPage } from "@/lib/auth/page-guards";
+import { requireServiceCapabilityForPage } from "@/lib/auth/page-guards";
+import { buildTechnicianDisplayName } from "@/lib/forms/system-form-prefill";
 import { MaintenanceWorkService } from "@/lib/services/maintenance-work-service";
-import { ROLE_CODES } from "@/lib/constants/roles";
 
 function fmtDate(d: Date | null) {
   return d ? new Date(d).toLocaleDateString("sq-AL") : "-";
 }
 
 export default async function InterventionPage() {
-  const session = await getAuthSession();
-  if (!session?.user) redirect("/auth/login");
-  if (session.user.roleCode !== ROLE_CODES.MAINTENANCE) redirect("/unauthorized");
-
-  const ctx = await requireAuthForPage();
+  const ctx = await requireServiceCapabilityForPage("maintenance");
   const [elevators, interventions] = await Promise.all([
     MaintenanceWorkService.listAssignedElevators(ctx),
     MaintenanceWorkService.listInterventions(ctx),
@@ -43,7 +37,10 @@ export default async function InterventionPage() {
         }
       >
         <SectionCard title="Regjistro ndërhyrje të re" padded>
-          <InterventionForm elevators={options} />
+          <InterventionForm
+            elevators={options}
+            defaultTechnicianName={buildTechnicianDisplayName(ctx)}
+          />
         </SectionCard>
 
         <SectionCard

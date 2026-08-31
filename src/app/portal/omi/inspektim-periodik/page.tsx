@@ -8,17 +8,17 @@ import {
   type InspectionElevatorOption,
 } from "@/components/maintenance/periodic-inspection-form";
 import { SectionCard } from "@/components/shared/institutional";
-import { getAuthSession } from "@/lib/auth";
-import { requireAuthForPage } from "@/lib/auth/page-guards";
+import { requireServiceCapabilityForPage } from "@/lib/auth/page-guards";
 import { CertifierInspectionService } from "@/lib/services/certifier-inspection-service";
-import { ROLE_CODES } from "@/lib/constants/roles";
+import {
+  PERIODIC_INSPECTION_HISTORY_LABEL,
+  PERIODIC_INSPECTION_LABEL,
+  PERIODIC_INSPECTIONS_LABEL,
+} from "@/lib/constants/periodic-inspection-labels";
+import { db } from "@/lib/db";
 
 export default async function CertifierPeriodicInspectionPage() {
-  const session = await getAuthSession();
-  if (!session?.user) redirect("/auth/login");
-  if (session.user.roleCode !== ROLE_CODES.CERTIFIER) redirect("/unauthorized");
-
-  const ctx = await requireAuthForPage();
+  const ctx = await requireServiceCapabilityForPage("om");
   const [elevators, inspections, pending] = await Promise.all([
     CertifierInspectionService.listAssignedElevators(ctx),
     CertifierInspectionService.listInspections(ctx),
@@ -35,17 +35,36 @@ export default async function CertifierPeriodicInspectionPage() {
     overdue: e.inspectionOverdue,
   }));
 
+  const lastInspection = await db.inspection.findFirst({
+    where: {
+      inspector: {
+        memberships: {
+          some: {
+            organizationId: ctx.activeOrgId,
+            deactivatedAt: null,
+          },
+        },
+      },
+      approvedBodyNumber: { not: null },
+    },
+    orderBy: { conductedDate: "desc" },
+    select: { approvedBodyNumber: true },
+  });
+
+  const defaultApprovedBodyNumber = lastInspection?.approvedBodyNumber ?? undefined;
+  const defaultConductedDate = new Date().toISOString().slice(0, 10);
+
   return (
-    <AppShell title="Inspektimi periodik (OMI)">
+    <AppShell title={`${PERIODIC_INSPECTION_LABEL} (OM)`}>
       <StandardPageLayout
         eyebrow="Portali · Certifikues"
-        title="Inspektimet periodike"
-        description="Regjistroni inspektime periodike për ashensorët me kontratë aktive OMI"
+        title={PERIODIC_INSPECTIONS_LABEL}
+        description="Regjistroni inspektime periodike vetëm për ashensorët me kontratë aktive OM"
         actions={
           <div className="flex flex-wrap items-center gap-3 text-sm">
             {pending.length > 0 && (
               <Link
-                href="/portal/omi/kontratat"
+                href="/portal/omi/kontratat-kontrolli"
                 className="rounded-full bg-amber-100 px-3 py-1 font-medium text-amber-800 hover:bg-amber-200"
               >
                 {pending.length} kontratë në pritje →
@@ -57,12 +76,16 @@ export default async function CertifierPeriodicInspectionPage() {
           </div>
         }
       >
-        <SectionCard title="Regjistro inspektim periodik" padded>
-          <PeriodicInspectionForm elevators={options} />
+        <SectionCard title={`Regjistro ${PERIODIC_INSPECTION_LABEL.toLowerCase()}`} padded>
+          <PeriodicInspectionForm
+            elevators={options}
+            defaultConductedDate={defaultConductedDate}
+            defaultApprovedBodyNumber={defaultApprovedBodyNumber}
+          />
         </SectionCard>
 
         <SectionCard
-          title="Historiku i inspektimeve"
+          title={PERIODIC_INSPECTION_HISTORY_LABEL}
           meta={
             <span className="portal-badge-neutral tabular-nums">{inspections.length} regjistrime</span>
           }

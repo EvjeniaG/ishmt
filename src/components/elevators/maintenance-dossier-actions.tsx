@@ -22,17 +22,20 @@ export function MaintenanceDossierActions({
   showInterventionForm = false,
   showMonthlyReportForm = false,
   hasActiveMaintenanceContract = false,
+  defaultTechnicianName,
 }: {
   elevatorId: string;
   registryNumber: string;
   pendingContract: PendingContract | null;
-  /** Fsheh lidhjet e ndërhyrjeve/raporteve (p.sh. për OMI që vetëm pranon kontratën). */
+  /** Fsheh lidhjet e ndërhyrjeve/raporteve (p.sh. për OM që vetëm pranon kontratën). */
   showServiceLinks?: boolean;
   /** Shfaq formularin e ndërhyrjes direkt në dosje. */
   showInterventionForm?: boolean;
   /** Shfaq formularin e kontrollit periodik mujor. */
   showMonthlyReportForm?: boolean;
   hasActiveMaintenanceContract?: boolean;
+  /** Emri i teknikut nga llogaria e përdoruesit. */
+  defaultTechnicianName?: string;
 }) {
   return (
     <div className="space-y-4">
@@ -75,6 +78,7 @@ export function MaintenanceDossierActions({
             <InterventionForm
               fixedElevatorId={elevatorId}
               elevators={[{ id: elevatorId, registryNumber, address: "" }]}
+              defaultTechnicianName={defaultTechnicianName}
             />
           </CardContent>
         </Card>
@@ -85,13 +89,14 @@ export function MaintenanceDossierActions({
           <CardHeader>
             <CardTitle className="text-base">Kontroll periodik mujor</CardTitle>
             <p className="text-sm text-muted-foreground">
-              Plotësoni fushat e kontrollit për ashensorin {registryNumber} — detyrim çdo 30 ditë.
+              Plotësoni fushat e kontrollit për ashensorin {registryNumber} - detyrim çdo 30 ditë.
             </p>
           </CardHeader>
           <CardContent>
             <MonthlyReportForm
               fixedElevatorId={elevatorId}
               elevators={[{ id: elevatorId, registryNumber, address: "" }]}
+              defaultTechnicianName={defaultTechnicianName}
             />
           </CardContent>
         </Card>

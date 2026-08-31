@@ -84,10 +84,12 @@ function menuForRole(roleCode: RoleCode): MenuItem[] {
     case ROLE_CODES.DIRECTORATE:
       return [
         { href: dashboard, label: "Paneli" },
-        { href: profile, label: "Profili" },
-        { href: notifications, label: "Njoftimet" },
         { href: "/directorate/companies", label: "Regjistri i kompanive" },
+        { href: "/directorate/companies/new", label: "Shto kompani" },
+        { href: "/directorate/licenses", label: "Licencat" },
         { href: "/directorate/activity", label: "Aktiviteti" },
+        { href: notifications, label: "Njoftimet" },
+        { href: profile, label: "Profili" },
       ];
     default:
       return [

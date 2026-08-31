@@ -2,6 +2,7 @@ import { ApplicationType, type ApplicationData } from "@prisma/client";
 import {
   getApplicationDocumentSpecs,
   getMissingRequiredApplicationDocuments,
+  CERTIFIER_COMPLETION_DOC_PHASES,
 } from "@/lib/documents/application-document-checklist";
 
 /** Document checklist for the certification step (Workflow 1, Step 5). */
@@ -13,20 +14,38 @@ export type CertificationDocSpec = {
   accept: string;
 };
 
-export const REQUIRED_CERTIFICATION_DOCS: CertificationDocSpec[] = [
-  {
-    purpose: "INITIAL_INSPECTION_CERT",
-    label: "Raport ose certifikatë ekzaminimi nga OMI",
-    maxMb: 10,
-    accept: "application/pdf,image/jpeg,image/png",
-  },
-  {
-    purpose: "TECHNICAL_DOSSIER",
-    label: "Dokumentacion teknik i ashensorit",
-    maxMb: 20,
-    accept: "application/pdf",
-  },
-];
+export function getCertificationDocsForApplication(data?: Partial<ApplicationData> | null): {
+  required: CertificationDocSpec[];
+  optional: CertificationDocSpec[];
+} {
+  const phaseSet = new Set(CERTIFIER_COMPLETION_DOC_PHASES);
+  const allSpecs = getApplicationDocumentSpecs({
+    type: ApplicationType.NEW_REGISTRATION,
+    data,
+  }).filter((item) => phaseSet.has(item.phase));
+
+  const mapped = allSpecs.map((item) => ({
+    purpose: item.purpose,
+    label: item.label,
+    maxMb: item.maxMb,
+    accept: item.accept,
+  }));
+
+  const requiredPurposes = new Set(
+    getMissingRequiredApplicationDocuments({
+      type: ApplicationType.NEW_REGISTRATION,
+      data,
+      uploadedPurposes: [],
+    })
+      .filter((missing) => phaseSet.has(missing.phase))
+      .map((missing) => missing.purpose),
+  );
+
+  return {
+    required: mapped.filter((item) => requiredPurposes.has(item.purpose)),
+    optional: mapped.filter((item) => !requiredPurposes.has(item.purpose)),
+  };
+}
 
 export const OPTIONAL_CERTIFICATION_DOCS: CertificationDocSpec[] = [
   {
@@ -37,44 +56,15 @@ export const OPTIONAL_CERTIFICATION_DOCS: CertificationDocSpec[] = [
   },
 ];
 
-export const REQUIRED_CERTIFICATION_PURPOSES = REQUIRED_CERTIFICATION_DOCS.map((d) => d.purpose);
-
-export function getCertificationDocsForApplication(data?: Partial<ApplicationData> | null): {
-  required: CertificationDocSpec[];
-  optional: CertificationDocSpec[];
-} {
-  const allSpecs = getApplicationDocumentSpecs({
-    type: ApplicationType.NEW_REGISTRATION,
-    data,
-  });
-  const certificationPurposes = new Set([
-    "INITIAL_INSPECTION_CERT",
-    "TECHNICAL_DOSSIER",
-    "EU_DECLARATION_CE",
-  ]);
-  const mapped = allSpecs
-    .filter((item) => certificationPurposes.has(item.purpose))
-    .map((item) => ({
-      purpose: item.purpose,
-      label: item.label,
-      maxMb: item.maxMb,
-      accept: item.accept,
-    }));
-
-  const requiredPurposes = new Set(
-    getMissingRequiredApplicationDocuments({
-      type: ApplicationType.NEW_REGISTRATION,
-      data,
-      uploadedPurposes: [],
-    }).map((missing) => missing.purpose),
-  );
-
-  return {
-    required: mapped.filter((item) => requiredPurposes.has(item.purpose)),
-    optional: mapped.filter((item) => !requiredPurposes.has(item.purpose)),
-  };
+/** @deprecated Prefer getCertificationDocsForApplication(applicationData).required */
+export function getRequiredCertificationDocs(data?: Partial<ApplicationData> | null): CertificationDocSpec[] {
+  return getCertificationDocsForApplication(data).required;
 }
 
-export function missingCertificationDocs(uploadedPurposes: string[]): CertificationDocSpec[] {
-  return REQUIRED_CERTIFICATION_DOCS.filter((d) => !uploadedPurposes.includes(d.purpose));
+export function missingCertificationDocs(
+  uploadedPurposes: string[],
+  data?: Partial<ApplicationData> | null,
+): CertificationDocSpec[] {
+  const { required } = getCertificationDocsForApplication(data);
+  return required.filter((d) => !uploadedPurposes.includes(d.purpose));
 }

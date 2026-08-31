@@ -5,6 +5,11 @@ import { Download, Mail } from "lucide-react";
 import { notifyFilteredContractOwnersAction } from "@/lib/actions/ishmt-contract-actions";
 import { buildContractsExportHref } from "@/lib/ishmt/contract-issue-filters";
 import type { ContractIssueListFilters } from "@/lib/ishmt/contract-issue-filters";
+import {
+  buildComplianceNotifyFeedback,
+  notifyFeedbackToneClasses,
+  type NotifyFeedbackTone,
+} from "@/lib/ishmt/compliance-notify-feedback";
 import { Button } from "@/components/ui/button";
 
 export function IshmtContractListToolbar({
@@ -17,27 +22,36 @@ export function IshmtContractListToolbar({
   searchParams: Record<string, string | undefined>;
 }) {
   const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState<string | null>(null);
+  const [feedback, setFeedback] = useState<{ message: string; tone: NotifyFeedbackTone } | null>(
+    null,
+  );
 
   async function notifyFiltered() {
     setBusy(true);
-    setMessage(null);
+    setFeedback(null);
     const result = await notifyFilteredContractOwnersAction(searchParams);
     setBusy(false);
     if (!result.success) {
-      setMessage(result.error);
+      setFeedback({ message: result.error, tone: "warning" });
       return;
     }
-    setMessage(
-      result.created > 0
-        ? `${result.created} njoftime u dërguan te ${result.organizations} organizata.`
-        : "Nuk u krijuan njoftime të reja (të dërguara së fundmi).",
+    setFeedback(
+      buildComplianceNotifyFeedback({
+        ...result,
+        contextLabel: "lista e filtruar",
+      }),
     );
   }
 
   return (
     <div className="flex flex-wrap items-center justify-end gap-2 border-b border-border/60 pb-4">
-      {message && <p className="mr-auto text-xs text-muted-foreground">{message}</p>}
+      {feedback && (
+        <p
+          className={`mr-auto rounded-md border px-3 py-2 text-xs ${notifyFeedbackToneClasses(feedback.tone)}`}
+        >
+          {feedback.message}
+        </p>
+      )}
       <Button asChild type="button" size="sm" variant="outline" className="h-9 rounded-lg text-xs">
         <a href={buildContractsExportHref(filters)}>
           <Download className="mr-1.5 h-3.5 w-3.5" aria-hidden />

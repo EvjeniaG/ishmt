@@ -10,7 +10,6 @@ export const APPLICATION_SUBTYPE_LABELS = {
 
 export const RESPONSIBLE_ENTITY_TYPE_LABELS = {
   ADMINISTRATOR: "Administrator Pallati",
-  OWNERS_ASSEMBLY: "Asamble e bashkëpronarëve",
   PHYSICAL_PERSON: "Person Fizik",
   LEGAL_PERSON: "Person Juridik",
   CONSTRUCTOR: "Ndërtues",
@@ -26,7 +25,6 @@ export const REGISTRATION_BUILDING_TYPE_LABELS = {
   VEND_PUNE_QENDER_TREGTARE: "Vend pune / Qendër tregtare",
   NDERTESA_NE_BASHKEPRONESI: "Ndërtesë në bashkëpronësi",
   MJEDISE_SHTEPIAKE: "Mjedis shtëpiak",
-  NDERTESE_PUBLIKE: "Ndërtesë publike",
 } as const;
 
 export const REGISTRATION_USAGE_PURPOSE_LABELS = {

@@ -2,11 +2,63 @@ import { MaintenanceContractStatus } from "@prisma/client";
 import { ROLE_CODES, type RoleCode } from "@/lib/constants/roles";
 import { db } from "@/lib/db";
 import { ElevatorService } from "@/lib/services/elevator-service";
-import { PERMISSIONS } from "@/lib/permissions/codes";
-import { roleHasPermission } from "@/lib/permissions/matrix";
+import { PERMISSIONS, type PermissionCode } from "@/lib/permissions/codes";
 import { isIshmtStaffRole } from "@/lib/permissions/routes";
+import type { OrgCapabilities } from "@/lib/organizations/org-capabilities";
+import { resolveDossierViewerKind, type DossierViewerKind } from "@/lib/elevators/dossier-viewer";
 
-export async function orgCanAccessDigitalFile(orgId: string, elevatorId: string): Promise<boolean> {
+const CONTRACT_ACCESS_STATUSES: MaintenanceContractStatus[] = [
+  MaintenanceContractStatus.PENDING,
+  MaintenanceContractStatus.ACTIVE,
+  MaintenanceContractStatus.EXPIRED,
+];
+
+export type ElevatorDigitalFileAccess =
+  | { kind: "owner" }
+  | { kind: "certifier" }
+  | { kind: "maintenance" }
+  | { kind: "ishmt" }
+  | { kind: "none" };
+
+export function dossierViewerKindFromAccess(
+  access: ElevatorDigitalFileAccess,
+  roleCode: RoleCode,
+): DossierViewerKind {
+  if (access.kind === "owner") return "owner";
+  if (access.kind === "certifier") return "certifier";
+  if (access.kind === "maintenance") return "maintenance";
+  if (access.kind === "ishmt") return "ishmt_staff";
+  if (isIshmtStaffRole(roleCode)) return "ishmt_staff";
+  return resolveDossierViewerKind(roleCode);
+}
+
+export type DigitalFileViewer = {
+  roleCode: RoleCode;
+  activeOrgId: string | null;
+  userId: string;
+  permissions: readonly PermissionCode[];
+  orgCapabilities?: OrgCapabilities | null;
+};
+
+type DigitalFileLoadResult =
+  | { status: "unauthorized" }
+  | { status: "not_found" }
+  | {
+      status: "ok";
+      elevator: NonNullable<Awaited<ReturnType<typeof ElevatorService.ensureDigitalFileAssets>>>;
+      viewerKind: DossierViewerKind;
+      access: ElevatorDigitalFileAccess;
+    };
+
+function viewerCanOpenDigitalFile(viewer: DigitalFileViewer): boolean {
+  return viewer.permissions.includes(PERMISSIONS.ELEVATORS_VIEW_DIGITAL_FILE);
+}
+
+/** Palë me kontratë shërbimi, caktim direkt në ashensor, ose pronari. */
+export async function resolveElevatorDigitalFileAccess(
+  orgId: string,
+  elevatorId: string,
+): Promise<Exclude<ElevatorDigitalFileAccess, { kind: "ishmt" }>> {
   const elevator = await db.elevator.findFirst({
     where: { id: elevatorId, deletedAt: null },
     select: {
@@ -15,63 +67,94 @@ export async function orgCanAccessDigitalFile(orgId: string, elevatorId: string)
       certifierOrgId: true,
     },
   });
-  if (!elevator) return false;
+  if (!elevator) return { kind: "none" };
 
-  if (
-    elevator.ownerOrgId === orgId ||
-    elevator.maintenanceOrgId === orgId ||
-    elevator.certifierOrgId === orgId
-  ) {
-    return true;
-  }
+  if (elevator.ownerOrgId === orgId) return { kind: "owner" };
 
-  const contract = await db.maintenanceContract.findFirst({
+  const contracts = await db.maintenanceContract.findMany({
     where: {
       elevatorId,
       maintenanceOrgId: orgId,
-      status: { in: [MaintenanceContractStatus.PENDING, MaintenanceContractStatus.ACTIVE] },
+      status: { in: CONTRACT_ACCESS_STATUSES },
     },
+    select: { serviceType: true, status: true },
+    orderBy: { createdAt: "desc" },
   });
-  return Boolean(contract);
+
+  const openContract = contracts.find(
+    (row) =>
+      row.status === MaintenanceContractStatus.PENDING ||
+      row.status === MaintenanceContractStatus.ACTIVE,
+  );
+
+  if (openContract?.serviceType === "PERIODIC_INSPECTION") {
+    return { kind: "certifier" };
+  }
+  if (openContract?.serviceType === "MAINTENANCE") {
+    return { kind: "maintenance" };
+  }
+
+  if (elevator.certifierOrgId === orgId) return { kind: "certifier" };
+  if (elevator.maintenanceOrgId === orgId) return { kind: "maintenance" };
+
+  const latestContract = contracts[0];
+  if (latestContract?.serviceType === "PERIODIC_INSPECTION") {
+    return { kind: "certifier" };
+  }
+  if (latestContract?.serviceType === "MAINTENANCE") {
+    return { kind: "maintenance" };
+  }
+
+  return { kind: "none" };
 }
 
-type DigitalFileLoadResult =
-  | { status: "unauthorized" }
-  | { status: "not_found" }
-  | { status: "ok"; elevator: NonNullable<Awaited<ReturnType<typeof ElevatorService.ensureDigitalFileAssets>>> };
+export async function orgCanAccessDigitalFile(orgId: string, elevatorId: string): Promise<boolean> {
+  const access = await resolveElevatorDigitalFileAccess(orgId, elevatorId);
+  return access.kind !== "none";
+}
 
 export async function loadDigitalFileForViewer(
   elevatorId: string,
-  viewer: { roleCode: RoleCode; activeOrgId: string | null; userId: string },
+  viewer: DigitalFileViewer,
 ): Promise<DigitalFileLoadResult> {
-  if (!roleHasPermission(viewer.roleCode, PERMISSIONS.ELEVATORS_VIEW_DIGITAL_FILE)) {
+  if (!viewerCanOpenDigitalFile(viewer)) {
     return { status: "unauthorized" };
   }
 
-  let ownerScopeOrgId: string | null = null;
-
-  if (isIshmtStaffRole(viewer.roleCode)) {
-    ownerScopeOrgId = null;
-  } else if (viewer.roleCode === ROLE_CODES.OWNER) {
-    if (!viewer.activeOrgId) return { status: "unauthorized" };
-    ownerScopeOrgId = viewer.activeOrgId;
-  } else if (
-    viewer.roleCode === ROLE_CODES.CERTIFIER ||
-    viewer.roleCode === ROLE_CODES.MAINTENANCE
-  ) {
-    if (!viewer.activeOrgId) return { status: "unauthorized" };
-    const allowed = await orgCanAccessDigitalFile(viewer.activeOrgId, elevatorId);
-    if (!allowed) return { status: "not_found" };
-    ownerScopeOrgId = null;
-  } else {
-    return { status: "unauthorized" };
+  if (viewer.roleCode === ROLE_CODES.DIRECTORATE || isIshmtStaffRole(viewer.roleCode)) {
+    const elevator = await ElevatorService.ensureDigitalFileAssets(
+      elevatorId,
+      null,
+      viewer.userId,
+    );
+    if (!elevator) return { status: "not_found" };
+    return {
+      status: "ok",
+      elevator,
+      viewerKind: "ishmt_staff",
+      access: { kind: "ishmt" },
+    };
   }
 
+  if (!viewer.activeOrgId) return { status: "unauthorized" };
+
+  const access = await resolveElevatorDigitalFileAccess(viewer.activeOrgId, elevatorId);
+  if (access.kind === "none") {
+    return { status: "not_found" };
+  }
+
+  const ownerScopeOrgId = access.kind === "owner" ? viewer.activeOrgId : null;
   const elevator = await ElevatorService.ensureDigitalFileAssets(
     elevatorId,
     ownerScopeOrgId,
     viewer.userId,
   );
   if (!elevator) return { status: "not_found" };
-  return { status: "ok", elevator };
+
+  return {
+    status: "ok",
+    elevator,
+    viewerKind: dossierViewerKindFromAccess(access, viewer.roleCode),
+    access,
+  };
 }

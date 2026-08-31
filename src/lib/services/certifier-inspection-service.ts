@@ -18,6 +18,7 @@ import type { AuthContext } from "@/lib/permissions/guards";
 import { hasPermission } from "@/lib/permissions/guards";
 import { PERMISSIONS, type PermissionCode } from "@/lib/permissions/codes";
 import { ROLE_CODES } from "@/lib/constants/roles";
+import { hasServiceCapability } from "@/lib/organizations/org-capabilities";
 
 const MS_PER_DAY = 1000 * 60 * 60 * 24;
 
@@ -50,8 +51,8 @@ export class CertifierInspectionService {
     ctx: AuthContext,
     permission: PermissionCode = PERMISSIONS.CERTIFIER_VIEW_INSPECTION_ASSIGNMENTS,
   ) {
-    if (ctx.roleCode !== ROLE_CODES.CERTIFIER || !hasPermission(ctx, permission)) {
-      throw new Error("Nuk keni leje për inspektimin periodik OMI.");
+    if (!hasServiceCapability(ctx, "om") || !hasPermission(ctx, permission)) {
+      throw new Error("Nuk keni leje për kontrollin periodik OM.");
     }
   }
 
@@ -59,7 +60,7 @@ export class CertifierInspectionService {
     return OrganizationCapabilityService.listPeriodicInspectionProviders();
   }
 
-  /** Certifier org with active OMI/certification license. */
+  /** Certifier org with active OM/certification license. */
   static async assertCertifierOrg(orgId: string) {
     return OrganizationCapabilityService.assertPeriodicInspectionProvider(orgId);
   }
@@ -92,7 +93,7 @@ export class CertifierInspectionService {
     }
 
     throw new Error(
-      "Inspektimi periodik kërkon organizatë OMI/certifikuese të licencuar. Zgjidhni kompaninë e inspektimit.",
+      "Kontrolli periodik kërkon organizatë OM/certifikuese të licencuar. Zgjidhni kompaninë e kontrollit.",
     );
   }
 
@@ -106,7 +107,7 @@ export class CertifierInspectionService {
       },
     });
     if (!contract) {
-      throw new Error("Ky ashensor nuk ka kontratë aktive inspektimi periodik me organizatën tuaj OMI.");
+      throw new Error("Ky ashensor nuk ka kontratë aktive kontrolli periodik me organizatën tuaj OM.");
     }
     return contract;
   }
@@ -135,7 +136,7 @@ export class CertifierInspectionService {
       },
       include: { elevator: true },
     });
-    if (!contract) throw new Error("Kontrata e inspektimit nuk u gjet.");
+    if (!contract) throw new Error("Kontrata e kontrollit periodik nuk u gjet.");
     if (contract.status !== MaintenanceContractStatus.PENDING) {
       throw new Error("Vetëm kontratat në pritje mund të pranohen.");
     }
@@ -224,8 +225,8 @@ export class CertifierInspectionService {
     });
 
     await NotificationService.notifyOrgMembers(contract.elevator.ownerOrgId, {
-      title: "Kontrata e inspektimit u pranua",
-      body: `Organizata OMI pranoi kontratën e inspektimit periodik për ashensorin ${contract.elevator.registryNumber}.`,
+      title: "Kontrata e kontrollit periodik u pranua",
+      body: `Organizata OM pranoi kontratën e kontrollit periodik për ashensorin ${contract.elevator.registryNumber}.`,
       entityType: "elevator",
       entityId: contract.elevatorId,
     });
@@ -357,7 +358,7 @@ export class CertifierInspectionService {
     const document = await db.document.findFirst({
       where: { id: input.reportDocumentId, uploadedById: ctx.userId, deletedAt: null },
     });
-    if (!document) throw new Error("Raporti i inspektimit nuk u gjet. Ngarkojeni përsëri.");
+    if (!document) throw new Error("Raporti i kontrollit nuk u gjet. Ngarkojeni përsëri.");
 
     const info = await this.getInspectionInfo(ctx, input.elevatorId);
     const result = input.result === "PASS" ? InspectionResult.PASS : InspectionResult.FAIL;
@@ -410,7 +411,7 @@ export class CertifierInspectionService {
       const resultLabel = result === InspectionResult.PASS ? "KALUES" : "JO KALUES";
       await OperationalEventNotificationService.broadcastForElevator({
         elevatorId: input.elevatorId,
-        title: `Inspektim periodik ${resultLabel}`,
+        title: `Kontroll periodik ${resultLabel}`,
         body: `Ashensori ${elevator.registryNumber} · ${input.examinationType} më ${input.conductedDate.toLocaleDateString("sq-AL")}.`,
       });
     }
@@ -422,20 +423,16 @@ export class CertifierInspectionService {
 
   private static async assertCertifierForElevator(ctx: AuthContext, elevatorId: string) {
     this.assertCertifier(ctx, PERMISSIONS.CERTIFIER_LOG_PERIODIC_INSPECTION);
+    await this.assertPeriodicInspectionContract(ctx, elevatorId);
+
     const elevator = await db.elevator.findFirst({
       where: { id: elevatorId, deletedAt: null },
     });
     if (!elevator) throw new Error("Ashensori nuk u gjet.");
-
-    if (elevator.certifierOrgId === ctx.activeOrgId) {
-      return elevator;
-    }
-
-    await this.assertPeriodicInspectionContract(ctx, elevatorId);
     return elevator;
   }
 
-  /** Plotëson inspektimin periodik legacy / pa dokument - ngarkim raporti nga OMI. */
+  /** Plotëson inspektimin periodik legacy / pa dokument - ngarkim raporti nga OM. */
   static async enrichPeriodicInspection(
     ctx: AuthContext,
     input: {
@@ -449,7 +446,7 @@ export class CertifierInspectionService {
       where: { id: input.inspectionId, type: InspectionType.PERIODIC },
       include: { elevator: { include: { originatingApplication: { include: { data: true } } } } },
     });
-    if (!inspection) throw new Error("Inspektimi periodik nuk u gjet.");
+    if (!inspection) throw new Error("Kontrolli periodik nuk u gjet.");
 
     await this.assertCertifierForElevator(ctx, inspection.elevatorId);
 
@@ -476,7 +473,7 @@ export class CertifierInspectionService {
     let findings = inspection.findings;
     if (input.notes?.trim()) {
       const prefix = findings ? `${findings}\n` : "";
-      findings = `${prefix}Shënime OMI: ${input.notes.trim()}`;
+      findings = `${prefix}Shënime OM: ${input.notes.trim()}`;
     }
 
     await db.$transaction(async (tx) => {

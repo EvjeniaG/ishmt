@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { AppLink } from "@/components/shared/app-link";
 import { redirect } from "next/navigation";
 import { AppShell } from "@/components/layout/app-shell";
 import { StandardPageLayout } from "@/components/layout/standard-page-layout";
@@ -68,9 +69,9 @@ export default async function PortalDocumentsPage() {
                     <td>{doc.uploadedBy ?? "-"}</td>
                     <td>{new Date(doc.uploadedAt).toLocaleDateString("sq-AL")}</td>
                     <td>
-                      <Link href={`/api/documents/${doc.id}/download`} className="text-gov-primary hover:underline">
+                      <AppLink href={`/api/documents/${doc.id}/download`} className="text-gov-primary hover:underline">
                         Shkarko
-                      </Link>
+                      </AppLink>
                     </td>
                   </tr>
                 ))}

@@ -18,8 +18,8 @@ export async function acceptInspectionContractAction(
     const ctx = await requireAuth();
     await CertifierInspectionService.acceptInspectionContract(ctx, contractId, documentId);
     revalidatePath("/portal/omi/inspektim-periodik");
-    revalidatePath("/portal/omi/kontratat");
-    revalidatePath("/portal/sherbimi/contracts");
+    revalidatePath("/portal/omi/kontratat-kontrolli");
+    revalidatePath("/portal/dashboard");
     revalidatePath("/portal/dashboard");
     return { success: true };
   } catch (error) {

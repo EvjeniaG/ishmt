@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { ISHMT_COMPLIANCE_MONITOR_PATH } from "@/lib/ishmt/contract-issue-filters";
 
-/** Adresa e vjetër — ridrejton te faqja e unifikuar e përmbledhjes. */
+/** Adresa e vjetër - ridrejton te faqja e unifikuar e përmbledhjes. */
 export default async function IshmtContractsRedirectPage({
   searchParams,
 }: {

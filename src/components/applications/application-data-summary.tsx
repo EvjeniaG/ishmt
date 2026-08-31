@@ -4,6 +4,7 @@ import {
   displayCertifierOrganizationName,
   formatOmBodyNumber,
 } from "@/lib/elevators/format-om-body";
+import { WorkflowSection } from "@/components/applications/workflow-section";
 
 const ELEVATOR_TYPE_LABELS: Record<string, string> = {
   PASSENGER: "Pasagjerësh",
@@ -87,19 +88,23 @@ function Group({ title, fields }: { title: string; fields: FieldDef[] }) {
 
 /**
  * Full, read-only view of every datum captured during an application
- * (owner location/responsible data, installer technical data, certifier/OMI data).
- * Shown identically to the owner and the ISHMT inspector for complete transparency.
+ * (owner location/responsible data, installer technical data, certifier/OM data).
+ * Shown identically to the owner and the IQMT inspector for complete transparency.
  */
 export function ApplicationDataSummary({
   data,
   orgs,
   title = "Përmbledhje e aplikimit",
   hideCertification = false,
+  hideTechnical = false,
+  hideLocation = false,
 }: {
   data: ApplicationSummaryData | null;
   orgs?: { owner?: string | null; installer?: string | null; certifier?: string | null };
   title?: string;
   hideCertification?: boolean;
+  hideTechnical?: boolean;
+  hideLocation?: boolean;
 }) {
   if (!data) return null;
 
@@ -107,12 +112,8 @@ export function ApplicationDataSummary({
     data.speedMs === null || data.speedMs === undefined ? null : `${String(data.speedMs)} m/s`;
 
   return (
-    <section className="workflow-section">
-      <div className="workflow-section-header">
-        <h2 className="workflow-section-title">{title}</h2>
-        <p className="workflow-section-desc">Të dhënat e regjistruara në aplikim</p>
-      </div>
-      <div className="workflow-section-body space-y-6">
+    <WorkflowSection title={title} description="Të dhënat e regjistruara në aplikim">
+      <div className="space-y-6">
         {orgs ? (
           <Group
             key="orgs"
@@ -130,6 +131,7 @@ export function ApplicationDataSummary({
           />
         ) : null}
 
+        {!hideLocation ? (
         <Group
           key="location"
           title="Vendndodhja"
@@ -155,7 +157,9 @@ export function ApplicationDataSummary({
             { label: "Shënime", value: data.notes },
           ]}
         />
+        ) : null}
 
+        {!hideTechnical ? (
         <Group
           key="technical"
           title="Të dhënat teknike (instaluesi)"
@@ -176,11 +180,12 @@ export function ApplicationDataSummary({
             { label: "Lloji i sistemit", value: data.driveType },
           ]}
         />
+        ) : null}
 
         {!hideCertification ? (
           <Group
             key="certification"
-            title="Certifikimi (certifikuesi / OMI)"
+            title="Certifikimi (certifikuesi / OM)"
             fields={[
               { label: "Numri i certifikatës së instalimit", value: data.installationCertificateNumber },
               { label: "Data e certifikatës", value: fmtDate(data.installationCertificateDate) },
@@ -203,6 +208,6 @@ export function ApplicationDataSummary({
           />
         ) : null}
       </div>
-    </section>
+    </WorkflowSection>
   );
 }

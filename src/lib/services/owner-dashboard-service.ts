@@ -11,7 +11,7 @@ import { computeElevatorComplianceIndicator } from "@/lib/elevators/elevator-com
 import { NotificationService } from "@/lib/services/notification-service";
 import { OwnerComplianceNotificationService } from "@/lib/services/owner-compliance-notification-service";
 import { ApplicationService } from "@/lib/services/application-service";
-import { DeadlineService } from "@/lib/deadlines/deadline-service";
+import { DeadlineService, ISHMT_PROCEDURE_REVIEW_STATUSES } from "@/lib/deadlines/deadline-service";
 import { resolveElevatorComplianceView } from "@/lib/elevators/resolve-elevator-compliance";
 import type { AuthContext } from "@/lib/permissions/guards";
 import { ROLE_CODES } from "@/lib/constants/roles";
@@ -19,11 +19,12 @@ import type { RequiredActionItem } from "@/lib/dashboard/required-actions";
 import { OWNER_TERM } from "@/lib/constants/owner-labels";
 import { APPLICATION_STATUS_LABELS } from "@/lib/workflows/application-workflow";
 import { labelElevatorStatus } from "@/lib/constants/display-labels";
-import { registrationPhasePath, resolveRegistrationPhase } from "@/lib/registration/phase-router";
+import { registrationPhasePath, resolveRegistrationPhase, buildRegistrationPhaseInput } from "@/lib/registration/phase-router";
+import { isReturnedToRole } from "@/lib/workflows/return-targets";
 
 const EXPIRY_WINDOW_DAYS = 30;
 
-const IN_PROGRESS_STATUSES: ApplicationStatus[] = [
+const OWNER_SIDE_IN_PROGRESS_STATUSES: ApplicationStatus[] = [
   ApplicationStatus.DRAFT,
   ApplicationStatus.BASIC_DATA_COMPLETED,
   ApplicationStatus.PENDING_INSTALLER,
@@ -39,10 +40,6 @@ const IN_PROGRESS_STATUSES: ApplicationStatus[] = [
   ApplicationStatus.CERTIFICATION_COMPLETED,
   ApplicationStatus.CERTIFICATION_COMPLETED_WITH_ISSUES,
   ApplicationStatus.PENDING_OWNER_SUBMISSION,
-  ApplicationStatus.SUBMITTED,
-  ApplicationStatus.UNDER_REVIEW,
-  ApplicationStatus.PENDING_CHIEF_INSPECTOR,
-  ApplicationStatus.RETURNED,
 ];
 
 
@@ -61,9 +58,16 @@ function applicationHref(app: {
   returnToRole?: ReturnTargetRole | null;
   installerOrgId?: string | null;
   certifierOrgId?: string | null;
+  delegations?: {
+    accessType: import("@prisma/client").DelegationType;
+    organizationId: string;
+    status: import("@prisma/client").DelegationStatus;
+    expiresAt?: Date | null;
+  }[];
+  data?: { registrationExtendedData?: unknown } | null;
 }) {
   if (app.type === "NEW_REGISTRATION") {
-    const phase = resolveRegistrationPhase(app, ROLE_CODES.OWNER);
+    const phase = resolveRegistrationPhase(buildRegistrationPhaseInput(app), ROLE_CODES.OWNER);
     return registrationPhasePath(app.id, phase);
   }
   return `/portal/applications/${app.id}`;
@@ -117,7 +121,7 @@ export class OwnerDashboardService {
         where: {
           ownerOrgId: orgId,
           deletedAt: null,
-          status: { in: IN_PROGRESS_STATUSES.filter((s) => s !== ApplicationStatus.RETURNED) },
+          status: { in: OWNER_SIDE_IN_PROGRESS_STATUSES },
         },
       }),
       db.application.count({
@@ -218,13 +222,7 @@ export class OwnerDashboardService {
         where: {
           ownerOrgId: orgId,
           deletedAt: null,
-          status: {
-            in: [
-              ApplicationStatus.SUBMITTED,
-              ApplicationStatus.UNDER_REVIEW,
-              ApplicationStatus.PENDING_CHIEF_INSPECTOR,
-            ],
-          },
+          status: { in: ISHMT_PROCEDURE_REVIEW_STATUSES },
           submittedAt: { not: null },
         },
         select: { id: true, applicationNumber: true, submittedAt: true, status: true, type: true },
@@ -445,6 +443,9 @@ export class OwnerDashboardService {
     }
 
     for (const app of input.returnedAppsList) {
+      if (!isReturnedToRole(app, ReturnTargetRole.OWNER)) {
+        continue;
+      }
       actions.push({
         id: `returned-${app.id}`,
         title: "Aplikim i kthyer për korrigjim",
@@ -458,7 +459,7 @@ export class OwnerDashboardService {
     for (const app of input.pendingOwnerApps) {
       actions.push({
         id: `submit-${app.id}`,
-        title: "Gati për parashtrim te ISHMT",
+        title: "Gati për parashtrim te IQMT",
         subtitle: `${app.applicationNumber} · ${app.data?.buildingAddress ?? "-"}`,
         severity: "warning",
         href: applicationHref(app),
@@ -493,9 +494,9 @@ export class OwnerDashboardService {
                 item.type === "pending-inspection-contract" ||
                 item.type === "inspection-contract-expiring" ||
                 item.type === "inspection-contract-expired"
-              ? `/portal/elevators/${item.elevatorId}?tab=inspections`
-              : item.type.includes("maintenance") || item.type === "missing-maintenance-company"
-                ? `/portal/elevators/${item.elevatorId}/maintenance/change`
+              ? `/portal/kontroll-periodik`
+              : item.type.includes("maintenance")
+                ? `/portal/elevators/${item.elevatorId}?tab=maintenance`
                 : item.type.includes("inspection") || item.type === "missing-inspection"
                   ? `/portal/elevators/${item.elevatorId}?tab=inspections`
                   : `/portal/elevators/${item.elevatorId}`;
@@ -506,7 +507,7 @@ export class OwnerDashboardService {
           : item.type === "missing-maintenance-company" || item.type === "missing-maintenance-contract"
             ? "Cakto mirëmbajtës"
             : item.type === "missing-inspection-contract"
-              ? "Cakto OMI"
+              ? "Cakto OM"
               : item.type === "pending-maintenance-contract" || item.type === "pending-inspection-contract"
                 ? "Shiko kontratën"
                 : item.type.includes("contract-expiring") || item.type.includes("contract-expired")
@@ -624,7 +625,7 @@ export class OwnerDashboardService {
           seen.add(key);
           items.push({
             type: "missing-inspection-contract",
-            label: "Mungon kontratë inspektimi periodik (OMI)",
+            label: "Mungon kontratë kontrolli periodik (OM)",
             elevatorId: elv.id,
             registryNumber: elv.registryNumber,
           });
@@ -651,7 +652,7 @@ export class OwnerDashboardService {
           seen.add(key);
           items.push({
             type: "pending-inspection-contract",
-            label: "Kontratë inspektimi - në pritje pranimi",
+            label: "Kontratë kontrolli periodik - në pritje pranimi",
             elevatorId: elv.id,
             registryNumber: elv.registryNumber,
             date: inspPending.endDate ?? undefined,
@@ -692,7 +693,7 @@ export class OwnerDashboardService {
           seen.add(key);
           items.push({
             type: "inspection-contract-expiring",
-            label: "Kontrata e inspektimit skadon së shpejti",
+            label: "Kontrata e kontrollit periodik skadon së shpejti",
             elevatorId: elv.id,
             registryNumber: elv.registryNumber,
             date: inspActive.endDate,
@@ -704,7 +705,7 @@ export class OwnerDashboardService {
           seen.add(key);
           items.push({
             type: "inspection-contract-expired",
-            label: "Kontrata e inspektimit ka skaduar",
+            label: "Kontrata e kontrollit periodik ka skaduar",
             elevatorId: elv.id,
             registryNumber: elv.registryNumber,
             date: inspActive.endDate,

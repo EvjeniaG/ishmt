@@ -1,6 +1,7 @@
 "use client";
 
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
+import { useRouter } from "@/lib/navigation/use-app-router";
 import { ComplianceIndicator, ElevatorStatus } from "@prisma/client";
 import { Button } from "@/components/ui/button";
 import { ELEVATOR_STATUS_LABELS } from "@/lib/constants/display-labels";

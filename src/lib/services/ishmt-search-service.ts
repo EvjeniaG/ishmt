@@ -6,6 +6,7 @@ import type { ComplianceDisplayProfile } from "@/lib/services/compliance-service
 import { AuditService } from "@/lib/audit/audit-service";
 import { AuditAction } from "@prisma/client";
 import type { AuthContext } from "@/lib/permissions/guards";
+import { ROLE_CODES } from "@/lib/constants/roles";
 import { isIshmtStaffRole } from "@/lib/permissions/routes";
 import {
   withDemoDataApplicationScope,
@@ -221,8 +222,12 @@ function needsInMemoryFiltering(filters: NationalSearchFilters): boolean {
 
 export class IshmtSearchService {
   static assertIshmtSearch(ctx: AuthContext) {
-    if (!isIshmtStaffRole(ctx.roleCode)) {
-      throw new Error("Vetëm ISHMT mund të kërkojë në regjistrin kombëtar.");
+    if (
+      !isIshmtStaffRole(ctx.roleCode) &&
+      ctx.roleCode !== ROLE_CODES.DIRECTORATE &&
+      ctx.roleCode !== ROLE_CODES.INSPECTOR
+    ) {
+      throw new Error("Vetëm IQMT mund të kërkojë në regjistrin kombëtar.");
     }
   }
 

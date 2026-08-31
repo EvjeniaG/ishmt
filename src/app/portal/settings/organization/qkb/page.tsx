@@ -5,18 +5,13 @@ import { StandardPageLayout } from "@/components/layout/standard-page-layout";
 import { SubmitNiptForm } from "@/components/forms/submit-nipt-form";
 import { SectionCard } from "@/components/shared/institutional";
 import { Button } from "@/components/ui/button";
-import { getAuthSession } from "@/lib/auth";
-import { ROLE_CODES } from "@/lib/constants/roles";
+import { requireServiceCapabilityForPage } from "@/lib/auth/page-guards";
 import { OrganizationService } from "@/lib/services/organization-service";
 import { QkbValidationService } from "@/lib/services/qkb-validation-service";
 
 export default async function QkbSettingsPage() {
-  const session = await getAuthSession();
-  if (!session?.user || session.user.roleCode !== ROLE_CODES.MAINTENANCE) {
-    redirect("/unauthorized");
-  }
-
-  const org = await OrganizationService.getById(session.user.activeOrgId);
+  const ctx = await requireServiceCapabilityForPage("maintenance");
+  const org = await OrganizationService.getById(ctx.activeOrgId);
   if (!org) redirect("/portal/dashboard");
 
   const validations = await QkbValidationService.getForOrganization(org.id);

@@ -5,10 +5,20 @@ import { StandardPageLayout } from "@/components/layout/standard-page-layout";
 import { ApplicationStatusBadge } from "@/components/applications/application-status-badge";
 import { PortalEmptyState, PortalTableWrap } from "@/components/shared/portal-table";
 import { OfficialTableFooter, RegistryNumber, SectionCard } from "@/components/shared/institutional";
+import { WorkflowStatusChip } from "@/components/applications/application-status-badge";
 import { getAuthSession } from "@/lib/auth";
 import { APPLICATION_TYPE_LABELS } from "@/lib/constants/application-labels";
+import { formatDateSq } from "@/lib/format-date";
 import { isFieldInspectorRole } from "@/lib/permissions/ishmt-roles";
-import { ApplicationService } from "@/lib/services/application-service";
+import { FieldInspectorWorkloadService } from "@/lib/services/field-inspector-workload-service";
+
+function locationLabel(
+  buildingAddress: string | null | undefined,
+  municipalityName: string | null | undefined,
+) {
+  const parts = [buildingAddress, municipalityName].filter(Boolean);
+  return parts.length ? parts.join(" · ") : "—";
+}
 
 export default async function MyApplicationReviewsPage() {
   const session = await getAuthSession();
@@ -27,19 +37,36 @@ export default async function MyApplicationReviewsPage() {
     permissions: session.user.permissions,
   };
 
-  const applications = await ApplicationService.listForContext(ctx, {
-    queueBucket: "needs_action",
-  });
+  const [pending, completed] = await Promise.all([
+    FieldInspectorWorkloadService.listPendingDocumentReviews(ctx),
+    FieldInspectorWorkloadService.listCompletedDocumentReviews(ctx),
+  ]);
 
   return (
     <AppShell>
       <StandardPageLayout
-        eyebrow="ISHMT · Inspektor"
+        eyebrow="IQMT · Inspektor"
         title="Shqyrtimi i aplikimeve"
-        description="Dosjet e caktuara nga përgjegjësi i sektorit — plotësoni raportin e shqyrtimit."
+        description="Dosjet e caktuara për shqyrtim dokumentacioni dhe historiku i punës suaj."
+        actions={
+          <Link
+            href="/ishmt/inspector/dashboard"
+            className="text-sm font-medium text-gov-primary hover:underline"
+          >
+            ← Paneli im
+          </Link>
+        }
       >
-        <SectionCard title="Detyrat e mia" subtitle="Aplikime në pritje të raportit">
-          {applications.length === 0 ? (
+        <SectionCard
+          title="Detyrat aktive"
+          subtitle="Dosje në pritje të raportit tuaj"
+          meta={
+            <span className="workflow-status-outline tabular-nums">
+              {pending.length} aktive
+            </span>
+          }
+        >
+          {pending.length === 0 ? (
             <PortalEmptyState>Nuk keni aplikime të caktuara për shqyrtim.</PortalEmptyState>
           ) : (
             <>
@@ -49,13 +76,76 @@ export default async function MyApplicationReviewsPage() {
                     <th className="w-12">#</th>
                     <th>Nr. aplikimit</th>
                     <th>Lloji</th>
-                    <th>Statusi</th>
+                    <th>Vendndodhja</th>
+                    <th>Terren</th>
+                    <th>Caktuar</th>
                     <th></th>
                   </tr>
                 </thead>
                 <tbody>
-                  {applications.map((app, index) => (
-                    <tr key={app.id}>
+                  {pending.map((app, index) => (
+                    <tr key={app.assignmentId}>
+                      <td className="tabular-nums text-muted-foreground">{index + 1}</td>
+                      <td>
+                        <RegistryNumber>{app.applicationNumber}</RegistryNumber>
+                      </td>
+                      <td>{APPLICATION_TYPE_LABELS[app.type] ?? app.type}</td>
+                      <td className="max-w-[14rem] truncate text-muted-foreground">
+                        {locationLabel(app.buildingAddress, app.municipalityName)}
+                      </td>
+                      <td>
+                        {app.requiresFieldVerification ? (
+                          <WorkflowStatusChip label="Kërkohet" tone="waiting" />
+                        ) : (
+                          <span className="text-sm text-muted-foreground">Jo</span>
+                        )}
+                      </td>
+                      <td className="tabular-nums text-muted-foreground">
+                        {formatDateSq(app.assignedAt)}
+                      </td>
+                      <td>
+                        <Link href={`/ishmt/review/${app.applicationId}`} className="portal-table-link">
+                          Shqyrto dosjen
+                        </Link>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </PortalTableWrap>
+              <OfficialTableFooter total={pending.length} />
+            </>
+          )}
+        </SectionCard>
+
+        <SectionCard
+          title="Historiku"
+          subtitle="Dosjet e shqyrtuara — dosja e plotë mbetet e hapur edhe pas regjistrimit"
+          meta={
+            <span className="workflow-status-outline tabular-nums">
+              {completed.length} përfunduar
+            </span>
+          }
+        >
+          {completed.length === 0 ? (
+            <PortalEmptyState>
+              Ende nuk keni përfunduar shqyrtime. Pas dorëzimit të raportit, dosjet do të shfaqen këtu.
+            </PortalEmptyState>
+          ) : (
+            <>
+              <PortalTableWrap>
+                <thead>
+                  <tr>
+                    <th className="w-12">#</th>
+                    <th>Nr. aplikimit</th>
+                    <th>Lloji</th>
+                    <th>Statusi i dosjes</th>
+                    <th>Përfunduar</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {completed.map((app, index) => (
+                    <tr key={app.assignmentId}>
                       <td className="tabular-nums text-muted-foreground">{index + 1}</td>
                       <td>
                         <RegistryNumber>{app.applicationNumber}</RegistryNumber>
@@ -68,16 +158,19 @@ export default async function MyApplicationReviewsPage() {
                           roleCode={session.user.roleCode}
                         />
                       </td>
+                      <td className="tabular-nums text-muted-foreground">
+                        {app.completedAt ? formatDateSq(app.completedAt) : "—"}
+                      </td>
                       <td>
-                        <Link href={`/ishmt/review/${app.id}`} className="portal-table-link">
-                          Shqyrto dosjen
+                        <Link href={`/ishmt/review/${app.applicationId}`} className="portal-table-link">
+                          Shiko dosjen e plotë
                         </Link>
                       </td>
                     </tr>
                   ))}
                 </tbody>
               </PortalTableWrap>
-              <OfficialTableFooter total={applications.length} />
+              <OfficialTableFooter total={completed.length} label="dosje" />
             </>
           )}
         </SectionCard>

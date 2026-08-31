@@ -3,7 +3,7 @@ import { ApplicationStatus, Prisma, ReturnTargetRole } from "@prisma/client";
 export const RETURN_TARGET_LABELS: Record<ReturnTargetRole, string> = {
   OWNER: "Personi përgjegjës i ashensorit",
   INSTALLER: "Kompania instaluese",
-  CERTIFIER: "Kompania certifikuese (OMI)",
+  CERTIFIER: "Kompania certifikuese (OM)",
 };
 
 const RETURN_TARGET_ORDER: ReturnTargetRole[] = [
@@ -32,6 +32,43 @@ export function isReturnedToRole(
   role: ReturnTargetRole,
 ): boolean {
   return getReturnToRoles(app).includes(role);
+}
+
+/** Aplikimi shfaq bannerin e korrigimit për rolin aktual (pronar, instalues, certifikues). */
+export function applicationReturnBannerVisible(
+  app: {
+    status: ApplicationStatus;
+    returnToRole?: ReturnTargetRole | null;
+    returnToRoles?: unknown;
+    returnReason?: string | null;
+    requiredCorrection?: string | null;
+  },
+  roleCode: string,
+): boolean {
+  if (!app.returnReason && !app.requiredCorrection) return false;
+
+  const target =
+    roleCode === "OWNER"
+      ? ReturnTargetRole.OWNER
+      : roleCode === "INSTALLER"
+        ? ReturnTargetRole.INSTALLER
+        : roleCode === "CERTIFIER"
+          ? ReturnTargetRole.CERTIFIER
+          : null;
+  if (!target) return false;
+
+  if (app.status === ApplicationStatus.RETURNED) {
+    return isReturnedToRole(app, target);
+  }
+
+  if (
+    app.status === ApplicationStatus.PENDING_OWNER_SUBMISSION &&
+    target === ReturnTargetRole.OWNER
+  ) {
+    return true;
+  }
+
+  return false;
 }
 
 /** Roli kryesor i kthimit (prioritet: personi përgjegjës i ashensorit → instaluesi → certifikuesi). */

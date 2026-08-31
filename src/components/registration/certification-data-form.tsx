@@ -1,6 +1,6 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { useRouter } from "@/lib/navigation/use-app-router";
 import { useState } from "react";
 import { submitRegistrationCertificationAction } from "@/lib/actions/registration-actions";
 import {
@@ -9,8 +9,8 @@ import {
   EXAMINATION_TYPE_LABELS,
 } from "@/lib/registration/labels";
 import {
+  getRequiredCertificationDocs,
   OPTIONAL_CERTIFICATION_DOCS,
-  REQUIRED_CERTIFICATION_DOCS,
   type CertificationDocSpec,
 } from "@/lib/registration/certification-documents";
 import { Button } from "@/components/ui/button";
@@ -97,20 +97,24 @@ export function RegistrationCertificationDataForm({
   applicationId,
   defaults,
   uploadedPurposes = [],
+  applicationData,
 }: {
   applicationId: string;
   defaults: Record<string, unknown>;
   uploadedPurposes?: string[];
+  applicationData?: Record<string, unknown> | null;
 }) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [uploaded, setUploaded] = useState<Set<string>>(new Set(uploadedPurposes));
 
+  const requiredDocs = getRequiredCertificationDocs(applicationData ?? null);
+
   function markUploaded(purpose: string) {
     setUploaded((prev) => new Set(prev).add(purpose));
   }
 
-  const missing = REQUIRED_CERTIFICATION_DOCS.filter((d) => !uploaded.has(d.purpose));
+  const missing = requiredDocs.filter((d) => !uploaded.has(d.purpose));
   const docsComplete = missing.length === 0;
 
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
@@ -141,10 +145,10 @@ export function RegistrationCertificationDataForm({
   return (
     <form onSubmit={onSubmit} className="space-y-6">
       <Card>
-        <CardHeader><CardTitle>Certifikimi - OMI / Certifikuesi</CardTitle></CardHeader>
+        <CardHeader><CardTitle>Certifikimi - OM / Certifikuesi</CardTitle></CardHeader>
         <CardContent className="grid gap-4 md:grid-cols-2">
-          <div className="space-y-2"><Label>Numri OMI *</Label><Input name="omiNumber" defaultValue={defaults.omiNumber as string ?? ""} placeholder="OM 013" required /></div>
-          <div className="space-y-2"><Label>Personi përgjegjës nga OMI</Label><Input name="certifierResponsiblePerson" /></div>
+          <div className="space-y-2"><Label>Numri OM *</Label><Input name="omiNumber" defaultValue={defaults.omiNumber as string ?? ""} placeholder="OM 013" required /></div>
+          <div className="space-y-2"><Label>Personi përgjegjës nga OM</Label><Input name="certifierResponsiblePerson" /></div>
           <div className="md:col-span-2 space-y-2">
             <Label>Lloji i ekzaminimit *</Label>
             {Object.entries(EXAMINATION_TYPE_LABELS).map(([v, l]) => (
@@ -184,7 +188,7 @@ export function RegistrationCertificationDataForm({
       <Card>
         <CardHeader><CardTitle>Dokumentacioni i certifikimit</CardTitle></CardHeader>
         <CardContent className="space-y-3">
-          {REQUIRED_CERTIFICATION_DOCS.map((spec) => (
+          {requiredDocs.map((spec) => (
             <CertificationUploadZone
               key={spec.purpose}
               applicationId={applicationId}

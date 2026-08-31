@@ -1,6 +1,6 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { useRouter } from "@/lib/navigation/use-app-router";
 import { useState } from "react";
 import { respondOwnershipTransferAction } from "@/lib/actions/ownership-transfer-actions";
 import { Button } from "@/components/ui/button";
@@ -40,7 +40,7 @@ export function OwnershipTransferResponse({
       <CardHeader>
         <CardTitle>Ftesë transferimi pronësie</CardTitle>
         <p className="text-sm text-muted-foreground">
-          {senderName} kërkon t&apos;ju kalojë kartelën e ashensorit. Përgjigjja juaj është e nevojshme para se aplikimi të shkojë te ISHMT.
+          {senderName} kërkon t&apos;ju kalojë kartelën e ashensorit. Përgjigjja juaj është e nevojshme para se aplikimi të shkojë te IQMT.
         </p>
       </CardHeader>
       <CardContent className="space-y-3 text-sm">
@@ -51,7 +51,7 @@ export function OwnershipTransferResponse({
           <p className="mt-1"><strong>Aplikimi:</strong> {applicationNumber}</p>
         </div>
         <p className="text-muted-foreground">
-          Nëse <strong>pranoni</strong>, personi përgjegjës aktual i ashensorit mund ta parashtrojë te ISHMT. Pas miratimit të ISHMT-së, kartela kalon te ju.
+          Nëse <strong>pranoni</strong>, personi përgjegjës aktual i ashensorit mund ta parashtrojë te IQMT. Pas miratimit të IQMT-së, kartela kalon te ju.
           Nëse <strong>refuzoni</strong>, transferimi ndalet - personi përgjegjës i ashensorit duhet të zgjedhë marrës tjetër.
         </p>
         {error && <p className="text-destructive">{error}</p>}

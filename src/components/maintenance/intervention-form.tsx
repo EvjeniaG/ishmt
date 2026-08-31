@@ -1,6 +1,6 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { useRouter } from "@/lib/navigation/use-app-router";
 import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -17,10 +17,13 @@ const inputClass = "h-9 text-sm";
 export function InterventionForm({
   elevators,
   fixedElevatorId,
+  defaultTechnicianName,
 }: {
   elevators: ElevatorOption[];
   /** Kur formulari hapet nga dosja e një ashensori - pa listë zgjedhjeje. */
   fixedElevatorId?: string;
+  /** Emri i teknikut nga llogaria e përdoruesit - plotësohet automatikisht. */
+  defaultTechnicianName?: string;
 }) {
   const router = useRouter();
   const [elevatorId, setElevatorId] = useState(fixedElevatorId ?? "");
@@ -48,20 +51,18 @@ export function InterventionForm({
       setError("Zgjidhni ashensorin.");
       return;
     }
-    if (!file) {
-      setError("Ngarkoni dokumentin e ndërhyrjes (PDF).");
-      return;
-    }
-
     setLoading(true);
     setError(null);
     try {
-      const documentId = await uploadElevatorDocumentClient(file, targetElevatorId, {
-        classification: "MAINTENANCE_LOG",
-        purpose: "INTERVENTION",
-      });
+      let documentId: string | undefined;
+      if (file) {
+        documentId = await uploadElevatorDocumentClient(file, targetElevatorId, {
+          classification: "MAINTENANCE_LOG",
+          purpose: "INTERVENTION",
+        });
+      }
       const formData = new FormData(e.currentTarget);
-      formData.set("documentId", documentId);
+      if (documentId) formData.set("documentId", documentId);
       const result = await logInterventionAction(formData);
       if (!result.success) {
         setError(result.error);
@@ -167,7 +168,13 @@ export function InterventionForm({
 
         <div className="space-y-1 md:col-span-2">
           <Label htmlFor="technicianName" className="text-xs">Emri i teknikut *</Label>
-          <Input id="technicianName" name="technicianName" required className={inputClass} />
+          <Input
+            id="technicianName"
+            name="technicianName"
+            required
+            className={inputClass}
+            defaultValue={defaultTechnicianName ?? ""}
+          />
         </div>
 
         <div className="space-y-1 md:col-span-2">
@@ -194,12 +201,13 @@ export function InterventionForm({
         </div>
 
         <div className="space-y-1 md:col-span-2">
-          <Label htmlFor="interventionDocument" className="text-xs">Dokumenti / raporti i ndërhyrjes *</Label>
+          <Label htmlFor="interventionDocument" className="text-xs">
+            Foto / raport shtesë (opsionale)
+          </Label>
           <Input
             id="interventionDocument"
             type="file"
             accept={COMPLIANCE_DOCUMENT_ACCEPT}
-            required
             className={inputClass}
             onChange={(event) => setFile(event.target.files?.[0] ?? null)}
           />

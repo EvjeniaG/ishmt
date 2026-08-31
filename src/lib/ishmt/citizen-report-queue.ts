@@ -1,6 +1,6 @@
 import { CitizenReportStatus } from "@prisma/client";
 
-/** Raportime që presin shqyrtim ose caktim nga ISHMT. */
+/** Raportime që presin shqyrtim ose caktim nga IQMT. */
 export const CITIZEN_REPORT_TRIAGE_STATUSES: CitizenReportStatus[] = [
   CitizenReportStatus.SUBMITTED,
   CitizenReportStatus.TRIAGED,
@@ -13,7 +13,7 @@ export const CITIZEN_REPORT_ACTIVE_STATUSES: CitizenReportStatus[] = [
   CitizenReportStatus.INVESTIGATING,
 ];
 
-/** Raportime të mbyllura — regjistri i zgjidhura. */
+/** Raportime të mbyllura - regjistri i zgjidhura. */
 export const CITIZEN_REPORT_CLOSED_STATUSES: CitizenReportStatus[] = [
   CitizenReportStatus.RESOLVED,
   CitizenReportStatus.DISMISSED,

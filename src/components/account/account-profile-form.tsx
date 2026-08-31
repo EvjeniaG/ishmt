@@ -1,6 +1,6 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { useRouter } from "@/lib/navigation/use-app-router";
 import { useRef, useState } from "react";
 import { updateAccountProfileAction } from "@/lib/actions/account-actions";
 import { ProfileSectionHeader } from "@/components/account/profile-section-header";

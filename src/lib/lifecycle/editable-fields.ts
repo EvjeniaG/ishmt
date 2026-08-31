@@ -17,7 +17,7 @@ export const CORRECTION_FIELDS: EditableFieldDef[] = [
   { field: "responsibleEntityIdentifier", label: "NIPT/NID" },
   { field: "floorsServed", label: "Kate të shërbyera" },
   { field: "capacityKg", label: "Kapaciteti (kg)" },
-  { field: "omiNumber", label: "Nr. identifikimi OMI" },
+  { field: "omiNumber", label: "Nr. identifikimi OM" },
   { field: "examinationType", label: "Lloji i ekzaminimit" },
 ];
 

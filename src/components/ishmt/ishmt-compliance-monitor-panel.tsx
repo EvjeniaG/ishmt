@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Mail } from "lucide-react";
+import { CheckCircle2, Info, Mail } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { MetricCard } from "@/components/shared/metric-card";
 import { SectionCard } from "@/components/shared/institutional";
@@ -10,29 +10,62 @@ import {
   buildContractsFilterHref,
   type ContractIssueListFilters,
 } from "@/lib/ishmt/contract-issue-filters";
-import type { IshmtComplianceDigestSnapshot } from "@/lib/services/ishmt-compliance-digest-service";
+import type { IshmtComplianceDigestSnapshot, IshmtDigestSectionNotifyStatus } from "@/lib/services/ishmt-compliance-digest-service";
 import type { IshmtContractStats } from "@/lib/services/ishmt-contract-monitor-service";
 import {
   notifyAllComplianceDigestAction,
   notifyExpiredContractsAction,
   notifyInspectionExpiring30Action,
   notifyMissingQrAction,
+  type ComplianceDigestNotifyResult,
 } from "@/lib/actions/ishmt-compliance-digest-actions";
+import {
+  buildComplianceNotifyFeedback,
+  formatLastNotifiedLabel,
+  notifyFeedbackToneClasses,
+  type NotifyFeedbackTone,
+} from "@/lib/ishmt/compliance-notify-feedback";
 
 type MonitorSection = {
-  id: string;
+  id: keyof IshmtDigestSectionNotifyStatus | string;
   title: string;
   description: string;
   count: number;
   secondaryLabel?: string;
   listHref: string;
-  notify?: () => Promise<{
-    success: boolean;
-    error?: string;
-    created?: number;
-    organizations?: number;
-  }>;
+  notify?: () => Promise<ComplianceDigestNotifyResult>;
 };
+
+function NotifyFeedbackBanner({
+  message,
+  tone,
+}: {
+  message: string;
+  tone: NotifyFeedbackTone;
+}) {
+  const Icon = tone === "success" ? CheckCircle2 : Info;
+
+  return (
+    <p
+      className={`flex items-start gap-2 rounded-lg border px-4 py-3 text-sm ${notifyFeedbackToneClasses(tone)}`}
+    >
+      <Icon className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
+      <span>{message}</span>
+    </p>
+  );
+}
+
+function applyNotifyResultToSectionStatus(
+  current: IshmtDigestSectionNotifyStatus,
+  sectionId: string,
+  result: Extract<ComplianceDigestNotifyResult, { success: true }>,
+): IshmtDigestSectionNotifyStatus {
+  if (!(sectionId in current)) return current;
+  const key = sectionId as keyof IshmtDigestSectionNotifyStatus;
+  const nextAt = result.sentAt ?? result.lastSentAt;
+  if (!nextAt) return current;
+  return { ...current, [key]: nextAt };
+}
 
 function listHref(filters: Partial<ContractIssueListFilters>, base: ContractIssueListFilters): string {
   return `${buildContractsFilterHref(base, { ...filters, page: 1 })}#alarmet-lista`;
@@ -54,16 +87,16 @@ function buildSections(
       id: "expired",
       title: "Kontrata të skaduara",
       description:
-        "Ashensorë aktivë me kontratë mirëmbajtjeje ose inspektimi (INP) me datë mbarimi të kaluar.",
+        "Ashensorë aktivë me kontratë mirëmbajtjeje ose kontrolli periodik (OM) me datë mbarimi të kaluar.",
       count: snapshot.contractsExpiredTotal,
-      secondaryLabel: `${snapshot.maintenanceContractExpired} mirëmbajtje · ${snapshot.inspectionContractExpired} inspektim`,
+      secondaryLabel: `${snapshot.maintenanceContractExpired} mirëmbajtje · ${snapshot.inspectionContractExpired} kontroll periodik`,
       listHref: listHref({ issueCategory: "expired" }, filterBase),
       notify: canNotify ? notifyExpiredContractsAction : undefined,
     },
     {
       id: "inp-30",
       title: "INP skadon brenda 30 ditëve",
-      description: "Kontrata periodike e inspektimit që kërkon rinovim ose veprim nga OMI dhe pronari.",
+      description: "Kontrata e kontrollit periodik që kërkon rinovim ose veprim nga OM dhe pronari.",
       count: snapshot.inspectionContractExpiring30,
       listHref: listHref(
         { issue: "inspection-contract-expiring", expiringWithin: 30 },
@@ -90,7 +123,7 @@ function buildSections(
     },
     {
       id: "no-inspection",
-      title: "Pa kontratë inspektimi (OMI)",
+      title: "Pa kontratë kontrolli periodik (OM)",
       description: "Ashensorë aktivë pa kontratë periodike me trupin certifikues.",
       count: stats.noInspectionContract,
       listHref: listHref({ issue: "no-inspection-contract" }, filterBase),
@@ -98,9 +131,9 @@ function buildSections(
     {
       id: "expiring-7",
       title: "Kontrata skadon brenda 7 ditëve",
-      description: "Mirëmbajtje dhe inspektim OMI që kërkojnë veprim urgjent.",
+      description: "Mirëmbajtje dhe kontroll periodik OM që kërkojnë veprim urgjent.",
       count: expiring7,
-      secondaryLabel: `${stats.maintenanceContractExpiring7} mirëmbajtje · ${stats.inspectionContractExpiring7} inspektim`,
+      secondaryLabel: `${stats.maintenanceContractExpiring7} mirëmbajtje · ${stats.inspectionContractExpiring7} kontroll periodik`,
       listHref: listHref({ issueCategory: "expiring", expiringWithin: 7 }, filterBase),
     },
     {
@@ -108,7 +141,7 @@ function buildSections(
       title: "Kontrata në pritje pranimi",
       description: "Kontrata të dërguara te pronari, pa konfirmim ende.",
       count: pending,
-      secondaryLabel: `${stats.pendingMaintenanceContract} mirëmbajtje · ${stats.pendingInspectionContract} inspektim`,
+      secondaryLabel: `${stats.pendingMaintenanceContract} mirëmbajtje · ${stats.pendingInspectionContract} kontroll periodik`,
       listHref: listHref({ issueCategory: "pending" }, filterBase),
     },
   ];
@@ -121,54 +154,76 @@ export function IshmtComplianceMonitorPanel({
   stats,
   filters,
   canNotify,
+  sectionNotifyStatus: initialSectionNotifyStatus,
 }: {
   snapshot: IshmtComplianceDigestSnapshot;
   stats: IshmtContractStats;
   filters: ContractIssueListFilters;
   canNotify: boolean;
+  sectionNotifyStatus?: IshmtDigestSectionNotifyStatus;
 }) {
   const [busyId, setBusyId] = useState<string | null>(null);
-  const [message, setMessage] = useState<string | null>(null);
+  const [feedback, setFeedback] = useState<{ message: string; tone: NotifyFeedbackTone } | null>(
+    null,
+  );
+  const [sectionNotifyStatus, setSectionNotifyStatus] = useState<IshmtDigestSectionNotifyStatus>(
+    initialSectionNotifyStatus ?? { expired: null, "inp-30": null, qr: null },
+  );
 
   const sections = buildSections(snapshot, stats, filters, canNotify);
   const highlightSections = sections.slice(0, 3);
   const detailSections = sections.slice(3);
   const hasAnyIssue = sections.some((section) => section.count > 0);
+  const hasNotifyableIssue = highlightSections.some((section) => section.count > 0);
 
   async function runAction(section: MonitorSection) {
     if (!section.notify) return;
     setBusyId(section.id);
-    setMessage(null);
+    setFeedback(null);
     const result = await section.notify();
     setBusyId(null);
 
     if (!result.success) {
-      setMessage(result.error ?? "Njoftimi dështoi.");
+      setFeedback({ message: result.error ?? "Njoftimi dështoi.", tone: "warning" });
       return;
     }
 
-    setMessage(
-      result.created && result.created > 0
-        ? `${result.created} njoftime u dërguan te ${result.organizations ?? 0} organizata (${section.title.toLowerCase()}).`
-        : "Nuk u krijuan njoftime të reja (të dërguara së fundmi).",
+    setSectionNotifyStatus((current) =>
+      applyNotifyResultToSectionStatus(current, section.id, result),
+    );
+    setFeedback(
+      buildComplianceNotifyFeedback({
+        ...result,
+        contextLabel: section.title,
+      }),
     );
   }
 
   async function notifyAll() {
     setBusyId("all");
-    setMessage(null);
+    setFeedback(null);
     const result = await notifyAllComplianceDigestAction();
     setBusyId(null);
 
     if (!result.success) {
-      setMessage(result.error ?? "Njoftimi dështoi.");
+      setFeedback({ message: result.error ?? "Njoftimi dështoi.", tone: "warning" });
       return;
     }
 
-    setMessage(
-      result.created > 0
-        ? `${result.created} njoftime u dërguan te ${result.organizations} organizata (kategoritë kryesore).`
-        : "Nuk u krijuan njoftime të reja (të dërguara së fundmi).",
+    setSectionNotifyStatus((current) => {
+      let next = { ...current };
+      for (const section of highlightSections) {
+        if (section.count > 0) {
+          next = applyNotifyResultToSectionStatus(next, section.id, result);
+        }
+      }
+      return next;
+    });
+    setFeedback(
+      buildComplianceNotifyFeedback({
+        ...result,
+        contextLabel: "kategoritë kryesore",
+      }),
     );
   }
 
@@ -185,7 +240,7 @@ export function IshmtComplianceMonitorPanel({
           <Button
             type="button"
             size="sm"
-            disabled={!hasAnyIssue || busyId !== null}
+            disabled={!hasNotifyableIssue || busyId !== null}
             onClick={() => void notifyAll()}
           >
             <Mail className="mr-1.5 h-3.5 w-3.5" aria-hidden />
@@ -194,11 +249,7 @@ export function IshmtComplianceMonitorPanel({
         )}
       </div>
 
-      {message && (
-        <p className="rounded-lg border border-border/70 bg-muted/30 px-4 py-3 text-sm text-muted-foreground">
-          {message}
-        </p>
-      )}
+      {feedback && <NotifyFeedbackBanner message={feedback.message} tone={feedback.tone} />}
 
       <div className="grid gap-4 md:grid-cols-3">
         {highlightSections.map((section) => (
@@ -213,13 +264,26 @@ export function IshmtComplianceMonitorPanel({
         ))}
       </div>
 
-      {highlightSections.map((section) => (
+      {highlightSections.map((section) => {
+        const lastNotifiedLabel =
+          section.id in sectionNotifyStatus
+            ? formatLastNotifiedLabel(
+                sectionNotifyStatus[section.id as keyof IshmtDigestSectionNotifyStatus],
+              )
+            : null;
+
+        return (
         <SectionCard key={section.id} title={section.title} subtitle={section.description} padded>
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <p className="text-2xl font-semibold tabular-nums">{section.count}</p>
               {section.secondaryLabel && (
                 <p className="mt-1 text-sm text-muted-foreground">{section.secondaryLabel}</p>
+              )}
+              {lastNotifiedLabel && (
+                <p className="mt-2 inline-flex items-center rounded-md border border-amber-200 bg-amber-50 px-2 py-1 text-xs font-medium text-amber-900">
+                  {lastNotifiedLabel}
+                </p>
               )}
             </div>
             <div className="flex flex-wrap gap-2">
@@ -241,10 +305,11 @@ export function IshmtComplianceMonitorPanel({
             </div>
           </div>
         </SectionCard>
-      ))}
+        );
+      })}
 
       <SectionCard
-        title="Kontrata & afatet — detaje"
+        title="Kontrata & afatet - detaje"
         subtitle="Të gjitha kategoritë e monitorimit kontraktual. Për njoftime të personalizuara, filtroni listën më poshtë."
         padded
       >

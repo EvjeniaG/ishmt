@@ -24,7 +24,7 @@ export default async function DirectorateCertifiersPage() {
       <div className="space-y-6">
         <DirectoratePageHeader
           title="Certifikuese të autorizuara"
-          description="Kompanitë OMI / certifikuese me status aktiv dhe licencë të vlefshme."
+          description="Kompanitë OM / certifikuese me status aktiv dhe licencë të vlefshme."
         />
         <DirectorateWorkloadList
           title="Ngarkesa aktuale"

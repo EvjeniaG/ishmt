@@ -1,7 +1,6 @@
 import Link from "next/link";
 import {
   ApplicationElevatorSummary,
-  ApplicationReturnBanner,
   ApplicationWorkflowLayout,
   ApplicationWorkflowSection,
   type WorkflowStep,
@@ -28,6 +27,7 @@ export function DataUpdateApplicationView({
   existingChanges,
   excludeElevatorId,
   maintenanceCompanies,
+  suggestedFieldValues,
 }: {
   applicationId: string;
   status: ApplicationStatus;
@@ -42,6 +42,7 @@ export function DataUpdateApplicationView({
   existingChanges: unknown[];
   excludeElevatorId: string;
   maintenanceCompanies: { id: string; name: string }[];
+  suggestedFieldValues?: Record<string, string | undefined>;
 }) {
   const hasType = Boolean(updateType);
   const hasChanges = existingChanges.length > 0;
@@ -57,8 +58,6 @@ export function DataUpdateApplicationView({
 
   return (
     <ApplicationWorkflowLayout steps={steps}>
-      <ApplicationReturnBanner returnReason={returnReason} requiredCorrection={requiredCorrection} />
-
       <ApplicationWorkflowSection title="Ashensori">
         <ApplicationElevatorSummary
           registryNumber={elevatorRegistry}
@@ -119,6 +118,7 @@ export function DataUpdateApplicationView({
                 excludeElevatorId={excludeElevatorId}
                 elevatorDefaults={elevatorDefaults}
                 existingChanges={existingChanges as never[]}
+                suggestedValues={suggestedFieldValues}
               />
             </ApplicationWorkflowSection>
           )}

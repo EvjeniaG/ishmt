@@ -10,6 +10,7 @@ import type {
   QrCode,
 } from "@prisma/client";
 import {
+  formatWorkflowHistoryLine,
   labelApplicationStatus,
   labelApplicationType,
   labelCertificateStatus,
@@ -17,7 +18,6 @@ import {
   labelDelegationStatus,
   labelDelegationType,
   labelElevatorStatus,
-  labelWorkflowAction,
 } from "@/lib/constants/display-labels";
 import { APPLICATION_STATUS_LABELS } from "@/lib/workflows/application-workflow";
 import { buildElevatorCompleteDossier } from "@/lib/elevators/build-complete-dossier";
@@ -27,6 +27,13 @@ import {
   isLegacyImportFindings,
 } from "@/lib/elevators/format-inspection-findings";
 import { displayCertifierOrganizationName, formatOmBodyNumber } from "@/lib/elevators/format-om-body";
+import {
+  ELEVATOR_DRIVE_TYPE_LABELS,
+  EXAMINATION_TYPE_LABELS,
+  USAGE_CLASSIFICATION_LABELS,
+  SPEED_RANGE_LABELS,
+  YES_NO_LABELS,
+} from "@/lib/registration/labels";
 import {
   displayLegacyActorName,
   isLegacyMigrationApplicationNumber,
@@ -117,6 +124,87 @@ function pickSectionFields(sections: DossierSection[], id: string): DossierField
   return sections.find((s) => s.id === id)?.fields ?? [];
 }
 
+const CONFORMITY_RESULT_LABELS: Record<string, string> = {
+  CONFORM: "Konform",
+  NON_CONFORM: "Jo konform",
+  CONDITIONAL: "Konform me kushte",
+};
+
+function additionalRegistryFields(raw: unknown): DossierField[] {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return [];
+
+  const obj = raw as Record<string, unknown>;
+  const { certifierMetadata, ...technicalRest } = obj;
+  const fields: DossierField[] = [];
+
+  const push = (label: string, value: unknown, format: "text" | "date" = "text") => {
+    if (value === null || value === undefined || value === "") return;
+    fields.push({
+      label,
+      value: format === "date" ? fmtDate(value as string) : fmt(value),
+    });
+  };
+
+  push("Data e instalimit", technicalRest.installationDate, "date");
+  push("Data e vënies në funksion", technicalRest.commissioningDate, "date");
+  if (technicalRest.elevatorDriveType) {
+    fields.push({
+      label: "Lloji i ngritjes (formulari)",
+      value: labelFrom(ELEVATOR_DRIVE_TYPE_LABELS, String(technicalRest.elevatorDriveType)),
+    });
+  }
+  push("Lloj tjetër i ngritjes", technicalRest.elevatorDriveTypeOther);
+  if (technicalRest.usageClassification) {
+    fields.push({
+      label: "Klasifikimi i përdorimit",
+      value: labelFrom(USAGE_CLASSIFICATION_LABELS, String(technicalRest.usageClassification)),
+    });
+  }
+  push("Viti i instalimit", technicalRest.installationYear);
+  if (technicalRest.speedRange) {
+    fields.push({
+      label: "Shpejtësia (klasë)",
+      value: labelFrom(SPEED_RANGE_LABELS, String(technicalRest.speedRange)),
+    });
+  }
+  push("Hapje dyer", technicalRest.openings);
+  if (technicalRest.accessibleForDisabled) {
+    fields.push({
+      label: "I aksesueshëm për persona me aftësi të kufizuara",
+      value: labelFrom(YES_NO_LABELS, String(technicalRest.accessibleForDisabled)),
+    });
+  }
+  push("Dimensionet e kabinës", technicalRest.cabinDimensions);
+  push("Dimensionet e dyerve", technicalRest.doorDimensions);
+  push("Shënime teknike të instaluesit", technicalRest.installerTechnicalNotes);
+  push("Marka", technicalRest.brand);
+
+  if (certifierMetadata && typeof certifierMetadata === "object" && !Array.isArray(certifierMetadata)) {
+    const cm = certifierMetadata as Record<string, unknown>;
+    const omi = cm.omiNumber ? formatOmBodyNumber(String(cm.omiNumber)) ?? String(cm.omiNumber) : null;
+    push("Numri OM", omi);
+    push("Data e certifikatës së instalimit", cm.installationCertificateDate, "date");
+    if (cm.examinationType) {
+      fields.push({
+        label: "Lloji i ekzaminimit",
+        value: labelFrom(EXAMINATION_TYPE_LABELS, String(cm.examinationType)),
+      });
+    }
+    push("Data e ekzaminimit", cm.examinationDate, "date");
+    if (cm.conformityResult) {
+      fields.push({
+        label: "Rezultati i konformitetit",
+        value: labelFrom(CONFORMITY_RESULT_LABELS, String(cm.conformityResult)),
+      });
+    }
+    push("Referenca e certifikatës", cm.certificateReference);
+    push("Shënime të certifikuesit", cm.certifierNotes);
+    push("Shënime teknike të certifikuesit", cm.certifierTechnicalNotes);
+  }
+
+  return fields;
+}
+
 function orgFields(prefix: string, org: Organization | null | undefined): DossierField[] {
   if (!org) return [{ label: `${prefix}`, value: "-" }];
   const displayName =
@@ -130,6 +218,52 @@ function orgFields(prefix: string, org: Organization | null | undefined): Dossie
     { label: `${prefix} - telefon`, value: fmt(org.phone) },
     { label: `${prefix} - adresa`, value: fmt(org.address) },
   ];
+}
+
+function compactOrgField(prefix: string, org: Organization | null | undefined): DossierField | null {
+  if (!org) return null;
+  const displayName =
+    prefix === "Certifikuesi (OM)"
+      ? displayCertifierOrganizationName(org.name)
+      : org.name;
+  const nipt = org.nipt ? ` · ${org.nipt}` : "";
+  return { label: prefix, value: `${displayName}${nipt}` };
+}
+
+function buildCompactRegistryFields(
+  elevator: ElevatorForTabDossier,
+  regCertNumber: string | null,
+  regCertExpiry: Date | null,
+  inspectionIntervalLabel: string,
+): DossierField[] {
+  return [
+    { label: "Statusi", value: labelElevatorStatus(elevator.status) },
+    { label: "Certifikata e regjistrimit", value: regCertNumber ?? "-" },
+    { label: "Skadimi i certifikatës", value: fmtDate(regCertExpiry) },
+    { label: "Intervali i inspektimit", value: inspectionIntervalLabel },
+    { label: "Data e regjistrimit", value: fmtDate(elevator.registrationDate) },
+  ];
+}
+
+function withApplicationNumberLink(
+  fields: DossierField[],
+  applicationId: string | undefined,
+): DossierField[] {
+  if (!applicationId) return fields;
+  return fields.map((field) =>
+    field.label === "Nr. aplikimit"
+      ? { ...field, href: `/portal/applications/${applicationId}` }
+      : field,
+  );
+}
+
+function buildCompactPartiesFields(elevator: ElevatorForTabDossier): DossierField[] {
+  return [
+    compactOrgField("Personi përgjegjës", elevator.ownerOrg),
+    compactOrgField("Instaluesi", elevator.installerOrg),
+    compactOrgField("Certifikuesi (OM)", elevator.certifierOrg),
+    compactOrgField("Mirëmbajtja", elevator.maintenanceOrg),
+  ].filter((field): field is DossierField => field !== null);
 }
 
 function technicalDataFields(td: ElevatorTechnicalData | null): DossierField[] {
@@ -148,10 +282,7 @@ function technicalDataFields(td: ElevatorTechnicalData | null): DossierField[] {
     { label: "Lloji i ngritjes", value: fmt(td.driveType) },
     { label: "Lloji i dyerve", value: fmt(td.doorType) },
     { label: "Sistemi i kontrollit", value: fmt(td.controlSystem) },
-    {
-      label: "Të dhëna shtesë (regjistri)",
-      value: td.additionalData ? JSON.stringify(td.additionalData) : "-",
-    },
+    ...additionalRegistryFields(td.additionalData),
     { label: "Përditësuar më", value: fmtDateTime(td.updatedAt) },
   ];
 }
@@ -178,6 +309,7 @@ function versionFields(
     { label: "Lloji i ngritjes", value: fmt(version.driveType) },
     { label: "Lloji i dyerve", value: fmt(version.doorType) },
     { label: "Sistemi i kontrollit", value: fmt(version.controlSystem) },
+    ...additionalRegistryFields(version.additionalData),
     { label: "Arsyeja e ndryshimit", value: fmt(version.changeReason) },
     {
       label: "Aplikimi burim",
@@ -203,7 +335,28 @@ function certificateRecordFields(cert: Certificate): DossierField[] {
     { label: "Statusi", value: labelCertificateStatus(cert.status) },
     { label: "Data e lëshimit", value: fmtDate(cert.issuedDate) },
     { label: "Data e skadimit", value: fmtDate(cert.expiryDate) },
-    { label: "Dokumenti PDF", value: cert.documentId ? "Disponueshëm" : "Mungon" },
+    cert.documentId
+      ? {
+          label: "Dokumenti",
+          value: "Shkarko PDF",
+          href: `/api/documents/${cert.documentId}/download`,
+        }
+      : { label: "Dokumenti PDF", value: "Mungon" },
+  ];
+}
+
+function buildCompactQrFields(qr: QrCode | null | undefined): DossierField[] {
+  if (!qr) {
+    return [{ label: "Statusi", value: "Kodi QR nuk është gjeneruar" }];
+  }
+  return [
+    { label: "Aktiv", value: qr.isActive ? "Po" : "Jo" },
+    { label: "Gjeneruar më", value: fmtDateTime(qr.generatedAt) },
+    { label: "Numri i skanimeve", value: fmt(qr.scanCount) },
+    { label: "Foto vendosjeje", value: qr.placementPhotoDocumentId ? "Konfirmuar" : "Mungon" },
+    ...(qr.placementConfirmedAt
+      ? [{ label: "Vendosja konfirmuar më", value: fmtDateTime(qr.placementConfirmedAt) }]
+      : []),
   ];
 }
 
@@ -402,10 +555,16 @@ function buildRegistryFields(
   ];
 }
 
-function buildApplicationDetailFields(app: ElevatorForTabDossier["targetApplications"][number] & { isOrigin?: boolean }): DossierField[] {
+function buildApplicationDetailFields(
+  app: ElevatorForTabDossier["targetApplications"][number] & { isOrigin?: boolean },
+): DossierField[] {
   const legacyMigration = isLegacyMigrationApplicationNumber(app.applicationNumber);
   return [
-    { label: "Nr. aplikimit", value: app.applicationNumber },
+    {
+      label: "Nr. aplikimit",
+      value: app.applicationNumber,
+      href: `/portal/applications/${app.id}`,
+    },
     {
       label: "Lloji",
       value: app.isOrigin ? "Regjistrim fillestar" : labelApplicationType(app.type, app.data?.updateType),
@@ -418,6 +577,60 @@ function buildApplicationDetailFields(app: ElevatorForTabDossier["targetApplicat
   ];
 }
 
+export type ElevatorApplicationListItem = {
+  id: string;
+  applicationNumber: string;
+  type: string;
+  typeLabel: string;
+  status: string;
+  statusLabel: string;
+  createdAt: Date;
+  submittedAt: Date | null;
+  notes: string | null;
+  isOrigin: boolean;
+};
+
+export function buildElevatorApplicationsList(
+  elevator: Pick<ElevatorForTabDossier, "originatingApplication" | "targetApplications">,
+): ElevatorApplicationListItem[] {
+  const originId = elevator.originatingApplication?.id;
+  const items: ElevatorApplicationListItem[] = [];
+
+  if (elevator.originatingApplication) {
+    const app = elevator.originatingApplication;
+    items.push({
+      id: app.id,
+      applicationNumber: app.applicationNumber,
+      type: app.type,
+      typeLabel: "Regjistrim fillestar",
+      status: app.status,
+      statusLabel: labelApplicationStatus(app.status),
+      createdAt: app.createdAt,
+      submittedAt: app.submittedAt,
+      notes: app.data?.notes ?? null,
+      isOrigin: true,
+    });
+  }
+
+  for (const app of elevator.targetApplications) {
+    if (app.id === originId) continue;
+    items.push({
+      id: app.id,
+      applicationNumber: app.applicationNumber,
+      type: app.type,
+      typeLabel: labelApplicationType(app.type, app.data?.updateType),
+      status: app.status,
+      statusLabel: labelApplicationStatus(app.status),
+      createdAt: app.createdAt,
+      submittedAt: app.submittedAt,
+      notes: app.data?.notes ?? null,
+      isOrigin: false,
+    });
+  }
+
+  return items.sort((left, right) => right.createdAt.getTime() - left.createdAt.getTime());
+}
+
 export function buildElevatorTabDossier(input: {
   elevator: ElevatorForTabDossier;
   complianceLabel: string;
@@ -427,9 +640,20 @@ export function buildElevatorTabDossier(input: {
   nextInspection: Date | null;
   inspectionIntervalLabel: string;
   qrPublicUrl: string | null;
+  /** Përmbledhje e shkurtër për portalin e pronarit; staff merr versionin e plotë. */
+  compactSummary?: boolean;
 }): Record<ElevatorTabId, ElevatorTabGroup[]> {
-  const { elevator, complianceLabel, needsAttention, regCertNumber, regCertExpiry, nextInspection, inspectionIntervalLabel, qrPublicUrl } =
-    input;
+  const {
+    elevator,
+    complianceLabel,
+    needsAttention,
+    regCertNumber,
+    regCertExpiry,
+    nextInspection,
+    inspectionIntervalLabel,
+    qrPublicUrl,
+    compactSummary = false,
+  } = input;
 
   const sections = buildElevatorCompleteDossier({
     registryNumber: elevator.registryNumber,
@@ -455,6 +679,34 @@ export function buildElevatorTabDossier(input: {
   ];
 
   const summary: ElevatorTabGroup[] = [
+    {
+      title: "Regjistri",
+      fields: buildCompactRegistryFields(
+        elevator,
+        regCertNumber,
+        regCertExpiry,
+        inspectionIntervalLabel,
+      ),
+    },
+    {
+      title: "A. Të dhënat e aplikimit",
+      fields: withApplicationNumberLink(
+        pickSectionFields(sections, "application"),
+        elevator.originatingApplication?.id,
+      ),
+    },
+    {
+      title: "B. Personi / subjekti përgjegjës",
+      fields: pickSectionFields(sections, "responsible"),
+    },
+    {
+      title: "C. Godina dhe vendndodhja",
+      fields: pickSectionFields(sections, "building"),
+    },
+    { title: "Palët e lidhura", fields: buildCompactPartiesFields(elevator) },
+  ];
+
+  const fullSummary: ElevatorTabGroup[] = [
     { title: "Regjistri dhe statusi", fields: registryFields },
     { title: "A. Të dhënat e aplikimit", fields: pickSectionFields(sections, "application") },
     { title: "B. Personi / subjekti përgjegjës", fields: pickSectionFields(sections, "responsible") },
@@ -462,28 +714,61 @@ export function buildElevatorTabDossier(input: {
     { title: "Palët e lidhura (regjistri aktual)", fields: partiesFields },
   ];
 
-  const technical: ElevatorTabGroup[] = [
-    { title: "D. Instaluesi", fields: pickSectionFields(sections, "installer") },
-    { title: "E. Të dhënat teknike të ashensorit", fields: pickSectionFields(sections, "technical") },
-    { title: "Të dhënat teknike në regjistër", fields: technicalDataFields(elevator.technicalData) },
-    ...elevator.technicalVersions.map((version) => ({
-      title: `Versioni teknik ${version.versionNumber}${version.isCurrent ? " (aktual)" : ""}`,
-      fields: versionFields(version),
-    })),
-  ];
+  const registryTechnicalFields = technicalDataFields(elevator.technicalData);
+  const currentTechnicalVersion = elevator.technicalVersions.find((version) => version.isCurrent);
+  const historicalTechnicalVersions = elevator.technicalVersions.filter((version) => !version.isCurrent);
 
-  const certificate: ElevatorTabGroup[] = [
-    { title: "F. Certifikuesi (OMI)", fields: pickSectionFields(sections, "certifier") },
-    { title: "G. Certifikimi dhe konformiteti", fields: pickSectionFields(sections, "certification") },
-    ...elevator.certificates.map((cert) => ({
-      title: `Certifikata ${cert.certificateNumber}`,
-      fields: certificateRecordFields(cert),
-    })),
-  ];
+  const technical: ElevatorTabGroup[] = compactSummary
+    ? [
+        {
+          title: "Të dhënat teknike",
+          fields:
+            registryTechnicalFields.length > 0
+              ? registryTechnicalFields
+              : pickSectionFields(sections, "technical"),
+        },
+      ]
+    : currentTechnicalVersion
+      ? [
+          { title: "D. Instaluesi", fields: pickSectionFields(sections, "installer") },
+          {
+            title: `Versioni teknik ${currentTechnicalVersion.versionNumber} (aktual)`,
+            fields: versionFields(currentTechnicalVersion),
+          },
+          ...historicalTechnicalVersions.map((version) => ({
+            title: `Versioni teknik ${version.versionNumber}`,
+            fields: versionFields(version),
+          })),
+        ]
+      : [
+          { title: "D. Instaluesi", fields: pickSectionFields(sections, "installer") },
+          { title: "E. Të dhënat teknike të ashensorit", fields: pickSectionFields(sections, "technical") },
+          ...(registryTechnicalFields.length > 0
+            ? [{ title: "Të dhënat teknike në regjistër", fields: registryTechnicalFields }]
+            : []),
+          ...elevator.technicalVersions.map((version) => ({
+            title: `Versioni teknik ${version.versionNumber}${version.isCurrent ? " (aktual)" : ""}`,
+            fields: versionFields(version),
+          })),
+        ];
 
-  const qr: ElevatorTabGroup[] = [
-    { title: "Kodi QR", fields: qrFields(elevator.qrCodes[0], qrPublicUrl) },
-  ];
+  const certificate: ElevatorTabGroup[] = compactSummary
+    ? elevator.certificates.map((cert) => ({
+        title: `Certifikata ${cert.certificateNumber}`,
+        fields: certificateRecordFields(cert),
+      }))
+    : [
+        { title: "F. Certifikuesi (OM)", fields: pickSectionFields(sections, "certifier") },
+        { title: "G. Certifikimi dhe konformiteti", fields: pickSectionFields(sections, "certification") },
+        ...elevator.certificates.map((cert) => ({
+          title: `Certifikata ${cert.certificateNumber}`,
+          fields: certificateRecordFields(cert),
+        })),
+      ];
+
+  const qr: ElevatorTabGroup[] = compactSummary
+    ? [{ title: "Regjistri QR", fields: buildCompactQrFields(elevator.qrCodes[0]) }]
+    : [{ title: "Kodi QR", fields: qrFields(elevator.qrCodes[0], qrPublicUrl) }];
 
   const maintenance: ElevatorTabGroup[] = [
     { title: "Kompania aktuale e mirëmbajtjes", fields: orgFields("Mirëmbajtja", elevator.maintenanceOrg) },
@@ -505,8 +790,13 @@ export function buildElevatorTabDossier(input: {
 
   const workflowFields: DossierField[] =
     elevator.originatingApplication?.workflowHistory?.map((h) => ({
-      label: fmtDateTime(h.createdAt),
-      value: `${h.fromStatus ? APPLICATION_STATUS_LABELS[h.fromStatus as keyof typeof APPLICATION_STATUS_LABELS] : "-"} → ${APPLICATION_STATUS_LABELS[h.toStatus as keyof typeof APPLICATION_STATUS_LABELS]} (${labelWorkflowAction(h.action)})`,
+      label: formatWorkflowHistoryLine({
+        fromStatus: h.fromStatus,
+        toStatus: h.toStatus,
+        action: h.action,
+        statusLabels: APPLICATION_STATUS_LABELS,
+      }),
+      value: fmtDateTime(h.createdAt),
     })) ?? [];
 
   const history: ElevatorTabGroup[] = [
@@ -535,28 +825,24 @@ export function buildElevatorTabDossier(input: {
     { title: "Historiku i aplikimit (workflow)", fields: workflowFields },
   ];
 
-  const applications: ElevatorTabGroup[] = [
-    ...(elevator.originatingApplication
-      ? [
-          {
-            title: `Aplikimi fillestar - ${elevator.originatingApplication.applicationNumber}`,
-            fields: buildApplicationDetailFields({
-              id: "",
-              applicationNumber: elevator.originatingApplication.applicationNumber,
-              type: elevator.originatingApplication.type,
-              status: elevator.originatingApplication.status,
-              createdAt: elevator.originatingApplication.createdAt,
-              submittedAt: elevator.originatingApplication.submittedAt,
-              isOrigin: true,
-            }),
-          },
-        ]
-      : []),
-    ...elevator.targetApplications.map((app) => ({
-      title: `Aplikim - ${app.applicationNumber}`,
-      fields: buildApplicationDetailFields(app),
-    })),
-  ];
+  const applicationItems = buildElevatorApplicationsList(elevator);
+  const applications: ElevatorTabGroup[] = applicationItems.map((item) => ({
+    title: item.isOrigin
+      ? `Aplikimi fillestar · ${item.applicationNumber}`
+      : `${item.typeLabel} · ${item.applicationNumber}`,
+    fields: buildApplicationDetailFields({
+      id: item.id,
+      applicationNumber: item.applicationNumber,
+      type: item.type,
+      status: item.status,
+      createdAt: item.createdAt,
+      submittedAt: item.submittedAt,
+      data: { notes: item.notes, updateType: null },
+      isOrigin: item.isOrigin,
+    }),
+  }));
 
-  return { summary, technical, certificate, qr, maintenance, inspections, history, applications, documents: [] };
+  return {
+    summary: compactSummary ? summary : fullSummary,
+    technical, certificate, qr, maintenance, inspections, history, applications, documents: [] };
 }

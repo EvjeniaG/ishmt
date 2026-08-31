@@ -10,6 +10,7 @@ import { computeElevatorComplianceIndicator, fetchElevatorsForCompliance } from 
 import { MaintenanceWorkService } from "@/lib/services/maintenance-work-service";
 import type { AuthContext } from "@/lib/permissions/guards";
 import { ROLE_CODES } from "@/lib/constants/roles";
+import { hasServiceCapability } from "@/lib/organizations/org-capabilities";
 
 const MS_PER_DAY = 1000 * 60 * 60 * 24;
 
@@ -21,7 +22,7 @@ function addDays(date: Date, days: number) {
 
 export class MaintenanceDashboardService {
   static async getDashboard(ctx: AuthContext) {
-    if (ctx.roleCode !== ROLE_CODES.MAINTENANCE) {
+    if (!hasServiceCapability(ctx, "maintenance")) {
       throw new Error("Vetëm kompania e mirëmbajtjes mund të shohë këtë panel.");
     }
 
@@ -116,7 +117,7 @@ export class MaintenanceDashboardService {
         .slice(0, 5)
         .map((e) => ({
           id: `no-insp-${e.elevatorId}`,
-          title: "Nuk ka inspektim të regjistruar",
+          title: "Nuk ka kontroll të regjistruar",
           subtitle: e.registryNumber,
           href: "/portal/elevators",
           actionLabel: "Shiko ashensorin",
@@ -139,7 +140,7 @@ export class MaintenanceDashboardService {
         .slice(0, 5)
         .map((e) => ({
           id: `insp-${e.elevatorId}`,
-          title: "Inspektim periodik i vonuar",
+          title: "Kontroll periodik i vonuar",
           subtitle: e.registryNumber,
           href: `/portal/elevators/${e.elevatorId}?tab=maintenance`,
           actionLabel: "Shiko ashensorin",

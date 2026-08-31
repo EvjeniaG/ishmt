@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 # Ngarkon databazën e plotë demo në PostgreSQL remote (Neon).
 #
-# Mod 1 — seed i plotë demo (rekomandohet për deploy):
+# Mod 1 - seed i plotë demo (rekomandohet për deploy):
 #   DATABASE_URL="postgresql://..." ./scripts/deploy/setup-remote-db.sh
 #
-# Mod 2 — kopje e saktë e databazës lokale (backup SQL):
+# Mod 2 - kopje e saktë e databazës lokale (backup SQL):
 #   DATABASE_URL="postgresql://..." ./scripts/deploy/setup-remote-db.sh --from-backup backup/ishmtt-20260629-1919.sql
 #
 # Mod 2 përfshin edhe të dhëna legacy në DB; në app vendos ISHMT_DEMO_DATA=true për të fshehur Excel-in.
@@ -31,8 +31,13 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
+if [[ -z "${DATABASE_URL:-}" ]] && [[ -f "$ROOT/.env" ]]; then
+  DATABASE_URL="$(node -e "require('dotenv').config({ path: process.argv[1] }); process.stdout.write(process.env.DATABASE_URL ?? '');" "$ROOT/.env")"
+  export DATABASE_URL
+fi
+
 if [[ -z "${DATABASE_URL:-}" ]]; then
-  echo "Vendos DATABASE_URL (Neon connection string me -pooler)."
+  echo "Vendos DATABASE_URL (Neon connection string me -pooler) ose shtoje në .env."
   exit 1
 fi
 
@@ -40,7 +45,7 @@ print_credentials() {
   cat <<'EOF'
 
 ============================================================
-DATASET DEMO — KREDENCIALET (fjalëkalim: Ishmt2026)
+DATASET DEMO - KREDENCIALET (fjalëkalim: Ishmt2026)
 ============================================================
 Personi përgjegjës i ashensorit     | I90404004D
 Instalues - Ashensorë Pro           | K11111111A
@@ -55,7 +60,8 @@ Admin ISHMT                         | I90101001A
 Kryeinspektor                       | I90505005E
 Drejtor Teknik                      | I90606006F
 Përgjegjës Sektor Mekanik           | I90707007G
-Inspektor terreni                   | I90909009I
+Inspektor - Dritan Gjoka            | I90909009I
+Inspektor - Elona Marku             | I90909010J
 Drejtoria e Politikave              | I90303003C
 ============================================================
 Përmbajtja demo:
@@ -91,7 +97,7 @@ echo "→ seed bazë (geo, role, leje, template)"
 npx prisma db seed
 
 echo "→ seed demo i plotë (16 përdorues, aplikime, ashensorë, pipeline, kryeinspektor)"
-npm run db:seed:demo
+tsx prisma/seed-demo.ts
 
 echo "✓ Databaza demo e plotë është gati."
 print_credentials

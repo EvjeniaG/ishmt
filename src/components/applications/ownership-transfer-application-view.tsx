@@ -1,6 +1,5 @@
 import {
   ApplicationElevatorSummary,
-  ApplicationReturnBanner,
   ApplicationWorkflowLayout,
   ApplicationWorkflowSection,
   type WorkflowStep,
@@ -65,8 +64,6 @@ export function OwnershipTransferApplicationView({
 
   return (
     <ApplicationWorkflowLayout steps={steps}>
-      <ApplicationReturnBanner returnReason={returnReason} requiredCorrection={requiredCorrection} />
-
       <ApplicationWorkflowSection title="Ashensori">
         <ApplicationElevatorSummary
           registryNumber={elevatorRegistry}

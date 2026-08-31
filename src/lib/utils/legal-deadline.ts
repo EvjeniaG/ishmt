@@ -1,5 +1,5 @@
 /**
- * Afati 10 ditë pune pas protokollimit (Udhëzim ISHMT p.6, 9, 14, 17; Ligji Nr. 44/2015).
+ * Afati 10 ditë pune pas protokollimit (Udhëzim IQMT p.6, 9, 14, 17; Ligji Nr. 44/2015).
  */
 
 import { PROCEDURE_WORKING_DAYS } from "@/lib/deadlines/deadline-policy";

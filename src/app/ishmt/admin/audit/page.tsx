@@ -38,7 +38,7 @@ export default async function AuditViewerPage({
   return (
     <AppShell title="Audit Log">
       <StandardPageLayout
-        eyebrow="ISHMT · Administrim"
+        eyebrow="IQMT · Administrim"
         title="Audit Log - Sistemi"
         description="Gjurmë e plotë e veprimeve në regjistër"
       >

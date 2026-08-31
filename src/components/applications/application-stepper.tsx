@@ -138,8 +138,8 @@ export function ApplicationStepper({
 
 function StepperTrack({ steps }: { steps: StepperItem[] }) {
   return (
-    <div className="reg-wizard-stepper-track portal-tab-scroll px-3 py-3 sm:px-5 sm:py-4">
-      <div className="flex w-max min-w-full items-start sm:w-full">
+    <div className="reg-wizard-stepper-track px-3 py-3 sm:px-5 sm:py-4">
+      <div className="flex w-full min-w-0 items-start">
         {steps.map((step, index) => {
           const isFirst = index === 0;
           const isLast = index === steps.length - 1;
@@ -184,7 +184,7 @@ function StepperTrack({ steps }: { steps: StepperItem[] }) {
               </div>
               <span
                 className={cn(
-                  "hidden max-w-[5.5rem] text-center text-[10px] leading-tight sm:block sm:max-w-none sm:text-[11px]",
+                  "line-clamp-2 max-w-[4.5rem] text-center text-[10px] leading-tight sm:max-w-none sm:text-[11px]",
                   labelClass(step.state),
                 )}
               >

@@ -9,6 +9,7 @@ import { APPLICATION_TYPE_LABELS } from "@/lib/constants/application-labels";
 import { ApplicationStatusBadge } from "@/components/applications/application-status-badge";
 import { ElevatorStatusBadge } from "@/components/elevators/elevator-status-badge";
 import { ROLE_CODES } from "@/lib/constants/roles";
+import { PERIODIC_INSPECTION_CONTRACTS_LABEL, PERIODIC_INSPECTION_CONTRACT_LABEL } from "@/lib/constants/periodic-inspection-labels";
 import type { OwnerDashboardService } from "@/lib/services/owner-dashboard-service";
 import { RequiredActionsPanel } from "@/components/dashboard/required-actions-panel";
 
@@ -40,13 +41,13 @@ export function OwnerDashboard({ data }: { data: DashboardData }) {
           label="Aplikime në proces"
           value={data.cards.inProgressApplications}
           accent="primary"
-          subtitle="Regjistrim, lifecycle dhe draft"
+          subtitle="Draft, instalues/certifikues, gati parashtrim"
         />
         <MetricCard
-          label="Në shqyrtim ISHMT"
+          label="Në shqyrtim IQMT"
           value={data.procedureSummary.inReview}
           accent="primary"
-          subtitle="Të parashtruara te inspektoriati"
+          subtitle="Të parashtruara te IQMT"
         />
         <MetricCard
           label="Veprime të kërkuara"
@@ -69,10 +70,10 @@ export function OwnerDashboard({ data }: { data: DashboardData }) {
             subtitle="Caktoni kompaninë e autorizuar"
           />
           <MetricCard
-            label="Pa kontratë inspektimi (OMI)"
+            label="Pa kontratë inspektimi periodik (OM)"
             value={data.alarmSummary.noInspectionContract}
             accent={data.alarmSummary.noInspectionContract > 0 ? "danger" : "success"}
-            subtitle="Kontratë periodike me trupin certifikues"
+            subtitle={PERIODIC_INSPECTION_CONTRACT_LABEL + " me OM"}
           />
           <MetricCard
             label="Kontrata skadon / skaduar"
@@ -129,7 +130,10 @@ export function OwnerDashboard({ data }: { data: DashboardData }) {
             </p>
             <div className="flex flex-wrap gap-2">
               <Button asChild variant="outline" size="sm">
-                <Link href="/portal/maintenance">Cakto kompani mirëmbajtjeje</Link>
+                <Link href="/portal/maintenance">Kontratat e mirëmbajtjes</Link>
+              </Button>
+              <Button asChild variant="outline" size="sm">
+                <Link href="/portal/kontroll-periodik">{PERIODIC_INSPECTION_CONTRACTS_LABEL}</Link>
               </Button>
               <Button asChild variant="outline" size="sm">
                 <Link href="/portal/qr-codes">Shiko QR kodet</Link>

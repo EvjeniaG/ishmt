@@ -1,4 +1,5 @@
 import { db } from "@/lib/db";
+import type { ApplicationStatus } from "@prisma/client";
 import {
   formatInspectionFindings,
   isLegacyImportFindings,
@@ -8,32 +9,136 @@ import {
   isLegacyMigrationApplicationNumber,
   LEGACY_REGISTRY_ATTRIBUTION,
 } from "@/lib/migration/legacy-display";
+import {
+  formatWorkflowHistoryLine,
+  labelApplicationType,
+  labelCertificateStatus,
+  labelCertificateType,
+  labelElevatorStatus,
+} from "@/lib/constants/display-labels";
+import { APPLICATION_STATUS_LABELS } from "@/lib/workflows/application-workflow";
+
+const INSPECTION_TYPE_LABELS: Record<string, string> = {
+  PERIODIC: "periodik",
+  EXTRAORDINARY: "jashtëzakonshme",
+  INITIAL: "fillestar",
+  FOLLOW_UP: "pasues",
+};
+
+const INSPECTION_RESULT_LABELS: Record<string, string> = {
+  PASS: "Konform",
+  FAIL: "Jo konform",
+  CONDITIONAL: "Me kushte",
+  PENDING: "Në pritje",
+};
+
+const MAINTENANCE_TYPE_LABELS: Record<string, string> = {
+  ROUTINE: "Mirëmbajtje rutinë",
+  ANNUAL_SERVICE: "Shërbim vjetor",
+  EMERGENCY: "Ndërhyrje emergjence",
+  MODERNIZATION: "Modernizim",
+};
+
+const CONTRACT_STATUS_LABELS: Record<string, string> = {
+  PENDING: "Në pritje",
+  ACTIVE: "Aktive",
+  REJECTED: "Refuzuar",
+  EXPIRED: "E skaduar",
+  TERMINATED: "E përfunduar",
+};
+
+const SERVICE_TYPE_LABELS: Record<string, string> = {
+  MAINTENANCE: "Mirëmbajtje",
+  PERIODIC_INSPECTION: "Kontroll periodik",
+};
 
 export type TimelineEvent = {
   id: string;
-  category:
-    | "status"
-    | "ownership"
-    | "application"
-    | "inspection"
-    | "maintenance"
-    | "certificate"
-    | "audit";
+  kind: "workflow" | "lifecycle";
   title: string;
   description?: string;
   occurredAt: Date;
   actorName?: string;
-  metadata?: Record<string, unknown>;
+  applicationId?: string;
+  applicationNumber?: string;
+  applicationTypeLabel?: string;
 };
 
+type ApplicationBlock = {
+  id: string;
+  applicationNumber: string;
+  applicationTypeLabel: string;
+  createdAt: Date;
+  workflowEntries: TimelineEvent[];
+};
+
+function labelInspectionType(type: string): string {
+  return INSPECTION_TYPE_LABELS[type] ?? type.toLowerCase();
+}
+
+function labelInspectionResult(result: string | null): string {
+  if (!result) return "-";
+  return INSPECTION_RESULT_LABELS[result] ?? result;
+}
+
+function labelMaintenanceRecord(type: string, interventionType: string | null): string {
+  if (interventionType?.trim()) return interventionType.trim();
+  return MAINTENANCE_TYPE_LABELS[type] ?? type;
+}
+
+function labelContractEvent(
+  serviceType: string,
+  status: string,
+  phase: "proposed" | "responded",
+): string {
+  const service = SERVICE_TYPE_LABELS[serviceType] ?? serviceType;
+  if (phase === "proposed") {
+    return `Kontratë ${service.toLowerCase()} e propozuar`;
+  }
+  const statusLabel = CONTRACT_STATUS_LABELS[status] ?? status.toLowerCase();
+  return `Kontratë ${service.toLowerCase()}: ${statusLabel}`;
+}
+
+function mergeWorkflowAndLifecycle(appBlocks: ApplicationBlock[], lifecycle: TimelineEvent[]): TimelineEvent[] {
+  const result: TimelineEvent[] = [];
+  const ops = [...lifecycle].sort((a, b) => a.occurredAt.getTime() - b.occurredAt.getTime());
+  let opIdx = 0;
+
+  for (let i = 0; i < appBlocks.length; i++) {
+    const app = appBlocks[i];
+    const nextAppStart =
+      i + 1 < appBlocks.length ? appBlocks[i + 1].createdAt.getTime() : Number.POSITIVE_INFINITY;
+
+    for (const entry of app.workflowEntries) {
+      while (
+        opIdx < ops.length &&
+        ops[opIdx].occurredAt.getTime() <= entry.occurredAt.getTime() &&
+        ops[opIdx].occurredAt.getTime() < nextAppStart
+      ) {
+        result.push(ops[opIdx++]);
+      }
+      result.push(entry);
+    }
+
+    while (opIdx < ops.length && ops[opIdx].occurredAt.getTime() < nextAppStart) {
+      result.push(ops[opIdx++]);
+    }
+  }
+
+  while (opIdx < ops.length) {
+    result.push(ops[opIdx++]);
+  }
+
+  return result;
+}
+
 export class ElevatorTimelineService {
-  static async buildTimeline(elevatorId: string, limit = 100): Promise<TimelineEvent[]> {
+  static async buildTimeline(elevatorId: string, limit = 150): Promise<TimelineEvent[]> {
     const elevator = await db.elevator.findFirst({
       where: { id: elevatorId, deletedAt: null },
       select: {
         id: true,
         applicationId: true,
-        registryNumber: true,
         originatingApplication: { select: { applicationNumber: true } },
       },
     });
@@ -43,19 +148,41 @@ export class ElevatorTimelineService {
       elevator.originatingApplication?.applicationNumber,
     );
 
+    const applicationWhere =
+      elevator.applicationId != null
+        ? { OR: [{ elevatorId }, { id: elevator.applicationId }] }
+        : { elevatorId };
+
     const [
+      applications,
       statusHistory,
       ownershipHistory,
-      workflowHistory,
       inspections,
       maintenanceRecords,
       certificates,
-      auditLogs,
+      maintenanceContracts,
     ] = await Promise.all([
+      db.application.findMany({
+        where: applicationWhere,
+        orderBy: { createdAt: "asc" },
+        select: {
+          id: true,
+          applicationNumber: true,
+          type: true,
+          data: true,
+          createdAt: true,
+          workflowHistory: {
+            orderBy: { createdAt: "asc" },
+            include: {
+              actor: { select: { firstName: true, lastName: true } },
+            },
+          },
+        },
+      }),
       db.elevatorStatusHistory.findMany({
         where: { elevatorId },
         include: { actor: { select: { firstName: true, lastName: true } } },
-        orderBy: { createdAt: "desc" },
+        orderBy: { createdAt: "asc" },
         take: limit,
       }),
       db.elevatorOwnershipHistory.findMany({
@@ -65,151 +192,160 @@ export class ElevatorTimelineService {
           newOwner: { select: { name: true } },
           createdBy: { select: { firstName: true, lastName: true } },
         },
-        orderBy: { createdAt: "desc" },
-        take: limit,
-      }),
-      db.applicationWorkflowHistory.findMany({
-        where: {
-          application: {
-            OR: [{ id: elevator.applicationId }, { elevatorId: elevator.id }],
-          },
-        },
-        include: {
-          actor: { select: { firstName: true, lastName: true } },
-          application: { select: { applicationNumber: true, type: true } },
-        },
-        orderBy: { createdAt: "desc" },
+        orderBy: { createdAt: "asc" },
         take: limit,
       }),
       db.inspection.findMany({
         where: { elevatorId },
         include: { inspector: { select: { firstName: true, lastName: true } } },
-        orderBy: { conductedDate: "desc" },
+        orderBy: { conductedDate: "asc" },
         take: limit,
       }),
       db.maintenanceRecord.findMany({
         where: { elevatorId },
         include: { createdBy: { select: { firstName: true, lastName: true } } },
-        orderBy: { performedDate: "desc" },
+        orderBy: { performedDate: "asc" },
         take: limit,
       }),
       db.certificate.findMany({
         where: { elevatorId },
-        orderBy: { issuedDate: "desc" },
+        orderBy: { issuedDate: "asc" },
         take: limit,
       }),
-      db.auditLog.findMany({
-        where: { entityType: "elevator", entityId: elevatorId },
-        include: { actor: { select: { firstName: true, lastName: true } } },
-        orderBy: { createdAt: "desc" },
+      db.maintenanceContract.findMany({
+        where: { elevatorId },
+        include: { maintenanceOrg: { select: { name: true } } },
+        orderBy: { createdAt: "asc" },
         take: limit,
       }),
     ]);
 
-    const events: TimelineEvent[] = [];
+    const uniqueApplications = [...new Map(applications.map((app) => [app.id, app])).values()].sort(
+      (left, right) => left.createdAt.getTime() - right.createdAt.getTime(),
+    );
 
-    for (const s of statusHistory) {
-      events.push({
-        id: `status-${s.id}`,
-        category: "status",
-        title: `Status: ${s.fromStatus ?? "-"} → ${s.toStatus}`,
-        description: s.reason ?? undefined,
-        occurredAt: s.createdAt,
-        actorName: legacyMigration
-          ? LEGACY_REGISTRY_ATTRIBUTION
-          : `${s.actor.firstName} ${s.actor.lastName}`,
-      });
-    }
+    const appBlocks: ApplicationBlock[] = uniqueApplications.map((app) => {
+      const applicationTypeLabel = labelApplicationType(
+        app.type,
+        (app.data as { updateType?: string } | null)?.updateType,
+      );
 
-    for (const o of ownershipHistory) {
-      events.push({
-        id: `ownership-${o.id}`,
-        category: "ownership",
-        title: `Ndryshim pronësie: ${o.oldOwner.name} → ${o.newOwner.name}`,
-        description: o.reason ?? undefined,
-        occurredAt: o.createdAt,
-        actorName: legacyMigration
-          ? LEGACY_REGISTRY_ATTRIBUTION
-          : `${o.createdBy.firstName} ${o.createdBy.lastName}`,
-      });
-    }
-
-    for (const w of workflowHistory) {
-      events.push({
-        id: `workflow-${w.id}`,
-        category: "application",
-        title: `${w.application.applicationNumber}: ${w.action}`,
-        description: w.comment ?? `${w.fromStatus ?? ""} → ${w.toStatus}`,
-        occurredAt: w.createdAt,
-        actorName: displayLegacyActorName(w.actor, {
-          applicationNumber: w.application.applicationNumber,
+      const workflowEntries = app.workflowHistory.map((entry) => ({
+        id: `workflow-${entry.id}`,
+        kind: "workflow" as const,
+        title: formatWorkflowHistoryLine({
+          fromStatus: entry.fromStatus as ApplicationStatus | null,
+          toStatus: entry.toStatus,
+          action: entry.action,
+          statusLabels: APPLICATION_STATUS_LABELS,
         }),
-        metadata: { type: w.application.type },
+        description: entry.comment?.trim() || undefined,
+        occurredAt: entry.createdAt,
+        actorName: displayLegacyActorName(entry.actor, {
+          applicationNumber: app.applicationNumber,
+        }),
+        applicationId: app.id,
+        applicationNumber: app.applicationNumber,
+        applicationTypeLabel,
+      }));
+
+      return {
+        id: app.id,
+        applicationNumber: app.applicationNumber,
+        applicationTypeLabel,
+        createdAt: app.createdAt,
+        workflowEntries,
+      };
+    });
+
+    const lifecycle: TimelineEvent[] = [];
+
+    for (const status of statusHistory) {
+      lifecycle.push({
+        id: `status-${status.id}`,
+        kind: "lifecycle",
+        title: `${labelElevatorStatus(status.fromStatus)} → ${labelElevatorStatus(status.toStatus)}`,
+        description: status.reason?.trim() || undefined,
+        occurredAt: status.createdAt,
+        actorName: legacyMigration
+          ? LEGACY_REGISTRY_ATTRIBUTION
+          : `${status.actor.firstName} ${status.actor.lastName}`,
       });
     }
 
-    for (const i of inspections) {
-      const typeLabel =
-        i.type === "EXTRAORDINARY"
-          ? "jashtëzakonshme"
-          : i.type === "PERIODIC"
-            ? "periodik"
-            : i.type.toLowerCase();
-      const resultLabel =
-        i.result === "PASS"
-          ? "Konform"
-          : i.result === "FAIL"
-            ? "Jo konform"
-            : i.result === "CONDITIONAL"
-              ? "Me kushte"
-              : i.result ?? "—";
+    for (const ownership of ownershipHistory) {
+      lifecycle.push({
+        id: `ownership-${ownership.id}`,
+        kind: "lifecycle",
+        title: `Ndryshim pronësie: ${ownership.oldOwner.name} → ${ownership.newOwner.name}`,
+        description: ownership.reason?.trim() || undefined,
+        occurredAt: ownership.createdAt,
+        actorName: legacyMigration
+          ? LEGACY_REGISTRY_ATTRIBUTION
+          : `${ownership.createdBy.firstName} ${ownership.createdBy.lastName}`,
+      });
+    }
 
-      events.push({
-        id: `inspection-${i.id}`,
-        category: "inspection",
-        title: `Inspektim ${typeLabel}: ${resultLabel}`,
-        description: formatInspectionFindings(i.findings) ?? undefined,
-        occurredAt: i.conductedDate ?? i.scheduledDate,
+    for (const inspection of inspections) {
+      lifecycle.push({
+        id: `inspection-${inspection.id}`,
+        kind: "lifecycle",
+        title: `Inspektim ${labelInspectionType(inspection.type)}: ${labelInspectionResult(inspection.result)}`,
+        description: formatInspectionFindings(inspection.findings) ?? undefined,
+        occurredAt: inspection.conductedDate ?? inspection.scheduledDate,
         actorName:
-          isLegacyImportFindings(i.findings) ||
-          i.findings?.trim().startsWith("K/INSP:") ||
+          isLegacyImportFindings(inspection.findings) ||
+          inspection.findings?.trim().startsWith("K/INSP:") ||
           legacyMigration
             ? LEGACY_REGISTRY_ATTRIBUTION
-            : `${i.inspector.firstName} ${i.inspector.lastName}`,
+            : `${inspection.inspector.firstName} ${inspection.inspector.lastName}`,
       });
     }
 
-    for (const m of maintenanceRecords) {
-      events.push({
-        id: `maintenance-${m.id}`,
-        category: "maintenance",
-        title: m.interventionType ?? m.type,
-        description: m.description ?? undefined,
-        occurredAt: m.performedDate,
-        actorName: `${m.createdBy.firstName} ${m.createdBy.lastName}`,
+    for (const record of maintenanceRecords) {
+      lifecycle.push({
+        id: `maintenance-${record.id}`,
+        kind: "lifecycle",
+        title: labelMaintenanceRecord(record.type, record.interventionType),
+        description: record.description?.trim() || undefined,
+        occurredAt: record.performedDate,
+        actorName: `${record.createdBy.firstName} ${record.createdBy.lastName}`,
       });
     }
 
-    for (const c of certificates) {
-      events.push({
-        id: `certificate-${c.id}`,
-        category: "certificate",
-        title: `Certifikatë ${c.certificateNumber} (${c.status})`,
-        occurredAt: new Date(c.issuedDate),
+    for (const certificate of certificates) {
+      lifecycle.push({
+        id: `certificate-${certificate.id}`,
+        kind: "lifecycle",
+        title: `Certifikatë ${labelCertificateType(certificate.type).toLowerCase()}, nr. ${certificate.certificateNumber}`,
+        description: labelCertificateStatus(certificate.status),
+        occurredAt: new Date(certificate.issuedDate),
       });
     }
 
-    for (const a of auditLogs) {
-      events.push({
-        id: `audit-${a.id}`,
-        category: "audit",
-        title: `Audit: ${a.action}`,
-        occurredAt: a.createdAt,
-        actorName: a.actor ? `${a.actor.firstName} ${a.actor.lastName}` : undefined,
+    for (const contract of maintenanceContracts) {
+      lifecycle.push({
+        id: `contract-proposed-${contract.id}`,
+        kind: "lifecycle",
+        title: labelContractEvent(contract.serviceType, contract.status, "proposed"),
+        description: contract.maintenanceOrg.name,
+        occurredAt: contract.createdAt,
       });
+
+      if (contract.respondedAt) {
+        lifecycle.push({
+          id: `contract-responded-${contract.id}`,
+          kind: "lifecycle",
+          title: labelContractEvent(contract.serviceType, contract.status, "responded"),
+          description:
+            contract.status === "REJECTED" && contract.rejectionReason?.trim()
+              ? contract.rejectionReason.trim()
+              : contract.maintenanceOrg.name,
+          occurredAt: contract.respondedAt,
+        });
+      }
     }
 
-    events.sort((a, b) => b.occurredAt.getTime() - a.occurredAt.getTime());
-    return events.slice(0, limit);
+    return mergeWorkflowAndLifecycle(appBlocks, lifecycle).slice(0, limit);
   }
 }

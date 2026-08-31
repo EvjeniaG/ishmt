@@ -55,7 +55,7 @@ function buildDetailRows(item: InspectionItem) {
     { label: "Lloji", value: item.typeLabel },
     { label: "Rezultati", value: item.resultLabel },
     {
-      label: isPeriodic ? "Data e inspektimit" : "Data e kryerjes",
+      label: isPeriodic ? "Data e kontrollit" : "Data e kryerjes",
       value: fmtDateSq(item.conductedDate),
     },
   ];
@@ -65,7 +65,7 @@ function buildDetailRows(item: InspectionItem) {
   }
 
   if (nextDate !== "-") {
-    rows.push({ label: "Inspektimi i radhës", value: nextDate });
+    rows.push({ label: "Kontrolli i radhës", value: nextDate });
   }
 
   if (
@@ -123,9 +123,9 @@ function InspectionCard({
           <div className="flex flex-wrap items-center gap-2">
             <p className="font-semibold text-foreground">{item.typeLabel}</p>
             <StatusPill tone={tone}>{item.resultLabel}</StatusPill>
-            {item.conductedByOrg === "ISHMT" && (
+            {item.conductedByOrg === "IQMT" && (
               <span className="inline-flex rounded-full bg-gov-primary/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-gov-primary">
-                ISHMT
+                IQMT
               </span>
             )}
           </div>
@@ -164,7 +164,7 @@ function InspectionCard({
         {item.hasReport && (
           <DocumentDownload
             documentId={item.reportDocumentId}
-            label="Shkarko dokumentin e inspektimit"
+            label="Shkarko dokumentin e kontrollit"
           />
         )}
         {showOmiEnrich && item.canOmiEnrich && elevatorId && (
@@ -229,7 +229,7 @@ export function InspectionHistoryList({
     return (
       <RegistryEmpty
         title="Pa inspektime"
-        description="OMI dhe ISHMT regjistrojnë inspektimet pas kontratës aktive."
+        description="OM regjistron inspektimet pas kontratës aktive të inspektimit periodik."
       />
     );
   }
@@ -268,7 +268,7 @@ export function InspectionHistoryList({
 
       {filtered.length === 0 ? (
         <p className="px-4 py-8 text-center text-sm text-muted-foreground sm:px-5">
-          Asnjë inspektim për filtrat e zgjedhur.
+          Asnjë kontroll për filtrat e zgjedhur.
         </p>
       ) : (
         <ul className="space-y-2 p-4 sm:p-5">

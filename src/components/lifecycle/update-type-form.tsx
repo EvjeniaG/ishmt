@@ -1,6 +1,6 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { useRouter } from "@/lib/navigation/use-app-router";
 import { useState } from "react";
 import { saveUpdateTypeAction } from "@/lib/actions/lifecycle-actions";
 import { DATA_UPDATE_SUBTYPE_LABELS } from "@/lib/constants/application-type-guide";
@@ -13,7 +13,7 @@ const UPDATE_TYPES = Object.entries(DATA_UPDATE_SUBTYPE_LABELS).map(([value, lab
 }));
 
 const UPDATE_TYPE_HINTS: Record<string, string> = {
-  SERIAL_NUMBER_CHANGE: "Kur numri serial ndryshon pas kontrollit nga OMI ose ndërhyrjes teknike.",
+  SERIAL_NUMBER_CHANGE: "Kur numri serial ndryshon pas kontrollit nga OM ose ndërhyrjes teknike.",
   MAINTENANCE_COMPANY_CHANGE: "Kur ndryshon kompania që mirëmbajt ashensorin.",
   ADDRESS_CHANGE: "Kur adresa ndryshon nga organet kompetente për rishikim adrese.",
   CONTACT_UPDATE: "Për telefon, email ose kontakt - jo për ndryshim pronësie.",

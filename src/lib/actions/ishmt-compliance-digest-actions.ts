@@ -6,9 +6,10 @@ import { requireAuthForPage } from "@/lib/auth/page-guards";
 import { IshmtComplianceDigestService } from "@/lib/services/ishmt-compliance-digest-service";
 import { IshmtContractMonitorService } from "@/lib/services/ishmt-contract-monitor-service";
 import { OwnerComplianceNotificationService } from "@/lib/services/owner-compliance-notification-service";
+import { serializeComplianceNotifyStats } from "@/lib/ishmt/compliance-notify-feedback";
 
 export type ComplianceDigestNotifyResult =
-  | { success: true; created: number; organizations: number }
+  | ({ success: true } & ReturnType<typeof serializeComplianceNotifyStats>)
   | { success: false; error: string };
 
 const NOTIFY_BATCH_MAX = 1000;
@@ -50,7 +51,7 @@ export async function notifyExpiredContractsAction(): Promise<ComplianceDigestNo
 
     const result = await OwnerComplianceNotificationService.notifyStakeholdersForContractIssues(rows);
     revalidatePath(DIGEST_PATH);
-    return { success: true, created: result.created, organizations: result.organizations };
+    return { success: true, ...serializeComplianceNotifyStats(result) };
   } catch (error) {
     return {
       success: false,
@@ -80,7 +81,7 @@ export async function notifyInspectionExpiring30Action(): Promise<ComplianceDige
 
     const result = await OwnerComplianceNotificationService.notifyStakeholdersForContractIssues(rows);
     revalidatePath(DIGEST_PATH);
-    return { success: true, created: result.created, organizations: result.organizations };
+    return { success: true, ...serializeComplianceNotifyStats(result) };
   } catch (error) {
     return {
       success: false,
@@ -101,7 +102,7 @@ export async function notifyMissingQrAction(): Promise<ComplianceDigestNotifyRes
 
     const result = await OwnerComplianceNotificationService.notifyStakeholdersForQrGaps(rows);
     revalidatePath(DIGEST_PATH);
-    return { success: true, created: result.created, organizations: result.organizations };
+    return { success: true, ...serializeComplianceNotifyStats(result) };
   } catch (error) {
     return {
       success: false,
@@ -137,28 +138,49 @@ export async function notifyAllComplianceDigestAction(): Promise<ComplianceDiges
     const [expiredResult, expiringResult, qrResult] = await Promise.all([
       expiredRows.length > 0
         ? OwnerComplianceNotificationService.notifyStakeholdersForContractIssues(expiredRows)
-        : Promise.resolve({ created: 0, organizations: 0 }),
+        : Promise.resolve({
+            created: 0,
+            skipped: 0,
+            organizations: 0,
+            lastSentAt: null,
+            sentAt: null,
+          }),
       expiringRows.length > 0
         ? OwnerComplianceNotificationService.notifyStakeholdersForContractIssues(expiringRows)
-        : Promise.resolve({ created: 0, organizations: 0 }),
+        : Promise.resolve({
+            created: 0,
+            skipped: 0,
+            organizations: 0,
+            lastSentAt: null,
+            sentAt: null,
+          }),
       qrRows.length > 0
         ? OwnerComplianceNotificationService.notifyStakeholdersForQrGaps(qrRows)
-        : Promise.resolve({ created: 0, organizations: 0 }),
+        : Promise.resolve({
+            created: 0,
+            skipped: 0,
+            organizations: 0,
+            lastSentAt: null,
+            sentAt: null,
+          }),
     ]);
 
     revalidatePath(DIGEST_PATH);
 
-    const organizations = new Set<number>();
-    organizations.add(expiredResult.organizations);
-    organizations.add(expiringResult.organizations);
-    organizations.add(qrResult.organizations);
-
-    return {
-      success: true,
+    const merged = serializeComplianceNotifyStats({
       created: expiredResult.created + expiringResult.created + qrResult.created,
+      skipped: expiredResult.skipped + expiringResult.skipped + qrResult.skipped,
       organizations:
         expiredResult.organizations + expiringResult.organizations + qrResult.organizations,
-    };
+      lastSentAt: [expiredResult.lastSentAt, expiringResult.lastSentAt, qrResult.lastSentAt]
+        .filter((value): value is Date => value != null)
+        .sort((a, b) => b.getTime() - a.getTime())[0] ?? null,
+      sentAt: [expiredResult.sentAt, expiringResult.sentAt, qrResult.sentAt]
+        .filter((value): value is Date => value != null)
+        .sort((a, b) => b.getTime() - a.getTime())[0] ?? null,
+    });
+
+    return { success: true, ...merged };
   } catch (error) {
     return {
       success: false,

@@ -8,6 +8,7 @@ import { ApplicationStatusBadge } from "@/components/applications/application-st
 import { RequiredActionsPanel } from "@/components/dashboard/required-actions-panel";
 import { ROLE_CODES } from "@/lib/constants/roles";
 import { type RequiredActionItem } from "@/lib/dashboard/required-actions";
+import { PERIODIC_INSPECTION_CONTRACTS_LABEL, PERIODIC_INSPECTION_LABEL } from "@/lib/constants/periodic-inspection-labels";
 import type { CertifierDashboardService } from "@/lib/services/certifier-dashboard-service";
 
 type Data = Awaited<ReturnType<typeof CertifierDashboardService.getDashboard>>;
@@ -21,7 +22,7 @@ function toRequiredActions(actions: Data["requiredActions"]): RequiredActionItem
     if (isContractAction(action)) {
       return {
         id: action.id,
-        title: `${action.type === "MAINTENANCE" ? "Mirëmbajtje" : "Inspektim"} - kontrata ${action.applicationNumber}`,
+        title: `${action.type === "MAINTENANCE" ? "Mirëmbajtje" : PERIODIC_INSPECTION_LABEL} - kontrata ${action.applicationNumber}`,
         subtitle: action.address,
         severity: action.severity,
         href: action.href,
@@ -46,19 +47,24 @@ export function CertifierDashboard({ data }: { data: Data }) {
   const { certifikim, instalime, mirembajtje, inspektime } = data.cards;
   const requiredActions = toRequiredActions(data.requiredActions);
   const description = data.hasMaintenanceAssignments
-    ? "Certifikim, inspektime periodike dhe mirëmbajtje (ku jeni caktuar edhe si kompani mirëmbajtëse)"
-    : "Certifikim dhe inspektime periodike OMI — pa detyra mirëmbajtjeje";
+    ? "Certifikim, inspektime periodike dhe mirëmbajtje"
+    : "Certifikim dhe inspektime periodike";
 
   return (
     <StandardPageLayout
-      eyebrow="Portali · OMI"
+      eyebrow="Portali · OM"
       title="Paneli operativ"
       description={description}
       actions={
         <div className="flex flex-wrap gap-2">
           <Button asChild variant="default">
-            <Link href="/portal/omi/kontratat">Kontratat</Link>
+            <Link href="/portal/omi/kontratat-kontrolli">{PERIODIC_INSPECTION_CONTRACTS_LABEL}</Link>
           </Button>
+          {data.hasMaintenanceAssignments && (
+            <Button asChild variant="outline">
+              <Link href="/portal/omi/kontratat">Kontratat e mirëmbajtjes</Link>
+            </Button>
+          )}
           <Button asChild variant="outline">
             <Link href="/portal/omi/inspektim-periodik">Inspektimet</Link>
           </Button>
@@ -74,7 +80,7 @@ export function CertifierDashboard({ data }: { data: Data }) {
         {mirembajtje && (
           <MetricCard compact label="Mirëmbajtje" value={mirembajtje.value} accent={mirembajtje.accent} subtitle={mirembajtje.subtitle} />
         )}
-        <MetricCard compact label="Inspektime" value={inspektime.value} accent={inspektime.accent} subtitle={inspektime.subtitle} />
+        <MetricCard compact label="Kontrolle" value={inspektime.value} accent={inspektime.accent} subtitle={inspektime.subtitle} />
       </div>
 
       <RequiredActionsPanel
@@ -113,7 +119,12 @@ export function CertifierDashboard({ data }: { data: Data }) {
                   <td>{a.address}</td>
                   <td>{a.installer}</td>
                   <td>
-                    <ApplicationStatusBadge status={a.status} type={a.type} roleCode={ROLE_CODES.CERTIFIER} />
+                    <ApplicationStatusBadge
+                      status={a.status}
+                      type={a.type}
+                      roleCode={ROLE_CODES.CERTIFIER}
+                      delegationRevoked={a.delegationRevoked}
+                    />
                   </td>
                   <td>{a.nextAction}</td>
                   <td>

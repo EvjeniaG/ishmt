@@ -160,7 +160,7 @@ function buildIssueRowsForElevators(
       rows.push({
         ...base,
         issueType: "no-inspection-contract",
-        issueLabel: "Pa kontratë inspektimi periodik (OMI)",
+        issueLabel: "Pa kontratë kontrolli periodik (OM)",
         severity: "critical",
         dueDate: null,
       });
@@ -181,7 +181,7 @@ function buildIssueRowsForElevators(
       rows.push({
         ...base,
         issueType: "pending-inspection-contract",
-        issueLabel: "Kontratë inspektimi në pritje pranimi",
+        issueLabel: "Kontratë kontrolli periodik në pritje pranimi",
         severity: "warning",
         dueDate: inspPending.endDate,
         contractEndDate: inspPending.endDate,
@@ -217,7 +217,7 @@ function buildIssueRowsForElevators(
         rows.push({
           ...base,
           issueType: "inspection-contract-expired",
-          issueLabel: "Kontrata e inspektimit ka skaduar",
+          issueLabel: "Kontrata e kontrollit periodik ka skaduar",
           severity: "critical",
           dueDate: inspActive.endDate,
           contractEndDate: inspActive.endDate,
@@ -226,7 +226,7 @@ function buildIssueRowsForElevators(
         rows.push({
           ...base,
           issueType: "inspection-contract-expiring",
-          issueLabel: `Kontrata inspektimit skadon (${days} ditë)`,
+          issueLabel: `Kontrata e kontrollit periodik skadon (${days} ditë)`,
           severity: days <= 7 ? "critical" : "warning",
           dueDate: inspActive.endDate,
           contractEndDate: inspActive.endDate,

@@ -536,7 +536,7 @@ export class ElevatorLifecycleService {
     return { elevatorId: elevator.id, decision, newCertificateNumber: newCert.certificateNumber };
   }
 
-  /** WF3 - Ndryshim dytësor: kontakt / mirëmbajtje pa ISHMT */
+  /** WF3 - Ndryshim dytësor: kontakt / mirëmbajtje pa IQMT */
   static async applyMinorContactUpdate(
     actorId: string,
     elevatorId: string,

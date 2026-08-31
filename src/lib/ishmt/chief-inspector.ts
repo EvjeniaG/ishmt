@@ -5,7 +5,7 @@ import { ROLE_CODES } from "@/lib/constants/roles";
 /** Emri zyrtar i kryeinspektorit në dokumentet e gjeneruara (fallback). */
 export const DEFAULT_CHIEF_INSPECTOR_NAME = "Edison Konomi";
 
-/** Emri i kryeinspektorit për nënshkrimet zyrtare — jo i miratuesit (p.sh. drejtori). */
+/** Emri i kryeinspektorit për nënshkrimet zyrtare - jo i miratuesit (p.sh. drejtori). */
 export async function resolveChiefInspectorDisplayName(): Promise<string> {
   const membership = await db.orgMembership.findFirst({
     where: {

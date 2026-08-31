@@ -16,19 +16,22 @@ export function CertifierDossierActions({
   elevatorId,
   registryNumber,
   pendingContract,
+  canLogPeriodicInspection = false,
 }: {
   elevatorId: string;
   registryNumber: string;
   pendingContract: PendingContract | null;
+  /** Vetëm OM me kontratë aktive të kontrollit periodik. */
+  canLogPeriodicInspection?: boolean;
 }) {
   return (
     <div className="space-y-4">
       {pendingContract && (
         <Card className="border-amber-200 bg-amber-50/40">
           <CardHeader>
-            <CardTitle className="text-base">Kontrata e inspektimit - në pritje të pranimit</CardTitle>
+            <CardTitle className="text-base">Kontrata e kontrollit periodik - në pritje të pranimit</CardTitle>
             <p className="text-sm text-muted-foreground">
-              Personi përgjegjës i ashensorit ju ka caktuar si OMI. Ngarkoni kontratën e nënshkruar dhe pranoni ftesën.
+              Personi përgjegjës i ashensorit ju ka caktuar si OM. Ngarkoni kontratën e nënshkruar dhe pranoni ftesën.
             </p>
           </CardHeader>
           <CardContent className="space-y-3 text-sm">
@@ -50,19 +53,21 @@ export function CertifierDossierActions({
         </Card>
       )}
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Inspektimi periodik</CardTitle>
-          <p className="text-sm text-muted-foreground">
-            Regjistroni inspektimin në terren për ashensorin {registryNumber}.
-          </p>
-        </CardHeader>
-        <CardContent>
-          <Button asChild>
-            <Link href="/portal/omi/inspektim-periodik">Hap formularin e inspektimit →</Link>
-          </Button>
-        </CardContent>
-      </Card>
+      {canLogPeriodicInspection && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Kontroll periodik (OM)</CardTitle>
+            <p className="text-sm text-muted-foreground">
+              Kontrollet periodike regjistrohen vetëm nga OM pas kontratës aktive të kontrollit periodik.
+            </p>
+          </CardHeader>
+          <CardContent>
+            <Button asChild>
+              <Link href="/portal/omi/inspektim-periodik">Regjistro kontrollin periodik →</Link>
+            </Button>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }

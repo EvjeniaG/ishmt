@@ -20,6 +20,7 @@ import { hasPermission } from "@/lib/permissions/guards";
 import { PERMISSIONS, type PermissionCode } from "@/lib/permissions/codes";
 import { ROLE_CODES } from "@/lib/constants/roles";
 import { certifierOrgHasMaintenanceAssignments } from "@/lib/certifier/certifier-maintenance-access";
+import { hasServiceCapability } from "@/lib/organizations/org-capabilities";
 import {
   INTERVENTION_TYPES,
   type InterventionTypeLabel,
@@ -76,12 +77,12 @@ export class MaintenanceWorkService {
     serviceType?: "MAINTENANCE" | "PERIODIC_INSPECTION",
   ) {
     if (
-      ctx.roleCode === ROLE_CODES.MAINTENANCE &&
+      hasServiceCapability(ctx, "maintenance") &&
       hasPermission(ctx, PERMISSIONS.MAINTENANCE_ACCEPT_CONTRACT)
     ) {
       return;
     }
-    if (ctx.roleCode === ROLE_CODES.CERTIFIER) {
+    if (hasServiceCapability(ctx, "om")) {
       if (
         serviceType === "PERIODIC_INSPECTION" &&
         hasPermission(ctx, PERMISSIONS.CERTIFIER_ACCEPT_INSPECTION_CONTRACT)
@@ -100,10 +101,10 @@ export class MaintenanceWorkService {
     ctx: AuthContext,
     permission: PermissionCode = PERMISSIONS.MAINTENANCE_VIEW_ASSIGNED,
   ) {
-    if (ctx.roleCode === ROLE_CODES.MAINTENANCE && hasPermission(ctx, permission)) {
+    if (hasServiceCapability(ctx, "maintenance") && hasPermission(ctx, permission)) {
       return;
     }
-    if (ctx.roleCode === ROLE_CODES.CERTIFIER) {
+    if (hasServiceCapability(ctx, "om")) {
       const hasMaintenanceRole = await certifierOrgHasMaintenanceAssignments(ctx.activeOrgId);
       if (
         hasMaintenanceRole &&
@@ -118,7 +119,7 @@ export class MaintenanceWorkService {
   }
 
   private static assertCertifierMaintenanceAllowed(ctx: AuthContext) {
-    if (ctx.roleCode !== ROLE_CODES.CERTIFIER) return;
+    if (!hasServiceCapability(ctx, "om")) return;
     throw new Error(
       "Kompania certifikuese nuk menaxhon mirëmbajtjen për këtë ashensor. Mirëmbajtja dhe kontrolli teknik vlejnë vetëm kur jeni caktuar edhe si kompani mirëmbajtëse.",
     );
@@ -150,7 +151,7 @@ export class MaintenanceWorkService {
       },
     });
     if (!contract) {
-      if (ctx.roleCode === ROLE_CODES.CERTIFIER) {
+      if (hasServiceCapability(ctx, "om")) {
         this.assertCertifierMaintenanceAllowed(ctx);
       }
       throw new Error("Ky ashensor nuk ka kontratë aktive mirëmbajtjeje me kompaninë tuaj.");
@@ -290,7 +291,7 @@ export class MaintenanceWorkService {
       throw new Error("Vetëm kontratat në pritje mund të pranohen.");
     }
     if (contract.serviceType === "PERIODIC_INSPECTION") {
-      throw new Error("Kontratat e inspektimit periodik pranohen nga organizata OMI/certifikuese.");
+      throw new Error("Kontratat e kontrollit periodik pranohen nga organizata OM/certifikuese.");
     }
 
     const document = await db.document.findFirst({
@@ -426,6 +427,77 @@ export class MaintenanceWorkService {
     return { ok: true };
   }
 
+  static async terminateActiveContract(ctx: AuthContext, contractId: string, reason: string) {
+    if (reason.trim().length < 10) {
+      throw new Error("Arsyeja e ndërprerjes duhet të ketë të paktën 10 karaktere.");
+    }
+
+    const contract = await db.maintenanceContract.findFirst({
+      where: {
+        id: contractId,
+        maintenanceOrgId: ctx.activeOrgId,
+        serviceType: "MAINTENANCE",
+      },
+      include: { elevator: true },
+    });
+    if (!contract) throw new Error("Kontrata nuk u gjet.");
+    this.assertCanAcceptServiceContract(ctx, "MAINTENANCE");
+    if (contract.status !== MaintenanceContractStatus.ACTIVE || !contract.isActive) {
+      throw new Error("Vetëm kontratat aktive mund të ndërprehen.");
+    }
+
+    const trimmedReason = reason.trim();
+
+    await db.$transaction(async (tx) => {
+      await tx.maintenanceContract.update({
+        where: { id: contract.id },
+        data: {
+          status: MaintenanceContractStatus.TERMINATED,
+          isActive: false,
+          rejectionReason: trimmedReason,
+          respondedAt: new Date(),
+        },
+      });
+      if (contract.elevator.maintenanceOrgId === ctx.activeOrgId) {
+        await tx.elevator.update({
+          where: { id: contract.elevatorId },
+          data: { maintenanceOrgId: null },
+        });
+        await tx.elevatorResponsibleEntity.updateMany({
+          where: {
+            elevatorId: contract.elevatorId,
+            role: OrgType.MAINTENANCE,
+            validTo: null,
+          },
+          data: { validTo: new Date() },
+        });
+      }
+      await AuditService.log(
+        {
+          actorId: ctx.userId,
+          action: AuditAction.UPDATE,
+          entityType: "maintenance_contract",
+          entityId: contract.id,
+          afterState: {
+            action: "CONTRACT_TERMINATED_BY_PROVIDER",
+            elevatorId: contract.elevatorId,
+            reason: trimmedReason,
+          },
+        },
+        tx,
+      );
+    });
+
+    await NotificationService.notifyOrgMembers(contract.elevator.ownerOrgId, {
+      title: "Kontrata e mirëmbajtjes u ndërpre",
+      body: `Kompania e mirëmbajtjes ndërpreu kontratën për ashensorin ${contract.elevator.registryNumber}. Arsye: ${trimmedReason}`,
+      entityType: "elevator",
+      entityId: contract.elevatorId,
+    });
+
+    return { ok: true };
+  }
+
   // ---------------------------------------------------------------------------
   // 2A - Interventions
   // ---------------------------------------------------------------------------
@@ -460,8 +532,6 @@ export class MaintenanceWorkService {
         where: { id: input.documentId, uploadedById: ctx.userId, deletedAt: null },
       });
       if (!document) throw new Error("Dokumenti i ndërhyrjes nuk u gjet. Ngarkojeni përsëri.");
-    } else {
-      throw new Error("Ngarkoni dokumentin e ndërhyrjes.");
     }
 
     const record = await db.maintenanceRecord.create({

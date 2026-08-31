@@ -1,5 +1,6 @@
 import {
   ApplicationStatus,
+  ApplicationFieldReviewAssignmentStatus,
   FieldInspectionAssignmentStatus,
 } from "@prisma/client";
 import { db } from "@/lib/db";
@@ -33,6 +34,10 @@ type AlarmSnapshot = {
   pendingChief: number;
   pendingDirector: number;
   pendingDirectorReport: number;
+  pendingSectorHead: number;
+  pendingSectorHeadReport: number;
+  returnedToInspectors: number;
+  returnedToSectorHead: number;
   procedureOverdue: number;
   procedureUrgent: number;
   redElevators: number;
@@ -41,6 +46,7 @@ type AlarmSnapshot = {
   pendingMigration: number;
   myFieldScheduled: number;
   myFieldInProgress: number;
+  myPendingDocumentReviews: number;
   recommendedRejection: number;
   noMaintenanceContract: number;
   noInspectionContract: number;
@@ -62,11 +68,26 @@ export class IshmtAlarmService {
       return sortIshmtAlarms(this.buildDirectorAlarms(snapshot));
     }
 
+    if (canReviewApplications(role)) {
+      return sortIshmtAlarms(this.buildSectorHeadAlarms(snapshot));
+    }
+
     if (role === ROLE_CODES.FIELD_INSPECTOR) {
       return sortIshmtAlarms(this.buildFieldInspectorAlarms(snapshot));
     }
 
     return sortIshmtAlarms(this.buildOperationalAlarms(snapshot, role));
+  }
+
+  private static sectorHeadActionWhere(ctx: AuthContext, status: ApplicationStatus) {
+    return withDemoDataApplicationScope({
+      deletedAt: null,
+      status,
+      OR: [
+        { currentAssigneeId: ctx.userId },
+        { participations: { some: { userId: ctx.userId, canAct: true } } },
+      ],
+    });
   }
 
   private static async fetchSnapshot(ctx: AuthContext): Promise<AlarmSnapshot> {
@@ -79,11 +100,16 @@ export class IshmtAlarmService {
       pendingChief,
       pendingDirector,
       pendingDirectorReport,
+      pendingSectorHead,
+      pendingSectorHeadReport,
+      returnedToInspectors,
+      returnedToSectorHead,
       pendingReports,
       pendingMigration,
       complianceAggregate,
       myFieldScheduled,
       myFieldInProgress,
+      myPendingDocumentReviews,
       recommendedRejection,
       pipelineApps,
       contractStats,
@@ -118,6 +144,18 @@ export class IshmtAlarmService {
           deletedAt: null,
         }),
       }),
+      db.application.count({
+        where: this.sectorHeadActionWhere(ctx, ApplicationStatus.PENDING_SECTOR_HEAD),
+      }),
+      db.application.count({
+        where: this.sectorHeadActionWhere(ctx, ApplicationStatus.PENDING_SECTOR_HEAD_REPORT),
+      }),
+      db.application.count({
+        where: this.sectorHeadActionWhere(ctx, ApplicationStatus.RETURNED_TO_INSPECTORS),
+      }),
+      db.application.count({
+        where: this.sectorHeadActionWhere(ctx, ApplicationStatus.RETURNED_TO_SECTOR_HEAD),
+      }),
       db.citizenReport.count({
         where: { status: { in: CITIZEN_REPORT_TRIAGE_STATUSES } },
       }),
@@ -138,6 +176,16 @@ export class IshmtAlarmService {
         where: {
           assigneeId: ctx.userId,
           status: FieldInspectionAssignmentStatus.IN_PROGRESS,
+        },
+      }),
+      db.applicationFieldReviewAssignment.count({
+        where: {
+          inspectorId: ctx.userId,
+          status: ApplicationFieldReviewAssignmentStatus.PENDING,
+          application: {
+            deletedAt: null,
+            status: ApplicationStatus.PENDING_FIELD_REVIEW,
+          },
         },
       }),
       db.applicationWorkflowHistory.count({
@@ -162,6 +210,10 @@ export class IshmtAlarmService {
       pendingChief,
       pendingDirector,
       pendingDirectorReport,
+      pendingSectorHead,
+      pendingSectorHeadReport,
+      returnedToInspectors,
+      returnedToSectorHead,
       procedureOverdue: procedure.overdue,
       procedureUrgent: procedure.urgent,
       redElevators: complianceAggregate.activeRed,
@@ -170,6 +222,7 @@ export class IshmtAlarmService {
       pendingMigration,
       myFieldScheduled,
       myFieldInProgress,
+      myPendingDocumentReviews,
       recommendedRejection,
       noMaintenanceContract: contractStats.noMaintenanceContract,
       noInspectionContract: contractStats.noInspectionContract,
@@ -177,6 +230,30 @@ export class IshmtAlarmService {
       inspectionContractExpiring7: contractStats.inspectionContractExpiring7,
       maintenanceContractExpired: contractStats.maintenanceContractExpired,
     };
+  }
+
+  private static applicationPipelineAlarms(
+    s: AlarmSnapshot,
+    hrefs: { submitted: string; underReview: string },
+  ): IshmtAlarm[] {
+    return [
+      {
+        id: "submitted",
+        priority: "critical",
+        label: "Aplikime në pritje marrjeje",
+        hint: "Dosje të reja të parashtruara që presin marrjen në shqyrtim ose delegim",
+        count: s.submitted,
+        href: hrefs.submitted,
+      },
+      {
+        id: "under-review",
+        priority: "urgent",
+        label: "Dosje në shqyrtim",
+        hint: "Aplikime në proces shqyrtimi administrativ",
+        count: s.underReview,
+        href: hrefs.underReview,
+      },
+    ];
   }
 
   private static contractAlarms(s: AlarmSnapshot): IshmtAlarm[] {
@@ -192,7 +269,7 @@ export class IshmtAlarmService {
       {
         id: "no-inspection-contract",
         priority: "critical",
-        label: "Pa kontratë inspektimi (OMI)",
+        label: "Pa kontratë kontrolli periodik (OM)",
         hint: "Ashensorë aktivë pa kontratë periodike me trupin certifikues",
         count: s.noInspectionContract,
         href: "/ishmt/compliance-digest?issue=no-inspection-contract#alarmet-lista",
@@ -216,10 +293,75 @@ export class IshmtAlarmService {
       {
         id: "inspection-contract-expiring",
         priority: "urgent",
-        label: "Kontrata inspektimit skadon (7 ditë)",
-        hint: "Kërkon rinovim kontrate me OMI-n",
+        label: "Kontrata e kontrollit periodik skadon (7 ditë)",
+        hint: "Kërkon rinovim kontrate me OM-n",
         count: s.inspectionContractExpiring7,
         href: "/ishmt/compliance-digest?issue=inspection-contract-expiring#alarmet-lista",
+      },
+    ];
+  }
+
+  private static buildSectorHeadAlarms(s: AlarmSnapshot): IshmtAlarm[] {
+    const pendingDelegation = s.pendingSectorHead + s.returnedToInspectors;
+    const pendingReport = s.pendingSectorHeadReport + s.returnedToSectorHead;
+
+    return [
+      ...this.contractAlarms(s),
+      {
+        id: "sector-head-delegation",
+        priority: "critical",
+        label: "Delegime të reja",
+        hint: "Dosje të deleguara nga drejtori - caktoni inspektorët për shqyrtim",
+        count: pendingDelegation,
+        href: "/ishmt/review?tab=needs_action",
+      },
+      {
+        id: "sector-head-report",
+        priority: "critical",
+        label: "Raport në pritje",
+        hint: "Inspektorët kanë përfunduar - dorëzoni raportin te drejtori",
+        count: pendingReport,
+        href: "/ishmt/review?tab=needs_action",
+      },
+      {
+        id: "procedure-overdue",
+        priority: "critical",
+        label: "Afat procedural i tejkaluar",
+        hint: "Aplikime jashtë afatit 10-ditor të shqyrtimit administrativ",
+        count: s.procedureOverdue,
+        href: "/ishmt/review?tab=needs_action",
+      },
+      {
+        id: "red-compliance",
+        priority: "critical",
+        label: "Jashtë përputhshmërisë",
+        hint: "Ashensorë aktivë me indikator të kuq në regjistër",
+        count: s.redElevators,
+        href: "/ishmt/search?compliance=RED&status=ACTIVE",
+      },
+      {
+        id: "procedure-urgent",
+        priority: "urgent",
+        label: "Afat procedural në skadim",
+        hint: "Maksimumi 3 ditë pune deri në përfundimin e afatit procedural",
+        count: s.procedureUrgent,
+        href: "/ishmt/review?tab=needs_action",
+      },
+      {
+        id: "pending-reports",
+        priority: "warning",
+        label: "Raportime publike",
+        hint: "Raportime qytetarësh në pritje të shqyrtimit",
+        count: s.pendingReports,
+        href: "/ishmt/reports",
+      },
+      {
+        id: "yellow-compliance",
+        priority: "warning",
+        label: "Afat ligjor në skadim",
+        hint: "Ashensorë aktivë me indikator të verdhë - inspektim, mirëmbajtje ose certifikatë",
+        count: s.yellowElevators,
+        href: "/ishmt/search?compliance=YELLOW&status=ACTIVE",
       },
     ];
   }
@@ -228,6 +370,10 @@ export class IshmtAlarmService {
     const pendingReview = s.pendingDirector + s.pendingDirectorReport;
 
     return [
+      ...this.applicationPipelineAlarms(s, {
+        submitted: "/ishmt/review",
+        underReview: "/ishmt/review",
+      }),
       ...this.contractAlarms(s),
       {
         id: "director-review",
@@ -282,6 +428,10 @@ export class IshmtAlarmService {
 
   private static buildChiefAlarms(s: AlarmSnapshot): IshmtAlarm[] {
     return [
+      ...this.applicationPipelineAlarms(s, {
+        submitted: "/ishmt/chief/inbox",
+        underReview: "/ishmt/review",
+      }),
       ...this.contractAlarms(s),
       {
         id: "chief-approval",
@@ -339,8 +489,19 @@ export class IshmtAlarmService {
     role: (typeof ROLE_CODES)[keyof typeof ROLE_CODES],
   ): IshmtAlarm[] {
     const canReview = canReviewApplications(role);
+    const canSeeApplicationQueue =
+      canReview ||
+      canApproveApplications(role) ||
+      canDirectApplications(role) ||
+      role === ROLE_CODES.ADMIN;
 
     const alarms: IshmtAlarm[] = [
+      ...(canSeeApplicationQueue
+        ? this.applicationPipelineAlarms(s, {
+            submitted: "/ishmt/review",
+            underReview: "/ishmt/review",
+          })
+        : []),
       ...this.contractAlarms(s),
       {
         id: "procedure-overdue",
@@ -367,28 +528,12 @@ export class IshmtAlarmService {
         href: "/ishmt/review",
       },
       {
-        id: "submitted",
-        priority: "urgent",
-        label: "Aplikime në pritje marrjeje",
-        hint: "Dosje të parashtruara që presin marrjen në shqyrtim",
-        count: s.submitted,
-        href: "/ishmt/review",
-      },
-      {
         id: "my-field-active",
         priority: "urgent",
         label: "Detyra të caktuara në terren",
         hint: "Inspektimet tuaja - të planifikuara ose në proces",
         count: s.myFieldScheduled + s.myFieldInProgress,
         href: "/ishmt/my-field-inspections",
-      },
-      {
-        id: "under-review",
-        priority: "warning",
-        label: "Dosje në shqyrtim",
-        hint: "Aplikime në proces shqyrtimi nga inspektori administrativ",
-        count: s.underReview,
-        href: "/ishmt/review",
       },
       {
         id: "pending-reports",
@@ -426,7 +571,7 @@ export class IshmtAlarmService {
 
     return alarms.filter((alarm) => {
       if (
-        !canReview &&
+        !canSeeApplicationQueue &&
         ["submitted", "under-review", "procedure-overdue", "procedure-urgent"].includes(alarm.id)
       ) {
         return false;
@@ -439,23 +584,41 @@ export class IshmtAlarmService {
   }
 
   private static buildFieldInspectorAlarms(s: AlarmSnapshot): IshmtAlarm[] {
-    return [
-      {
+    const alarms: IshmtAlarm[] = [];
+
+    if (s.myPendingDocumentReviews > 0) {
+      alarms.push({
+        id: "my-document-reviews",
+        priority: "critical",
+        label: "Dosje për shqyrtim dokumentacioni",
+        hint: "Dosje të reja të caktuara — shqyrtoni dokumentacionin dhe përgatisni raportin",
+        count: s.myPendingDocumentReviews,
+        href: "/ishmt/my-application-reviews",
+      });
+    }
+
+    if (s.myFieldInProgress > 0) {
+      alarms.push({
         id: "my-field-in-progress",
         priority: "critical",
         label: "Inspektim në proces",
         hint: "Detyra të filluara - regjistroni rezultatin e inspektimit",
         count: s.myFieldInProgress,
         href: "/ishmt/my-field-inspections",
-      },
-      {
+      });
+    }
+
+    if (s.myFieldScheduled > 0) {
+      alarms.push({
         id: "my-field-scheduled",
         priority: "urgent",
         label: "Inspektimet e planifikuara",
         hint: "Detyra të reja - konfirmoni planifikimin dhe filloni inspektimin",
         count: s.myFieldScheduled,
         href: "/ishmt/my-field-inspections",
-      },
-    ];
+      });
+    }
+
+    return alarms;
   }
 }

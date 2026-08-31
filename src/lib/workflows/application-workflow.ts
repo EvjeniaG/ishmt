@@ -7,6 +7,8 @@ export type WorkflowAction =
   | "ASSIGN_INSTALLER"
   | "ACCEPT_DELEGATION"
   | "REJECT_DELEGATION"
+  | "REVOKE_INSTALLER_DELEGATION"
+  | "REVOKE_CERTIFIER_DELEGATION"
   | "START_TECHNICAL_DATA"
   | "COMPLETE_INSTALLER"
   | "ASSIGN_CERTIFIER"
@@ -240,6 +242,11 @@ const REGISTRATION_TRANSITIONS: TransitionRule[] = [
   { applicationType: ApplicationType.NEW_REGISTRATION, from: ApplicationStatus.INSTALLER_INVITED, to: ApplicationStatus.INSTALLER_ACCEPTED, action: "ACCEPT_DELEGATION", roles: [ROLE_CODES.INSTALLER] },
   { applicationType: ApplicationType.NEW_REGISTRATION, from: ApplicationStatus.PENDING_INSTALLER, to: ApplicationStatus.INSTALLER_ACCEPTED, action: "ACCEPT_DELEGATION", roles: [ROLE_CODES.INSTALLER] },
   { applicationType: ApplicationType.NEW_REGISTRATION, from: ApplicationStatus.INSTALLER_INVITED, to: ApplicationStatus.BASIC_DATA_COMPLETED, action: "REJECT_DELEGATION", roles: [ROLE_CODES.INSTALLER] },
+  { applicationType: ApplicationType.NEW_REGISTRATION, from: ApplicationStatus.PENDING_INSTALLER, to: ApplicationStatus.BASIC_DATA_COMPLETED, action: "REVOKE_INSTALLER_DELEGATION", roles: [ROLE_CODES.OWNER] },
+  { applicationType: ApplicationType.NEW_REGISTRATION, from: ApplicationStatus.INSTALLER_INVITED, to: ApplicationStatus.BASIC_DATA_COMPLETED, action: "REVOKE_INSTALLER_DELEGATION", roles: [ROLE_CODES.OWNER] },
+  { applicationType: ApplicationType.NEW_REGISTRATION, from: ApplicationStatus.INSTALLER_ACCEPTED, to: ApplicationStatus.BASIC_DATA_COMPLETED, action: "REVOKE_INSTALLER_DELEGATION", roles: [ROLE_CODES.OWNER] },
+  { applicationType: ApplicationType.NEW_REGISTRATION, from: ApplicationStatus.TECHNICAL_DATA_IN_PROGRESS, to: ApplicationStatus.BASIC_DATA_COMPLETED, action: "REVOKE_INSTALLER_DELEGATION", roles: [ROLE_CODES.OWNER] },
+  { applicationType: ApplicationType.NEW_REGISTRATION, from: ApplicationStatus.RETURNED, to: ApplicationStatus.BASIC_DATA_COMPLETED, action: "REVOKE_INSTALLER_DELEGATION", roles: [ROLE_CODES.OWNER] },
   { applicationType: ApplicationType.NEW_REGISTRATION, from: ApplicationStatus.INSTALLER_ACCEPTED, to: ApplicationStatus.TECHNICAL_DATA_IN_PROGRESS, action: "START_TECHNICAL_DATA", roles: [ROLE_CODES.INSTALLER] },
   { applicationType: ApplicationType.NEW_REGISTRATION, from: ApplicationStatus.TECHNICAL_DATA_IN_PROGRESS, to: ApplicationStatus.TECHNICAL_DATA_COMPLETED, action: "COMPLETE_INSTALLER", roles: [ROLE_CODES.INSTALLER] },
   { applicationType: ApplicationType.NEW_REGISTRATION, from: ApplicationStatus.INSTALLER_ACCEPTED, to: ApplicationStatus.TECHNICAL_DATA_COMPLETED, action: "COMPLETE_INSTALLER", roles: [ROLE_CODES.INSTALLER] },
@@ -250,6 +257,11 @@ const REGISTRATION_TRANSITIONS: TransitionRule[] = [
   { applicationType: ApplicationType.NEW_REGISTRATION, from: ApplicationStatus.CERTIFIER_INVITED, to: ApplicationStatus.CERTIFIER_ACCEPTED, action: "ACCEPT_CERTIFIER", roles: [ROLE_CODES.CERTIFIER] },
   { applicationType: ApplicationType.NEW_REGISTRATION, from: ApplicationStatus.PENDING_CERTIFIER, to: ApplicationStatus.CERTIFIER_ACCEPTED, action: "ACCEPT_CERTIFIER", roles: [ROLE_CODES.CERTIFIER] },
   { applicationType: ApplicationType.NEW_REGISTRATION, from: ApplicationStatus.CERTIFIER_INVITED, to: ApplicationStatus.TECHNICAL_DATA_COMPLETED, action: "REJECT_DELEGATION", roles: [ROLE_CODES.CERTIFIER] },
+  { applicationType: ApplicationType.NEW_REGISTRATION, from: ApplicationStatus.PENDING_CERTIFIER, to: ApplicationStatus.TECHNICAL_DATA_COMPLETED, action: "REVOKE_CERTIFIER_DELEGATION", roles: [ROLE_CODES.OWNER] },
+  { applicationType: ApplicationType.NEW_REGISTRATION, from: ApplicationStatus.CERTIFIER_INVITED, to: ApplicationStatus.TECHNICAL_DATA_COMPLETED, action: "REVOKE_CERTIFIER_DELEGATION", roles: [ROLE_CODES.OWNER] },
+  { applicationType: ApplicationType.NEW_REGISTRATION, from: ApplicationStatus.CERTIFIER_ACCEPTED, to: ApplicationStatus.TECHNICAL_DATA_COMPLETED, action: "REVOKE_CERTIFIER_DELEGATION", roles: [ROLE_CODES.OWNER] },
+  { applicationType: ApplicationType.NEW_REGISTRATION, from: ApplicationStatus.CERTIFICATION_IN_PROGRESS, to: ApplicationStatus.TECHNICAL_DATA_COMPLETED, action: "REVOKE_CERTIFIER_DELEGATION", roles: [ROLE_CODES.OWNER] },
+  { applicationType: ApplicationType.NEW_REGISTRATION, from: ApplicationStatus.RETURNED, to: ApplicationStatus.TECHNICAL_DATA_COMPLETED, action: "REVOKE_CERTIFIER_DELEGATION", roles: [ROLE_CODES.OWNER] },
   { applicationType: ApplicationType.NEW_REGISTRATION, from: ApplicationStatus.CERTIFIER_ACCEPTED, to: ApplicationStatus.CERTIFICATION_IN_PROGRESS, action: "START_CERTIFICATION", roles: [ROLE_CODES.CERTIFIER] },
   { applicationType: ApplicationType.NEW_REGISTRATION, from: ApplicationStatus.CERTIFICATION_IN_PROGRESS, to: ApplicationStatus.CERTIFICATION_COMPLETED, action: "COMPLETE_CERTIFIER", roles: [ROLE_CODES.CERTIFIER] },
   { applicationType: ApplicationType.NEW_REGISTRATION, from: ApplicationStatus.CERTIFIER_ACCEPTED, to: ApplicationStatus.CERTIFICATION_COMPLETED, action: "COMPLETE_CERTIFIER", roles: [ROLE_CODES.CERTIFIER] },
@@ -334,6 +346,20 @@ const MODERNIZATION_TRANSITIONS: TransitionRule[] = [
     to: ApplicationStatus.PENDING_OWNER_SUBMISSION,
     action: "COMPLETE_CERTIFIER",
     roles: [ROLE_CODES.CERTIFIER],
+  },
+  {
+    applicationType: ApplicationType.MODERNIZATION,
+    from: ApplicationStatus.PENDING_INSTALLER,
+    to: ApplicationStatus.DRAFT,
+    action: "REVOKE_INSTALLER_DELEGATION",
+    roles: [ROLE_CODES.OWNER],
+  },
+  {
+    applicationType: ApplicationType.MODERNIZATION,
+    from: ApplicationStatus.PENDING_CERTIFIER,
+    to: ApplicationStatus.INSTALLER_COMPLETED,
+    action: "REVOKE_CERTIFIER_DELEGATION",
+    roles: [ROLE_CODES.OWNER],
   },
   {
     applicationType: ApplicationType.MODERNIZATION,
@@ -494,7 +520,7 @@ export const APPLICATION_STATUS_LABELS: Record<ApplicationStatus, string> = {
 export const RETURN_TARGET_LABELS: Record<ReturnTargetRole, string> = {
   OWNER: "Personi përgjegjës i ashensorit",
   INSTALLER: "Instaluesi",
-  CERTIFIER: "Certifikuesi / OMI",
+  CERTIFIER: "Certifikuesi / OM",
 };
 
 export const REVIEW_LEVEL_BY_ACTION: Partial<Record<WorkflowAction, ReviewLevel>> = {

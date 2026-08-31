@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { ApplicationStatus } from "@prisma/client";
+import { ApplicationStatus, ApplicationType } from "@prisma/client";
 import { AppShell } from "@/components/layout/app-shell";
 import { StandardPageLayout } from "@/components/layout/standard-page-layout";
 import { ApplicationStatusBadge } from "@/components/applications/application-status-badge";
@@ -10,36 +10,33 @@ import { OfficialTableFooter, RegistryNumber, SectionCard } from "@/components/s
 import { getAuthSession } from "@/lib/auth";
 import { APPLICATION_TYPE_LABELS } from "@/lib/constants/application-labels";
 import { canChiefHandleApplications } from "@/lib/permissions/ishmt-roles";
-import { ApplicationService } from "@/lib/services/application-service";
+import { db } from "@/lib/db";
+import { withDemoDataApplicationScope } from "@/lib/demo/demo-data-mode";
 
 export default async function ChiefInboxPage() {
   const session = await getAuthSession();
   if (!session?.user) redirect("/auth/login");
   if (!canChiefHandleApplications(session.user.roleCode)) redirect("/unauthorized");
 
-  const ctx = {
-    userId: session.user.id,
-    email: session.user.email ?? "",
-    firstName: session.user.firstName,
-    lastName: session.user.lastName,
-    activeOrgId: session.user.activeOrgId,
-    activeOrgType: session.user.activeOrgType,
-    activeOrgName: session.user.activeOrgName,
-    roleCode: session.user.roleCode,
-    permissions: session.user.permissions,
-  };
-
-  const applications = await ApplicationService.listForContext(ctx, {
-    queueBucket: "needs_action",
-    status: ApplicationStatus.SUBMITTED,
+  const applications = await db.application.findMany({
+    where: withDemoDataApplicationScope({
+      deletedAt: null,
+      type: ApplicationType.NEW_REGISTRATION,
+      status: ApplicationStatus.SUBMITTED,
+    }),
+    include: {
+      data: { select: { buildingAddress: true } },
+      ownerOrg: { select: { name: true } },
+    },
+    orderBy: { submittedAt: "asc" },
   });
 
   return (
     <AppShell>
       <StandardPageLayout
-        eyebrow="ISHMT · Kryeinspektor"
+        eyebrow="IQMT · Kryeinspektor"
         title="Aplikime të reja për rregjistrim"
-        description="Aplikimet e dërguara nga personi përgjegjës — delegoni te drejtori i drejtorisë dhe caktoni numrin e inspektorëve."
+        description="Aplikimet e dërguara nga personi përgjegjës - delegoni te drejtori i drejtorisë dhe caktoni numrin e inspektorëve."
       >
         <SectionCard title="Radha e aplikimeve" subtitle="Në pritje të delegimit">
           {applications.length === 0 ? (

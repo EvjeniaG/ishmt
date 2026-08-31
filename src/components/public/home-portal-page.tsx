@@ -17,20 +17,19 @@ import {
 import { Button } from "@/components/ui/button";
 import { InstitutionalNotice } from "@/components/shared/institutional";
 import { CitizenQrLookup } from "@/components/public/citizen-qr-lookup";
-import { HomePortalGuideSection } from "@/components/public/home-portal-guide-section";
 
 const PORTAL_SERVICES = [
   {
     icon: FileCheck2,
     title: "Regjistrim & certifikim",
     description:
-      "Aplikime dixhitale për regjistrimin fillestar, modernizimin dhe çregjistrimin e ashensorëve sipas Udhëzimit të ISHMT.",
+      "Aplikime dixhitale për regjistrimin fillestar, modernizimin dhe çregjistrimin e ashensorëve sipas Udhëzimit të IQMT.",
   },
   {
     icon: ClipboardCheck,
-    title: "Inspektime & përputhshmëri",
+    title: "Kontrolle & përputhshmëri",
     description:
-      "Ndjekje e inspektimeve fillestare dhe periodike, trupave OM dhe statusit të përputhshmërisë në regjistër.",
+      "Ndjekje e kontrolleve fillestare dhe periodike, trupave OM dhe statusit të përputhshmërisë në regjistër.",
   },
   {
     icon: Wrench,
@@ -49,9 +48,10 @@ const PORTAL_SERVICES = [
 const AUDIENCES = [
   { label: "Personi përgjegjës i ashensorit", hint: "Aplikime, dosje, detyrime" },
   { label: "Kompanitë instaluese", hint: "Të dhëna teknike & dokumentacion" },
-  { label: "Trupat certifikues / OM", hint: "Certifikim & inspektim periodik" },
+  { label: "Trupat certifikues / OM", hint: "Certifikim & kontroll periodik" },
   { label: "Kompanitë e mirëmbajtjes", hint: "Kontrata & raporte" },
-  { label: "Stafi ISHMT", hint: "Shqyrtim, miratim, mbikëqyrje" },
+  { label: "Drejtoria e Politikave", hint: "Licenca kompanish & regjistrim" },
+  { label: "Stafi IQMT", hint: "Shqyrtim, miratim, mbikëqyrje" },
 ] as const;
 
 export function HomePortalPage() {
@@ -73,9 +73,9 @@ export function HomePortalPage() {
                 Republika e Shqipërisë
               </p>
               <p className="truncate text-sm font-semibold sm:text-base">
-                Inspektorati Shtetëror i Mbikeqyrjes së Tregut
+                Inspektorati Qendror i Mbikeqyrjes së Tregut
               </p>
-              <p className="text-xs text-white/75 sm:text-sm">ISHMT · Portali zyrtar</p>
+              <p className="text-xs text-white/75 sm:text-sm">IQMT · Portali zyrtar</p>
             </div>
           </div>
           <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
@@ -84,7 +84,7 @@ export function HomePortalPage() {
               variant="ghost"
               className="flex-1 text-white/90 hover:bg-white/10 hover:text-white sm:flex-none"
             >
-              <Link href="#udhezim">
+              <Link href="/udhezim">
                 <BookOpen className="mr-2 h-4 w-4" aria-hidden />
                 Udhëzim
               </Link>
@@ -131,7 +131,7 @@ export function HomePortalPage() {
                 Regjistri Digjital i Ashensorëve
               </h1>
               <p className="mt-5 max-w-2xl text-base leading-relaxed text-muted-foreground sm:text-lg">
-                Platforma zyrtare e ISHMT për regjistrimin, certifikimin, inspektimin dhe
+                Platforma zyrtare e IQMT për regjistrimin, certifikimin, mbikëqyrjen dhe
                 menaxhimin e plotë të ciklit jetësor të ashensorëve në të gjithë territorin e
                 Shqipërisë.
               </p>
@@ -199,13 +199,13 @@ export function HomePortalPage() {
                 </h2>
                 <p className="mt-3 max-w-lg text-sm leading-relaxed text-muted-foreground sm:text-base">
                   Verifikoni statusin e ashensorit duke skanuar kodin QR, ose raportoni probleme
-                  sigurie te ISHMT - pa hyrje në sistem.
+                  sigurie te IQMT - pa hyrje në sistem.
                 </p>
                 <ul className="mt-6 space-y-3 text-sm text-muted-foreground">
                   <li className="flex items-start gap-2">
                     <ScanLine className="mt-0.5 h-4 w-4 shrink-0 text-gov-primary" aria-hidden />
                     <span>
-                      Statusi i regjistrimit, inspektimit dhe përputhshmërisë (informacion publik)
+                      Statusi i regjistrimit, kontrollit periodik dhe përputhshmërisë (informacion publik)
                     </span>
                   </li>
                   <li className="flex items-start gap-2">
@@ -247,14 +247,14 @@ export function HomePortalPage() {
                     <ShieldCheck className="h-5 w-5 text-gov-primary" aria-hidden />
                     <span className="font-semibold text-gov-primary">Ashensor i paregjistruar</span>
                     <span className="text-xs leading-relaxed text-muted-foreground">
-                      Dyshim për ashensor pa regjistrim në ISHMT
+                      Dyshim për ashensor pa regjistrim në IQMT
                     </span>
                   </Link>
                 </div>
 
                 <InstitutionalNotice variant="legal" title="Privatësia">
                   Të dhënat e personit përgjegjës dhe adresa e plotë e ndërtesës nuk shfaqen
-                  publikisht. Raportimet e qytetarëve shqyrtohen nga ISHMT.
+                  publikisht. Raportimet e qytetarëve shqyrtohen nga IQMT.
                 </InstitutionalNotice>
               </div>
             </div>
@@ -266,7 +266,7 @@ export function HomePortalPage() {
             <p className="portal-eyebrow">Shërbimet e portalit</p>
             <h2 className="portal-title mt-1">Çfarë ofron platforma</h2>
             <p className="portal-subtitle mt-2">
-              Një pikë qendrore për të gjitha palët e involvruara në sigurinë dhe përputhshmërinë
+              Një pikë qendrore për të gjitha palët e përfshira në sigurinë dhe përputhshmërinë
               e ashensorëve.
             </p>
           </div>
@@ -331,8 +331,6 @@ export function HomePortalPage() {
             </div>
           </div>
         </section>
-
-        <HomePortalGuideSection />
 
         <section className="mx-auto max-w-6xl px-4 py-12 sm:px-6 lg:px-8 lg:py-16">
           <div className="overflow-hidden rounded-2xl border border-gov-primary/15 bg-gradient-to-br from-gov-primary via-gov-secondary to-gov-header p-8 text-white shadow-portal-lg sm:p-10 lg:flex lg:items-center lg:justify-between lg:gap-8">

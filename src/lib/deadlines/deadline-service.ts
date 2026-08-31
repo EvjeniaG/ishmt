@@ -14,10 +14,14 @@ export type DeadlineSeverity = "ok" | "gray" | "orange" | "red";
 export type DeadlineCategory =
   | "procedure"
   | "inspection"
+  | "inspection_contract_missing"
+  | "inspection_contract_pending"
+  | "inspection_contract"
   | "maintenance_contract"
   | "maintenance_report"
   | "maintenance_missing"
-  | "certificate";
+  | "certificate"
+  | "qr_placement";
 
 export type UnifiedDeadlineItem = {
   id: string;
@@ -32,11 +36,21 @@ export type UnifiedDeadlineItem = {
   actionLabel?: string;
 };
 
-const REVIEW_STATUSES: ApplicationStatus[] = [
+export const ISHMT_PROCEDURE_REVIEW_STATUSES: ApplicationStatus[] = [
   ApplicationStatus.SUBMITTED,
   ApplicationStatus.UNDER_REVIEW,
+  ApplicationStatus.PENDING_DIRECTOR,
+  ApplicationStatus.PENDING_SECTOR_HEAD,
+  ApplicationStatus.PENDING_FIELD_REVIEW,
+  ApplicationStatus.PENDING_SECTOR_HEAD_REPORT,
+  ApplicationStatus.PENDING_DIRECTOR_REPORT,
   ApplicationStatus.PENDING_CHIEF_INSPECTOR,
+  ApplicationStatus.RETURNED_TO_INSPECTORS,
+  ApplicationStatus.RETURNED_TO_SECTOR_HEAD,
+  ApplicationStatus.RETURNED_TO_DIRECTOR,
 ];
+
+const REVIEW_STATUSES = ISHMT_PROCEDURE_REVIEW_STATUSES;
 
 function daysBetween(from: Date, to: Date): number {
   return Math.round((to.getTime() - from.getTime()) / (1000 * 60 * 60 * 24));
@@ -82,7 +96,7 @@ export class DeadlineService {
     return {
       id: `procedure-${input.applicationId}`,
       category: "procedure",
-      title: isOverdue ? "Afati i procedurës ka skaduar" : "Afati i shqyrtimit ISHMT",
+      title: isOverdue ? "Afati i procedurës ka skaduar" : "Afati i shqyrtimit IQMT",
       subtitle: `${input.applicationNumber} · ${PROCEDURE_WORKING_DAYS} ditë pune nga protokolli`,
       dueDate: legal.deadlineDate,
       severity: severityFromWorkingDays(legal),
@@ -122,14 +136,14 @@ export class DeadlineService {
     return {
       id: `inspection-${input.elevatorId}`,
       category: "inspection",
-      title: isOverdue ? "Inspektimi periodik i vonuar" : "Inspektimi periodik i radhës",
+      title: isOverdue ? "Kontrolli periodik i vonuar" : "Kontrolli periodik i radhës",
       subtitle: `${input.registryNumber} · çdo ${intervalMonths} muaj`,
       dueDate,
       severity: severityFromDaysRemaining(daysRemaining, warningDays),
       daysRemaining,
       isOverdue,
       href: input.href ?? `/portal/elevators/${input.elevatorId}?tab=inspections`,
-      actionLabel: "Shiko inspektimet",
+      actionLabel: "Shiko kontrollet",
     };
   }
 
@@ -206,8 +220,94 @@ export class DeadlineService {
       severity: "red",
       daysRemaining: 0,
       isOverdue: true,
-      href: input.href ?? `/portal/elevators/${input.elevatorId}/maintenance/change`,
+      href: input.href ?? `/portal/elevators/${input.elevatorId}?tab=maintenance`,
       actionLabel: "Cakto mirëmbajtës",
+    };
+  }
+
+  static buildMissingInspectionContractItem(input: {
+    elevatorId: string;
+    registryNumber: string;
+    href?: string;
+  }): UnifiedDeadlineItem {
+    const now = new Date();
+    return {
+      id: `insp-contract-missing-${input.elevatorId}`,
+      category: "inspection_contract_missing",
+      title: "Pa kontratë kontrolli periodik (OM)",
+      subtitle: input.registryNumber,
+      dueDate: now,
+      severity: "red",
+      daysRemaining: 0,
+      isOverdue: true,
+      href: input.href ?? `/portal/elevators/${input.elevatorId}?tab=inspections`,
+      actionLabel: "Cakto OM-n",
+    };
+  }
+
+  static buildPendingInspectionContractItem(input: {
+    elevatorId: string;
+    registryNumber: string;
+    href?: string;
+  }): UnifiedDeadlineItem {
+    const now = new Date();
+    return {
+      id: `insp-contract-pending-${input.elevatorId}`,
+      category: "inspection_contract_pending",
+      title: "Kontratë kontrolli periodik - në pritje pranimi",
+      subtitle: input.registryNumber,
+      dueDate: now,
+      severity: "orange",
+      daysRemaining: 0,
+      isOverdue: false,
+      href: input.href ?? `/portal/elevators/${input.elevatorId}?tab=inspections`,
+      actionLabel: "Shiko kontrollet",
+    };
+  }
+
+  static buildInspectionContractDeadlineItem(input: {
+    elevatorId: string;
+    registryNumber: string;
+    contractEndDate: Date;
+    warningDays?: number;
+    href?: string;
+  }): UnifiedDeadlineItem {
+    const warningDays = input.warningDays ?? COMPLIANCE_WARNING_DAYS;
+    const now = new Date();
+    const daysRemaining = daysBetween(now, input.contractEndDate);
+    const isOverdue = input.contractEndDate < now;
+
+    return {
+      id: `insp-contract-${input.elevatorId}`,
+      category: "inspection_contract",
+      title: isOverdue ? "Kontrata e kontrollit periodik ka skaduar" : "Kontrata e kontrollit periodik skadon",
+      subtitle: input.registryNumber,
+      dueDate: input.contractEndDate,
+      severity: severityFromDaysRemaining(daysRemaining, warningDays),
+      daysRemaining,
+      isOverdue,
+      href: input.href ?? `/portal/elevators/${input.elevatorId}?tab=inspections`,
+      actionLabel: "Shiko kontrollet",
+    };
+  }
+
+  static buildQrPlacementItem(input: {
+    elevatorId: string;
+    registryNumber: string;
+    href?: string;
+  }): UnifiedDeadlineItem {
+    const now = new Date();
+    return {
+      id: `qr-placement-${input.elevatorId}`,
+      category: "qr_placement",
+      title: "Mungon fotografia e vendosjes së QR",
+      subtitle: input.registryNumber,
+      dueDate: now,
+      severity: "red",
+      daysRemaining: 0,
+      isOverdue: true,
+      href: input.href ?? `/portal/elevators/${input.elevatorId}?tab=qr`,
+      actionLabel: "Ngarko foton",
     };
   }
 
@@ -222,12 +322,25 @@ export class DeadlineService {
       nextInspectionDate: Date | null;
     } | null;
     activeMaintenanceContract?: { endDate: Date | null } | null;
+    maintenanceContracts?: Array<{
+      serviceType: string;
+      status: string;
+      endDate: Date | null;
+    }>;
+    qrCode?: { code: string; placementPhotoDocumentId: string | null } | null;
     lastInterventionDate?: Date | null;
     activeRegistrationCertExpiry?: Date | null;
     rules?: ComplianceRulesConfig;
   }): Promise<UnifiedDeadlineItem[]> {
     const rules = input.rules ?? (await SystemConfigService.getComplianceRules());
     const items: UnifiedDeadlineItem[] = [];
+
+    const inspectionActive = input.maintenanceContracts?.find(
+      (contract) => contract.serviceType === "PERIODIC_INSPECTION" && contract.status === "ACTIVE",
+    );
+    const inspectionPending = input.maintenanceContracts?.find(
+      (contract) => contract.serviceType === "PERIODIC_INSPECTION" && contract.status === "PENDING",
+    );
 
     items.push(
       this.buildInspectionDeadlineItem({
@@ -239,6 +352,31 @@ export class DeadlineService {
         rules,
       }),
     );
+
+    if (!inspectionActive && !inspectionPending) {
+      items.push(
+        this.buildMissingInspectionContractItem({
+          elevatorId: input.elevatorId,
+          registryNumber: input.registryNumber,
+        }),
+      );
+    } else if (inspectionPending && !inspectionActive) {
+      items.push(
+        this.buildPendingInspectionContractItem({
+          elevatorId: input.elevatorId,
+          registryNumber: input.registryNumber,
+        }),
+      );
+    } else if (inspectionActive?.endDate) {
+      items.push(
+        this.buildInspectionContractDeadlineItem({
+          elevatorId: input.elevatorId,
+          registryNumber: input.registryNumber,
+          contractEndDate: inspectionActive.endDate,
+          warningDays: rules.certificateWarningDays,
+        }),
+      );
+    }
 
     if (!input.maintenanceOrgId) {
       items.push(this.buildMissingMaintenanceItem({ elevatorId: input.elevatorId, registryNumber: input.registryNumber }));
@@ -281,10 +419,25 @@ export class DeadlineService {
       });
     }
 
-    return items.sort((a, b) => a.dueDate.getTime() - b.dueDate.getTime());
+    if (input.qrCode?.code && !input.qrCode.placementPhotoDocumentId) {
+      items.push(
+        this.buildQrPlacementItem({
+          elevatorId: input.elevatorId,
+          registryNumber: input.registryNumber,
+        }),
+      );
+    }
+
+    return items.sort((a, b) => {
+      const severityRank = (item: UnifiedDeadlineItem) =>
+        item.severity === "red" ? 0 : item.severity === "orange" ? 1 : item.severity === "gray" ? 2 : 3;
+      const rankDiff = severityRank(a) - severityRank(b);
+      if (rankDiff !== 0) return rankDiff;
+      return a.dueDate.getTime() - b.dueDate.getTime();
+    });
   }
 
-  /** Afate procedure për radhën ISHMT (inspektor / kryeinspektor). */
+  /** Afate procedure për radhën IQMT (inspektor / kryeinspektor). */
   static summarizeProcedureQueue(
     applications: { id: string; applicationNumber: string; submittedAt: Date | null }[],
   ) {

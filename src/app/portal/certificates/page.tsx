@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { AppLink } from "@/components/shared/app-link";
 import { redirect } from "next/navigation";
 import { AppShell } from "@/components/layout/app-shell";
 import { StandardPageLayout } from "@/components/layout/standard-page-layout";
@@ -70,9 +71,9 @@ export default async function OwnerCertificatesPage() {
                     <td>{labelCertificateStatus(cert.status)}</td>
                     <td>
                       {cert.documentId && (
-                        <Link href={`/api/documents/${cert.documentId}/download`} className="text-gov-primary hover:underline">
+                        <AppLink href={`/api/documents/${cert.documentId}/download`} className="text-gov-primary hover:underline">
                           Shkarko PDF
-                        </Link>
+                        </AppLink>
                       )}
                     </td>
                   </tr>

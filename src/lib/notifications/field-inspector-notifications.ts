@@ -2,7 +2,7 @@ import type { Prisma } from "@prisma/client";
 import { ROLE_CODES, type RoleCode } from "@/lib/constants/roles";
 import { isFieldInspectorRole } from "@/lib/permissions/ishmt-roles";
 
-/** Rolet që përjashtohen nga njoftimet operacionale të ISHMT (aplikime, regjistrime, raportime). */
+/** Rolet që përjashtohen nga njoftimet operacionale të IQMT (aplikime, regjistrime, raportime). */
 export const ISHMT_OPERATIONS_NOTIFY_EXCLUDED_ROLES = [ROLE_CODES.FIELD_INSPECTOR] as const;
 
 /** Drejtori teknik dhe kryeinspektori shohin statistikat; nuk marrin njoftime për kontrata/afate. */

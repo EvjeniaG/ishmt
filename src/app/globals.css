@@ -526,7 +526,7 @@
   }
 
   .workflow-section {
-    @apply workflow-panel;
+    @apply workflow-panel min-w-0 max-w-full overflow-hidden;
   }
 
   .workflow-section-header {
@@ -689,8 +689,69 @@
     @apply border-gov-primary/50 bg-gov-primary/[0.05];
   }
 
+  .workflow-upload-zone-row {
+    @apply flex-row items-center justify-center gap-2 px-4 py-3 text-left;
+  }
+
+  .workflow-doc-file-row {
+    @apply flex min-w-0 flex-1 items-center gap-2 rounded-lg border border-border/60 bg-background px-3 py-2;
+  }
+
+  .workflow-doc-slot-row {
+    @apply workflow-doc-item min-w-0 flex-col gap-3 sm:flex-row sm:items-start sm:gap-4;
+  }
+
   .workflow-link-card {
     @apply flex items-center justify-between gap-4 rounded-xl border border-border/70 bg-card p-4 shadow-sm transition-all hover:border-gov-primary/25 hover:shadow-md;
+  }
+
+  .workflow-history-compact {
+    @apply overflow-hidden rounded-xl border border-border/60 bg-card shadow-sm;
+  }
+
+  .workflow-history-header {
+    @apply flex items-center gap-2 border-b border-border/60 bg-muted/15 px-4 py-2.5;
+  }
+
+  .workflow-history-body {
+    @apply px-4 py-3;
+  }
+
+  .workflow-history-entry,
+  .workflow-history-entry-latest {
+    @apply flex items-start justify-between gap-3;
+  }
+
+  .workflow-history-entry-latest {
+    @apply rounded-lg border border-gov-primary/10 bg-gov-primary/[0.03] px-3 py-2;
+  }
+
+  .workflow-history-entry-title {
+    @apply text-sm font-medium leading-snug text-foreground;
+  }
+
+  .workflow-history-entry-comment {
+    @apply mt-0.5 text-xs leading-relaxed text-muted-foreground;
+  }
+
+  .workflow-history-entry-time {
+    @apply shrink-0 pt-0.5 text-[11px] tabular-nums text-muted-foreground;
+  }
+
+  .workflow-history-more {
+    @apply mt-2 border-t border-border/50 pt-2;
+  }
+
+  .workflow-history-more-summary {
+    @apply flex cursor-pointer list-none items-center justify-between gap-2 text-xs font-medium text-gov-primary hover:text-gov-secondary;
+  }
+
+  .workflow-history-more-summary::-webkit-details-marker {
+    display: none;
+  }
+
+  .workflow-history-more-list {
+    @apply mt-2 space-y-2 border-l border-border/60 pl-3;
   }
 
   .workflow-timeline {
@@ -702,11 +763,23 @@
   }
 
   .workflow-timeline-dot {
-    @apply relative z-10 mt-1 flex h-3 w-3 shrink-0 rounded-full bg-gov-primary ring-4 ring-gov-primary/15;
+    @apply relative z-10 mt-1.5 flex h-2.5 w-2.5 shrink-0 rounded-full bg-border ring-4 ring-background;
+  }
+
+  .workflow-timeline-dot-latest {
+    @apply h-3 w-3 bg-gov-primary ring-gov-primary/15;
   }
 
   .workflow-timeline-line {
-    @apply absolute left-[5px] top-3 bottom-0 w-px bg-border;
+    @apply absolute left-[4px] top-4 bottom-0 w-px bg-border/80;
+  }
+
+  .workflow-timeline-content {
+    @apply pb-1;
+  }
+
+  .workflow-timeline-content-latest {
+    @apply rounded-xl border border-gov-primary/15 bg-gov-primary/[0.04] px-3 py-2.5;
   }
 
   .workflow-step-counter {
@@ -735,6 +808,55 @@
   }
 
   .reg-wizard-body {
+    @apply px-4 py-5 sm:px-6 sm:py-6;
+  }
+
+  /* -- IQMT: i njëjti stil si workflow / shqyrtim aplikimi -- */
+  .ishmt-canvas .space-y-6 {
+    @apply space-y-8;
+  }
+
+  .ishmt-canvas .portal-surface {
+    @apply rounded-xl border-border/70 shadow-sm ring-0;
+  }
+
+  .ishmt-canvas .portal-section-card {
+    @apply workflow-panel ring-0;
+  }
+
+  .ishmt-canvas .portal-section-card-header {
+    @apply border-b border-border/60 bg-muted/20 px-4 py-4 sm:px-6;
+  }
+
+  .ishmt-canvas .portal-section-card-title {
+    @apply text-base font-semibold normal-case tracking-tight text-foreground;
+  }
+
+  .ishmt-canvas .portal-section-card-subtitle {
+    @apply mt-1 text-sm leading-relaxed text-muted-foreground;
+  }
+
+  .ishmt-canvas .portal-section-card > .p-5 {
+    @apply px-4 py-5 sm:px-6 sm:py-6;
+  }
+
+  .ishmt-canvas .portal-data-sheet-cell {
+    @apply rounded-lg border-border/60 bg-muted/20;
+  }
+
+  .ishmt-canvas .portal-data-sheet-label {
+    @apply text-xs font-medium normal-case tracking-normal text-muted-foreground;
+  }
+
+  .ishmt-canvas .portal-data-sheet-value {
+    @apply text-sm;
+  }
+
+  .ishmt-canvas .portal-tab-scroll {
+    @apply pb-0;
+  }
+
+  .ishmt-canvas .reg-wizard-body {
     @apply px-4 py-5 sm:px-6 sm:py-6;
   }
 

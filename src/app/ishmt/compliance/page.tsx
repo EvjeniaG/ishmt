@@ -34,7 +34,7 @@ export default async function IshmtCompliancePage() {
   return (
     <AppShell title="Konformiteti">
       <StandardPageLayout
-        eyebrow="ISHMT · Përputhshmëria"
+        eyebrow="IQMT · Përputhshmëria"
         title="Konformiteti kombëtar"
         description="Pamje e përgjithshme e përputhshmërisë së regjistrit kombëtar të ashensorëve sipas treguesve zyrtarë."
       >
@@ -61,7 +61,7 @@ export default async function IshmtCompliancePage() {
               <tbody>
                 {[
                   {
-                    label: "Pa inspektim të regjistruar",
+                    label: "Pa kontroll të regjistruar",
                     value: summary.gapCounts.missingInspection,
                     href: "/ishmt/search?complianceGap=missing-inspection",
                   },

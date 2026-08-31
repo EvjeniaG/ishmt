@@ -1,4 +1,36 @@
-import { PageHeader } from "@/components/layout/page-header";
+import type { ReactNode } from "react";
+import { StandardPageLayout } from "@/components/layout/standard-page-layout";
+import { DirectorateNavTabs } from "@/components/directorate/directorate-nav-tabs";
+import { DIRECTORATE_EYEBROW, type DirectorateNavTab } from "@/lib/directorate/directorate-nav";
+
+export function DirectoratePageShell({
+  title,
+  description,
+  actions,
+  banner,
+  tabs,
+  children,
+}: {
+  title: string;
+  description?: string;
+  actions?: ReactNode;
+  banner?: ReactNode;
+  tabs?: DirectorateNavTab[];
+  children: ReactNode;
+}) {
+  return (
+    <StandardPageLayout
+      eyebrow={DIRECTORATE_EYEBROW}
+      title={title}
+      description={description}
+      actions={actions}
+      banner={banner}
+    >
+      {tabs && tabs.length > 0 && <DirectorateNavTabs tabs={tabs} />}
+      {children}
+    </StandardPageLayout>
+  );
+}
 
 export function DirectoratePageHeader({
   title,
@@ -7,14 +39,11 @@ export function DirectoratePageHeader({
 }: {
   title: string;
   description?: string;
-  actions?: React.ReactNode;
+  actions?: ReactNode;
 }) {
   return (
-    <PageHeader
-      eyebrow="Drejtoria e licencimit"
-      title={title}
-      description={description}
-      actions={actions}
-    />
+    <StandardPageLayout eyebrow={DIRECTORATE_EYEBROW} title={title} description={description} actions={actions}>
+      {null}
+    </StandardPageLayout>
   );
 }

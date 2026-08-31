@@ -25,6 +25,8 @@ export type CreateCitizenReportInput = {
   description: string;
   qrCode?: string | null;
   locationAddress?: string | null;
+  gpsLatitude?: number | null;
+  gpsLongitude?: number | null;
   reporterName?: string | null;
   reporterEmail?: string | null;
   reporterPhone?: string | null;
@@ -81,6 +83,10 @@ export class CitizenReportService {
           elevatorId,
           municipalityId,
           locationAddress: input.locationAddress?.trim() || null,
+          gpsLatitude:
+            input.gpsLatitude != null ? new Prisma.Decimal(input.gpsLatitude) : null,
+          gpsLongitude:
+            input.gpsLongitude != null ? new Prisma.Decimal(input.gpsLongitude) : null,
           reporterName: input.reporterName?.trim() || null,
           reporterEmail: input.reporterEmail?.trim() || null,
           reporterPhone: input.reporterPhone?.trim() || null,
@@ -269,7 +275,7 @@ export class CitizenReportService {
       },
     });
     if (!inspectorMembership) {
-      throw new Error("Inspektori i zgjedhur nuk është anëtar i vlefshëm i ISHMT.");
+      throw new Error("Inspektori i zgjedhur nuk është anëtar i vlefshëm i IQMT.");
     }
 
     const fromStatus = report.status;

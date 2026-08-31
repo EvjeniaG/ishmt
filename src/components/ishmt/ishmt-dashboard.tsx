@@ -17,7 +17,7 @@ export function IshmtDashboard({
 }) {
   return (
     <IshmtDashboardShell
-      eyebrow={`ISHMT · ${roleLabelSq(roleCode)}`}
+      eyebrow={`IQMT · ${roleLabelSq(roleCode)}`}
       alarms={alarms}
       metrics={metrics}
     />

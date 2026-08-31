@@ -4,7 +4,7 @@ import { AppShell } from "@/components/layout/app-shell";
 import { StandardPageLayout } from "@/components/layout/standard-page-layout";
 import { ComplianceIndicatorBadge } from "@/components/shared/compliance-indicator-badge";
 import { SectionCard } from "@/components/shared/institutional";
-import { ElevatorTimeline } from "@/components/ishmt/elevator-timeline";
+import { ElevatorDossierTimeline } from "@/components/elevators/elevator-dossier-timeline";
 import { getAuthSession } from "@/lib/auth";
 import { requireAuthForPage } from "@/lib/auth/page-guards";
 import { IshmtSearchService } from "@/lib/services/ishmt-search-service";
@@ -37,7 +37,7 @@ export default async function IshmtElevatorDetailPage({
   return (
     <AppShell title={elevator.registryNumber}>
       <StandardPageLayout
-        eyebrow="ISHMT · Regjistri"
+        eyebrow="IQMT · Regjistri"
         title={elevator.registryNumber}
         description={`${elevator.buildingAddress} · ${elevator.municipality.nameSq} · ${labelElevatorStatus(elevator.status)}`}
         actions={
@@ -64,15 +64,18 @@ export default async function IshmtElevatorDetailPage({
       >
         <p className="text-sm text-muted-foreground">
           Të dhënat bazë, teknike, certifikata, QR, dokumente dhe historiku janë në dosjen e plotë digjitale.
-          Këtu shfaqet vetëm kronologjia e shqyrtimit ISHMT.
+          Këtu shfaqet vetëm kronologjia e shqyrtimit IQMT.
         </p>
 
         <SectionCard
-          title="Kronologjia e ashensorit"
-          subtitle="Ngjarjet dhe veprimet e regjistruara nga ISHMT"
+          title="Historiku"
+          subtitle="Hapat e procesit sipas workflow-it, nga fillimi deri te veprimet e fundit"
           padded
         >
-          <ElevatorTimeline events={timeline} />
+          <ElevatorDossierTimeline
+            events={timeline}
+            applicationHref={(applicationId) => `/ishmt/review/${applicationId}`}
+          />
         </SectionCard>
       </StandardPageLayout>
     </AppShell>

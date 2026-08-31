@@ -18,13 +18,13 @@ export type ContractIssueListFilters = {
 export const CONTRACT_ISSUE_FILTER_OPTIONS = [
   { value: "", label: "Të gjitha llojet e alarmit" },
   { value: "no-maintenance-contract", label: "Pa kontratë mirëmbajtjeje" },
-  { value: "no-inspection-contract", label: "Pa kontratë inspektimi (OMI)" },
+  { value: "no-inspection-contract", label: "Pa kontratë kontrolli periodik (OM)" },
   { value: "maintenance-contract-expired", label: "Kontrata mirëmbajtjes skaduar" },
-  { value: "inspection-contract-expired", label: "Kontrata inspektimit skaduar" },
+  { value: "inspection-contract-expired", label: "Kontrata e kontrollit periodik skaduar" },
   { value: "maintenance-contract-expiring", label: "Mirëmbajtje skadon së shpejti" },
-  { value: "inspection-contract-expiring", label: "Inspektim skadon së shpejti" },
+  { value: "inspection-contract-expiring", label: "Kontroll periodik skadon së shpejti" },
   { value: "pending-maintenance-contract", label: "Mirëmbajtje në pritje pranimi" },
-  { value: "pending-inspection-contract", label: "Inspektim në pritje pranimi" },
+  { value: "pending-inspection-contract", label: "Kontroll periodik në pritje pranimi" },
 ] as const;
 
 export const CONTRACT_ISSUE_CATEGORY_OPTIONS = [

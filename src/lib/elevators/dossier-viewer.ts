@@ -1,5 +1,6 @@
 import { ROLE_CODES, type RoleCode } from "@/lib/constants/roles";
 import { isIshmtStaffRole } from "@/lib/permissions/routes";
+import { PERMISSIONS } from "@/lib/permissions/codes";
 import {
   ELEVATOR_DOSSIER_TABS,
   type ElevatorDossierTabId,
@@ -11,6 +12,7 @@ export function resolveDossierViewerKind(roleCode: RoleCode): DossierViewerKind 
   if (roleCode === ROLE_CODES.OWNER) return "owner";
   if (roleCode === ROLE_CODES.CERTIFIER) return "certifier";
   if (roleCode === ROLE_CODES.MAINTENANCE) return "maintenance";
+  if (roleCode === ROLE_CODES.DIRECTORATE) return "ishmt_staff";
   if (isIshmtStaffRole(roleCode)) return "ishmt_staff";
   return "other";
 }

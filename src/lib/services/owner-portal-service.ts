@@ -77,26 +77,50 @@ export class OwnerPortalService {
     });
   }
 
-  static async listMaintenance(orgId: string) {
+  static async listServiceContracts(
+    orgId: string,
+    serviceType: "MAINTENANCE" | "PERIODIC_INSPECTION",
+  ) {
     const elevators = await db.elevator.findMany({
       where: { ownerOrgId: orgId, deletedAt: null, status: ElevatorStatus.ACTIVE },
       include: {
         maintenanceOrg: true,
-        maintenanceContracts: { where: { isActive: true }, orderBy: { endDate: "desc" }, take: 1 },
+        maintenanceContracts: {
+          where: { serviceType, isActive: true },
+          include: { maintenanceOrg: { select: { name: true, nipt: true } } },
+          orderBy: { endDate: "desc" },
+          take: 1,
+        },
         municipality: true,
       },
       orderBy: { registryNumber: "asc" },
     });
 
-    return elevators.map((elv) => ({
-      id: elv.id,
-      registryNumber: elv.registryNumber,
-      address: elv.buildingAddress,
-      municipality: elv.municipality.nameSq,
-      maintenanceCompany: elv.maintenanceOrg?.name ?? null,
-      contract: elv.maintenanceContracts[0] ?? null,
-      hasMaintenance: Boolean(elv.maintenanceOrgId),
-    }));
+    return elevators.map((elv) => {
+      const contract = elv.maintenanceContracts[0] ?? null;
+      const serviceCompany =
+        serviceType === "MAINTENANCE"
+          ? (elv.maintenanceOrg?.name ?? null)
+          : (contract?.maintenanceOrg.name ?? null);
+
+      return {
+        id: elv.id,
+        registryNumber: elv.registryNumber,
+        address: elv.buildingAddress,
+        municipality: elv.municipality.nameSq,
+        serviceCompany,
+        contract,
+        hasAssignment: serviceType === "MAINTENANCE" ? Boolean(elv.maintenanceOrgId) : Boolean(contract),
+      };
+    });
+  }
+
+  static async listMaintenance(orgId: string) {
+    return this.listServiceContracts(orgId, "MAINTENANCE");
+  }
+
+  static async listInspectionContracts(orgId: string) {
+    return this.listServiceContracts(orgId, "PERIODIC_INSPECTION");
   }
 
   static async listInspections(orgId: string) {
@@ -159,8 +183,10 @@ export class OwnerPortalService {
           email: true,
           firstName: true,
           lastName: true,
+          fatherName: true,
           phone: true,
           nid: true,
+          birthDate: true,
         },
       }),
       db.organization.findFirst({

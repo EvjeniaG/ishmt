@@ -5,6 +5,7 @@ import { AuditService } from "@/lib/audit/audit-service";
 import { hashPassword } from "@/lib/auth/password";
 import type { RoleCode } from "@/lib/constants/roles";
 import { isRoleValidForOrgType } from "@/lib/constants/org-role-map";
+import { MembershipService } from "@/lib/services/membership-service";
 
 const INVITATION_EXPIRY_DAYS = 7;
 
@@ -27,7 +28,7 @@ export class InvitationService {
     if (!org) throw new Error("Organizata nuk u gjet.");
 
     const role = await db.authRole.findUnique({ where: { code: input.roleCode } });
-    if (!role || !isRoleValidForOrgType(input.roleCode, org.type)) {
+    if (!role || !isRoleValidForOrgType(input.roleCode, org)) {
       throw new Error("Roli nuk është i vlefshëm për këtë organizatë.");
     }
 
@@ -170,6 +171,10 @@ export class InvitationService {
           roleId: invitation.roleId,
           isPrimary: true,
         },
+      });
+
+      await MembershipService.grantCapabilityMemberships(tx, userId, invitation.organization, {
+        primaryRoleCode: invitation.role.code as RoleCode,
       });
 
       const updated = await tx.orgInvitation.update({

@@ -25,43 +25,7 @@ export type CompanyActivityFilters = {
   dateTo?: string;
 };
 
-const activityInclude = {
-  data: { include: { municipality: true, administrativeUnit: true } },
-  ownerOrg: { select: { id: true, name: true, nipt: true } },
-  installerOrg: { select: { id: true, name: true, nipt: true, type: true, status: true } },
-  certifierOrg: { select: { id: true, name: true, nipt: true, type: true, status: true } },
-  targetElevator: {
-    select: {
-      id: true,
-      registryNumber: true,
-      status: true,
-      buildingAddress: true,
-      registrationDate: true,
-    },
-  },
-  originElevator: {
-    select: {
-      id: true,
-      registryNumber: true,
-      status: true,
-      buildingAddress: true,
-      registrationDate: true,
-    },
-  },
-  delegations: {
-    include: {
-      organization: { select: { name: true, nipt: true } },
-    },
-    orderBy: { invitedAt: "desc" as const },
-  },
-  workflowHistory: {
-    orderBy: { createdAt: "desc" as const },
-    take: 15,
-    include: {
-      actor: { select: { firstName: true, lastName: true } },
-    },
-  },
-} as const;
+import { applicationInclude } from "@/lib/services/application-service";
 
 function buildWhere(filters: CompanyActivityFilters): Prisma.ApplicationWhereInput {
   const phase = filters.phase ?? "all";
@@ -157,8 +121,19 @@ export class DirectorateActivityService {
   static async listCompanyActivity(filters: CompanyActivityFilters = {}) {
     return db.application.findMany({
       where: buildWhere(filters),
-      include: activityInclude,
+      include: applicationInclude,
       orderBy: { updatedAt: "desc" },
+    });
+  }
+
+  static async getCompanyActivityById(id: string) {
+    return db.application.findFirst({
+      where: {
+        id,
+        deletedAt: null,
+        OR: [{ installerOrgId: { not: null } }, { certifierOrgId: { not: null } }],
+      },
+      include: applicationInclude,
     });
   }
 
@@ -219,4 +194,28 @@ export function parseCompanyActivityFilters(
     dateFrom: params.dateFrom || undefined,
     dateTo: params.dateTo || undefined,
   };
+}
+
+const ACTIVITY_QUERY_KEYS = [
+  "phase",
+  "q",
+  "type",
+  "status",
+  "companyId",
+  "companyRole",
+  "municipalityId",
+  "dateFrom",
+  "dateTo",
+] as const;
+
+export function serializeCompanyActivityQuery(
+  params: Record<string, string | undefined>,
+): string {
+  const sp = new URLSearchParams();
+  for (const key of ACTIVITY_QUERY_KEYS) {
+    const value = params[key];
+    if (value) sp.set(key, value);
+  }
+  const serialized = sp.toString();
+  return serialized ? `?${serialized}` : "";
 }

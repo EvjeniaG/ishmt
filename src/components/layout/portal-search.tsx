@@ -1,10 +1,10 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { useRouter } from "@/lib/navigation/use-app-router";
 import { useState } from "react";
 import { Search } from "lucide-react";
 
-export function PortalSearch() {
+export function PortalSearch({ searchHref = "/portal/search" }: { searchHref?: string }) {
   const router = useRouter();
   const [query, setQuery] = useState("");
 
@@ -12,7 +12,7 @@ export function PortalSearch() {
     e.preventDefault();
     const q = query.trim();
     if (!q) return;
-    router.push(`/portal/search?q=${encodeURIComponent(q)}`);
+    router.push(`${searchHref}?q=${encodeURIComponent(q)}`);
   }
 
   return (

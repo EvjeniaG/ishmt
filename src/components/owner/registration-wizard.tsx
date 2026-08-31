@@ -5,6 +5,7 @@ import {
   CancelApplicationButton,
 } from "@/components/applications/application-workflow-forms";
 import { RegistrationBasicDataForm } from "@/components/registration/basic-data-form";
+import { RegistrationDossierView } from "@/components/registration/registration-dossier-view";
 import { RegistrationPreSubmitReview } from "@/components/registration/registration-pre-submit-review";
 import type { DossierSection } from "@/lib/registration/build-dossier";
 import {
@@ -12,6 +13,8 @@ import {
   AssignInstallerFormWrapper,
 } from "@/components/owner/owner-application-forms";
 import { buildRegistrationFormDefaults } from "@/lib/registration/basic-data-defaults";
+import type { OwnerRegistrationPrefill } from "@/lib/registration/owner-registration-prefill";
+import type { SelectableRegistryCompany } from "@/lib/organizations/registry-company-display";
 import { RegistrationWizardProgress } from "@/components/registration/workflow-progress";
 import { RegistrationWaitingPanel } from "@/components/registration/registration-waiting-panel";
 import { RegistrationWizardBody } from "@/components/registration/registration-wizard-shell";
@@ -22,15 +25,20 @@ import {
 } from "@/components/registration/registration-ui";
 import { DemoStepFillButton } from "@/components/demo/demo-step-fill-button";
 import {
+  revokeCertifierDelegationAction,
+  revokeInstallerDelegationAction,
+} from "@/lib/actions/delegation-actions";
+import { isIshmtOwnerTrackingStatus } from "@/lib/ishmt/owner-ishmt-tracker";
+import {
+  getOwnerPhaseDescription,
   getOwnerPhaseTitle,
   type RegistrationPhase,
 } from "@/lib/registration/phase-router";
-import { RETURN_TARGET_LABELS } from "@/lib/workflows/return-targets";
-import type { ReturnTargetRole } from "@prisma/client";
+import { isReturnedToRole } from "@/lib/workflows/return-targets";
+import { ReturnTargetRole, type ReturnTargetRole as ReturnTargetRoleType } from "@prisma/client";
 import {
   AlertTriangle,
   CheckCircle2,
-  RotateCcw,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -90,6 +98,7 @@ function PostSubmitPanel({ status, phase }: { status: ApplicationStatus; phase: 
     ApplicationStatus.CLOSED,
   ];
   const isApproved = approvedStatuses.includes(status);
+  const description = getOwnerPhaseDescription(phase);
 
   return (
     <div className={cn("reg-wizard-panel border-l-[3px]", isApproved ? "border-l-gov-success" : "border-l-gov-secondary")}>
@@ -105,11 +114,9 @@ function PostSubmitPanel({ status, phase }: { status: ApplicationStatus; phase: 
           </div>
           <div>
             <h2 className="text-base font-semibold text-foreground">{getOwnerPhaseTitle(phase)}</h2>
-            {status === ApplicationStatus.PENDING_CHIEF_INSPECTOR && (
-              <p className="mt-2 text-sm text-muted-foreground">
-                Në pritje të miratimit final nga administratori ISHMT.
-              </p>
-            )}
+            {description ? (
+              <p className="mt-2 text-base text-muted-foreground">{description}</p>
+            ) : null}
           </div>
         </div>
       </RegistrationWizardBody>
@@ -128,17 +135,23 @@ export function RegistrationWizard({
   data,
   municipalities,
   adminUnits,
-  installers,
   certifiers,
+  installers,
+  installerOrgId,
+  certifierOrgId,
   installerName,
   certifierName,
   canEditOwnerFields,
+  layoutPlanSlot,
   documentsSlot,
   installerDocsSlot,
   certifierDocsSlot,
+  ownerDocsSlot,
   blockSubmit,
   dossierSections,
   submissionChecklist,
+  ownerPrefill,
+  canUploadOwnerDocs = false,
 }: {
   applicationId: string;
   phase: RegistrationPhase;
@@ -148,55 +161,58 @@ export function RegistrationWizard({
   returnReason?: string | null;
   requiredCorrection?: string | null;
   data: AppData | null;
+  ownerPrefill?: OwnerRegistrationPrefill | null;
   municipalities: { id: string; nameSq: string; code?: string | null; legacyRegistryCode?: string | null }[];
   adminUnits: { id: string; nameSq: string }[];
-  installers: { id: string; name: string }[];
-  certifiers: { id: string; name: string }[];
+  certifiers: SelectableRegistryCompany[];
+  installers: SelectableRegistryCompany[];
+  installerOrgId?: string | null;
+  certifierOrgId?: string | null;
   installerName?: string | null;
   certifierName?: string | null;
   canEditOwnerFields: boolean;
+  layoutPlanSlot?: React.ReactNode;
   documentsSlot?: React.ReactNode;
   installerDocsSlot?: React.ReactNode;
   certifierDocsSlot?: React.ReactNode;
+  ownerDocsSlot?: React.ReactNode;
   blockSubmit?: string | null;
   dossierSections?: DossierSection[];
   submissionChecklist?: { key: string; label: string; ok: boolean }[];
+  canUploadOwnerDocs?: boolean;
 }) {
-  const resolvedReturnRoles =
-    returnToRoles.length > 0
-      ? returnToRoles
-      : returnToRole
-        ? [returnToRole as ReturnTargetRole]
-        : [];
-
+  const inIshmtReview = isIshmtOwnerTrackingStatus(status);
   const showPostSubmit =
-    ["submitted", "review", "completed"].includes(phase) ||
-    status === ApplicationStatus.PENDING_CHIEF_INSPECTOR;
+    status !== ApplicationStatus.RETURNED &&
+    (["submitted", "review", "completed"].includes(phase) || inIshmtReview);
 
   return (
     <div className="space-y-4">
-      <RegistrationWizardProgress phase={phase} />
+      {!inIshmtReview ? <RegistrationWizardProgress phase={phase} /> : null}
 
-      {returnReason && (
-        <AlertPanel variant="warning" title="Korrigjim i kërkuar" icon={RotateCcw}>
-          <p>{returnReason}</p>
-          {requiredCorrection && <p className="mt-1"><strong>Çfarë duhet bërë:</strong> {requiredCorrection}</p>}
-          {status === ApplicationStatus.PENDING_OWNER_SUBMISSION && (
-            <p className="mt-2 font-medium text-emerald-800">Riparashtroni aplikimin kur të jeni gati.</p>
-          )}
-          {status === ApplicationStatus.RETURNED && resolvedReturnRoles.length > 0 && (
-            <p className="mt-2 text-sm">
-              Palët: {resolvedReturnRoles.map((r) => RETURN_TARGET_LABELS[r]).join(", ")}
-            </p>
-          )}
-        </AlertPanel>
+      {showPostSubmit && (
+        <>
+          {!inIshmtReview ? <PostSubmitPanel status={status} phase={phase} /> : null}
+          <div className="reg-wizard-panel">
+            <RegistrationWizardBody>
+              {dossierSections ? (
+                <RegistrationDossierView
+                  sections={dossierSections}
+                  ownerDocsSlot={ownerDocsSlot}
+                  installerDocsSlot={installerDocsSlot}
+                  certifierDocsSlot={certifierDocsSlot}
+                />
+              ) : (
+                <BasicDataSummary data={data} municipalities={municipalities} />
+              )}
+            </RegistrationWizardBody>
+          </div>
+        </>
       )}
-
-      {showPostSubmit && <PostSubmitPanel status={status} phase={phase} />}
 
       {phase === "rejected" && (
         <AlertPanel variant="danger" title="Aplikimi u refuzua" icon={AlertTriangle}>
-          Ky aplikim u refuzua nga ISHMT dhe nuk mund të vazhdojë.
+          Ky aplikim u refuzua nga IQMT dhe nuk mund të vazhdojë.
         </AlertPanel>
       )}
 
@@ -209,8 +225,8 @@ export function RegistrationWizard({
                   <RegistrationBasicDataForm
                     applicationId={applicationId}
                     municipalities={municipalities}
-                    adminUnits={adminUnits}
-                    defaults={buildRegistrationFormDefaults(data)}
+                    defaults={buildRegistrationFormDefaults(data, ownerPrefill)}
+                    layoutPlanSlot={layoutPlanSlot}
                     documentsSlot={documentsSlot}
                   />
                 ) : (
@@ -225,23 +241,73 @@ export function RegistrationWizard({
             {phase === "select-installer" && (
               <>
                 <DemoStepFillButton applicationId={applicationId} step="owner-assign-installer" className="mb-4" />
-                <AssignInstallerFormWrapper applicationId={applicationId} installers={installers} />
+                <AssignInstallerFormWrapper
+                  applicationId={applicationId}
+                  installers={installers}
+                  certifierOrgId={certifierOrgId}
+                />
               </>
             )}
 
             {phase === "wait-installer" && (
-              <RegistrationWaitingPanel companyName={installerName} roleLabel="instaluesit" />
+              <RegistrationWaitingPanel
+                companyName={installerName}
+                roleLabel="instaluesit"
+                mode={
+                  status === ApplicationStatus.RETURNED &&
+                  isReturnedToRole(
+                    { returnToRole: returnToRole as ReturnTargetRoleType | null, returnToRoles },
+                    ReturnTargetRole.INSTALLER,
+                  )
+                    ? "return-correction"
+                    : "delegation"
+                }
+                onRevoke={
+                  status === ApplicationStatus.RETURNED &&
+                  isReturnedToRole(
+                    { returnToRole: returnToRole as ReturnTargetRoleType | null, returnToRoles },
+                    ReturnTargetRole.INSTALLER,
+                  )
+                    ? undefined
+                    : (reason) => revokeInstallerDelegationAction(applicationId, reason)
+                }
+              />
             )}
 
             {phase === "select-certifier" && (
               <>
                 <DemoStepFillButton applicationId={applicationId} step="owner-assign-certifier" className="mb-4" />
-                <AssignCertifierFormWrapper applicationId={applicationId} certifiers={certifiers} />
+                <AssignCertifierFormWrapper
+                  applicationId={applicationId}
+                  certifiers={certifiers}
+                  installerOrgId={installerOrgId}
+                />
               </>
             )}
 
             {phase === "wait-certifier" && (
-              <RegistrationWaitingPanel companyName={certifierName} roleLabel="certifikuesit" />
+              <RegistrationWaitingPanel
+                companyName={certifierName}
+                roleLabel="certifikuesit"
+                mode={
+                  status === ApplicationStatus.RETURNED &&
+                  isReturnedToRole(
+                    { returnToRole: returnToRole as ReturnTargetRoleType | null, returnToRoles },
+                    ReturnTargetRole.CERTIFIER,
+                  )
+                    ? "return-correction"
+                    : "delegation"
+                }
+                onRevoke={
+                  status === ApplicationStatus.RETURNED &&
+                  isReturnedToRole(
+                    { returnToRole: returnToRole as ReturnTargetRoleType | null, returnToRoles },
+                    ReturnTargetRole.CERTIFIER,
+                  )
+                    ? undefined
+                    : (reason) => revokeCertifierDelegationAction(applicationId, reason)
+                }
+              />
             )}
 
             {phase === "final-review" && dossierSections && submissionChecklist && data && (
@@ -251,8 +317,23 @@ export function RegistrationWizard({
                 sections={dossierSections}
                 installerDocsSlot={installerDocsSlot}
                 certifierDocsSlot={certifierDocsSlot}
+                ownerDocsSlot={ownerDocsSlot}
                 checklist={submissionChecklist}
                 blockSubmit={blockSubmit}
+                canUploadOwnerDocs={canUploadOwnerDocs}
+                canEditOwnerData={canEditOwnerFields}
+                ownerDataEditForm={
+                  canEditOwnerFields ? (
+                    <RegistrationBasicDataForm
+                      applicationId={applicationId}
+                      municipalities={municipalities}
+                      defaults={buildRegistrationFormDefaults(data, ownerPrefill)}
+                      layoutPlanSlot={layoutPlanSlot}
+                      documentsSlot={documentsSlot}
+                      editMode="pre-submit"
+                    />
+                  ) : undefined
+                }
               />
             )}
           </RegistrationWizardBody>

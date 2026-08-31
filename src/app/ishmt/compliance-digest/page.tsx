@@ -40,8 +40,10 @@ export default async function IshmtComplianceDigestPage({
   const filters = parseContractIssueFilters(rawParams);
   const canNotify = (DIGEST_NOTIFY_ROLES as readonly string[]).includes(session.user.roleCode);
 
-  const [snapshot, stats, issuesPage, municipalities] = await Promise.all([
-    IshmtComplianceDigestService.getSnapshot(),
+  const snapshotPromise = IshmtComplianceDigestService.getSnapshot();
+
+  const [snapshot, stats, issuesPage, municipalities, sectionNotifyStatus] = await Promise.all([
+    snapshotPromise,
     IshmtContractMonitorService.getNationalStats(),
     IshmtContractMonitorService.listIssues(filters),
     db.geoMunicipality.findMany({
@@ -49,6 +51,11 @@ export default async function IshmtComplianceDigestPage({
       orderBy: { nameSq: "asc" },
       select: { id: true, nameSq: true },
     }),
+    canNotify
+      ? snapshotPromise.then((currentSnapshot) =>
+          IshmtComplianceDigestService.getHighlightSectionNotifyStatus(currentSnapshot),
+        )
+      : Promise.resolve(undefined),
   ]);
 
   const matchedElevator =
@@ -68,7 +75,7 @@ export default async function IshmtComplianceDigestPage({
   return (
     <AppShell title="Përmbledhje ditore">
       <StandardPageLayout
-        eyebrow="ISHMT · Monitorim"
+        eyebrow="IQMT · Monitorim"
         title="Përmbledhje ditore e përputhshmërisë"
         description="Kontrata, afate ligjore dhe mungesa QR në një vend. Çdo ditë merrni njoftim; nga këtu njoftoni me një klik pronarët dhe kompanitë përkatëse."
         actions={
@@ -85,6 +92,7 @@ export default async function IshmtComplianceDigestPage({
           stats={stats}
           filters={filters}
           canNotify={canNotify}
+          sectionNotifyStatus={sectionNotifyStatus}
         />
 
         <div id="alarmet-lista" className="scroll-mt-6">

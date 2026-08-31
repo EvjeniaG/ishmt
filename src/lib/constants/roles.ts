@@ -14,7 +14,7 @@ export const ROLE_CODES = {
   SECTOR_HEAD: "SECTOR_HEAD",
   FIELD_INSPECTOR: "FIELD_INSPECTOR",
   ADMIN: "ADMIN",
-  /** Drejtoria e Politikave (MPB) - regjistrim kompanish, jo stafi operativ ISHMT */
+  /** Drejtoria e Politikave (MPB) - regjistrim kompanish, jo stafi operativ IQMT */
   DIRECTORATE: "DIRECTORATE",
 } as const;
 

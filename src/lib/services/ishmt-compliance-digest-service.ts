@@ -3,8 +3,12 @@ import { ROLE_CODES } from "@/lib/constants/roles";
 import { db } from "@/lib/db";
 import { withDemoDataElevatorScope } from "@/lib/demo/demo-data-mode";
 import { IshmtContractMonitorService } from "@/lib/services/ishmt-contract-monitor-service";
+import { OwnerComplianceNotificationService } from "@/lib/services/owner-compliance-notification-service";
 
 export const ISHMT_COMPLIANCE_DIGEST_ENTITY_TYPE = "ishmt_compliance_digest";
+
+const QR_NOTIFY_TITLE = "Mungon fotografia e vendosjes së QR";
+const NOTIFY_STATUS_BATCH_MAX = 1000;
 
 const LEADERSHIP_ROLES = [
   ROLE_CODES.CHIEF_INSPECTOR,
@@ -33,6 +37,11 @@ export type IshmtQrGapRow = {
   registryNumber: string;
 };
 
+export type IshmtDigestSectionNotifyStatus = Record<
+  "expired" | "inp-30" | "qr",
+  string | null
+>;
+
 function formatDateKey(date: Date): string {
   return date.toISOString().slice(0, 10);
 }
@@ -43,7 +52,7 @@ function buildDigestTitle(): string {
 
 function buildDigestBody(snapshot: IshmtComplianceDigestSnapshot): string {
   const lines = [
-    `${snapshot.contractsExpiredTotal} ashensorë me kontratë të skaduar (${snapshot.maintenanceContractExpired} mirëmbajtje, ${snapshot.inspectionContractExpired} inspektim).`,
+    `${snapshot.contractsExpiredTotal} ashensorë me kontratë të skaduar (${snapshot.maintenanceContractExpired} mirëmbajtje, ${snapshot.inspectionContractExpired} kontroll periodik).`,
     `${snapshot.inspectionContractExpiring30} ashensorë me kontratë INP që skadon brenda 30 ditëve.`,
     `${snapshot.missingQrCompanies} kompani/pronarë me ${snapshot.missingQrElevators} ashensorë pa vendosje QR.`,
   ];
@@ -142,6 +151,58 @@ export class IshmtComplianceDigestService {
       ownerOrgId: row.ownerOrgId,
       registryNumber: row.registryNumber,
     }));
+  }
+
+  static async getHighlightSectionNotifyStatus(
+    snapshot: IshmtComplianceDigestSnapshot,
+  ): Promise<IshmtDigestSectionNotifyStatus> {
+    const [expiredRows, expiringRows, qrRows] = await Promise.all([
+      snapshot.contractsExpiredTotal > 0
+        ? IshmtContractMonitorService.listAllFilteredIssues(
+            { issueCategory: "expired" },
+            NOTIFY_STATUS_BATCH_MAX,
+          )
+        : Promise.resolve([]),
+      snapshot.inspectionContractExpiring30 > 0
+        ? IshmtContractMonitorService.listAllFilteredIssues(
+            {
+              issue: "inspection-contract-expiring",
+              expiringWithin: 30,
+            },
+            NOTIFY_STATUS_BATCH_MAX,
+          )
+        : Promise.resolve([]),
+      snapshot.missingQrElevators > 0
+        ? this.listMissingQrGaps(NOTIFY_STATUS_BATCH_MAX)
+        : Promise.resolve([]),
+    ]);
+
+    const [expiredAt, expiringAt, qrAt] = await Promise.all([
+      expiredRows.length > 0
+        ? OwnerComplianceNotificationService.getLastNotifiedAtForScope(
+            expiredRows.map((row) => row.elevatorId),
+            [...new Set(expiredRows.map((row) => row.issueLabel))],
+          )
+        : Promise.resolve(null),
+      expiringRows.length > 0
+        ? OwnerComplianceNotificationService.getLastNotifiedAtForScope(
+            expiringRows.map((row) => row.elevatorId),
+            [...new Set(expiringRows.map((row) => row.issueLabel))],
+          )
+        : Promise.resolve(null),
+      qrRows.length > 0
+        ? OwnerComplianceNotificationService.getLastNotifiedAtForScope(
+            qrRows.map((row) => row.elevatorId),
+            [QR_NOTIFY_TITLE],
+          )
+        : Promise.resolve(null),
+    ]);
+
+    return {
+      expired: expiredAt?.toISOString() ?? null,
+      "inp-30": expiringAt?.toISOString() ?? null,
+      qr: qrAt?.toISOString() ?? null,
+    };
   }
 
   /** Dërgon një njoftim ditor për çdo përdorues me rol drejtues. */

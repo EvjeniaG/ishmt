@@ -90,7 +90,7 @@ function drawOfficialFrame(doc: PDFKit.PDFDocument) {
 
 function drawHeaderBlock(doc: PDFKit.PDFDocument, title: string, subtitle?: string) {
   doc.font("Helvetica-Bold").fontSize(11).text("REPUBLIKA E SHQIPËRISË", { align: "center" });
-  doc.fontSize(10).text("INSPEKTORATI SHTETËROR I MBIKËQYRJES SË TREGUT", { align: "center" });
+  doc.fontSize(10).text("INSPEKTORATI QENDROR I MBIKËQYRJES SË TREGUT", { align: "center" });
   doc.moveDown(0.5);
   doc.moveTo(80, doc.y).lineTo(doc.page.width - 80, doc.y).stroke();
   doc.moveDown(0.8);
@@ -132,15 +132,15 @@ export class PdfService {
       const right = doc.page.width - 60;
       const contentWidth = right - left;
 
-      // ── Header: institutional identity (left) + ISHMT (right) ──
+      // ── Header: institutional identity (left) + IQMT (right) ──
       doc.font("Helvetica").fontSize(7).fillColor("#333333");
       doc.text("REPUBLIKA E SHQIPËRISË", left, 42, { width: 220 });
       doc.text("MINISTRIA E EKONOMISË, KULTURËS DHE INOVACIONIT", left, doc.y, { width: 220 });
 
       doc.font("Helvetica-Bold").fontSize(20).fillColor("#1a3a6b");
-      doc.text("ISHMT", right - 160, 40, { width: 160, align: "right" });
+      doc.text("IQMT", right - 160, 40, { width: 160, align: "right" });
       doc.font("Helvetica").fontSize(6).fillColor("#555555");
-      doc.text("Inspektorati Shtetëror i Mbikëqyrjes së Tregut", right - 200, doc.y, {
+      doc.text("Inspektorati Qendror i Mbikeqyrjes së Tregut", right - 200, doc.y, {
         width: 200,
         align: "right",
       });
@@ -173,7 +173,7 @@ export class PdfService {
       doc.text(
         'Është regjistruar në zbatim të Ligjit nr.10489/2011 "Për tregtimin dhe mbikëqyrjen e tregut ' +
           'të produkteve joushqimore" i ndryshuar dhe VKM Nr. 1056, datë 23.12.2015 "Për miratimin e rregullit teknik ' +
-          '"Për sigurinë e ashensorëve në përdorim" i ndryshuar, si dhe Udhëzimi ISHMT për procedurën e regjistrimit.',
+          '"Për sigurinë e ashensorëve në përdorim" i ndryshuar, si dhe Udhëzimi IQMT për procedurën e regjistrimit.',
         left,
         doc.y,
         { width: contentWidth, align: "center", lineGap: 2 },
@@ -226,7 +226,7 @@ export class PdfService {
       field("Vendndodhja e Ashensorit (adresa):", variables.buildingAddress);
       field("Personi Përgjegjës:", variables.ownerName);
       field("NIPT/NID:", variables.responsibleIdentifier);
-      field("Numri i identifikimit të Organit të Miratuar (OMI):", variables.omiNumber);
+      field("Numri i identifikimit të Organit të Miratuar (OM):", variables.omiNumber);
       field("Lloji i ekzaminimit:", variables.examinationType);
 
       doc.moveDown(1.2);
@@ -457,7 +457,7 @@ export class PdfService {
       doc.moveDown(1.4);
 
       // ── Recipient ──
-      doc.font("Helvetica-Bold").fontSize(11).text("INSPEKTORATIT SHTETËROR TË MBIKËQYRJES SË TREGUT (ISHMT)", left, doc.y, {
+      doc.font("Helvetica-Bold").fontSize(11).text("INSPEKTORATIT QENDROR TË MBIKËQYRJES SË TREGUT (IQMT)", left, doc.y, {
         width: contentWidth,
         align: "center",
       });
@@ -490,7 +490,7 @@ export class PdfService {
         "procedurës së miratuar të publikuar në faqen tuaj zyrtare, ju paraqesim ";
 
       if (variables.formType === "REGISTRATION_NEW") {
-        paragraph(`${legalBase}kërkesën për regjistrimin për herë të parë pranë ISHMT-së të ashensorit/ëve si më poshtë:`);
+        paragraph(`${legalBase}kërkesën për regjistrimin për herë të parë pranë IQMT-së të ashensorit/ëve si më poshtë:`);
         const list = variables.elevators && variables.elevators.length > 0 ? variables.elevators : ["", "", ""];
         list.forEach((item, idx) => {
           labeled(`${idx + 1}) Ashensori ${idx + 1}:`, item, 0.5);
@@ -498,11 +498,11 @@ export class PdfService {
         doc.moveDown(0.6);
         paragraph(
           "Bashkëlidhur kërkesës gjeni dokumentat përkatëse sipas legjislacionit në fuqi dhe procedurës mbi " +
-            "regjistrimin e ashensorëve pranë ISHMT-së.",
+            "regjistrimin e ashensorëve pranë IQMT-së.",
         );
       } else if (variables.formType === "REGISTRATION_EXISTING") {
         paragraph(
-          `${legalBase}kërkesën për regjistrimin për herë të parë pranë ISHMT-së të ashensorit/ëve ekzistues ` +
+          `${legalBase}kërkesën për regjistrimin për herë të parë pranë IQMT-së të ashensorit/ëve ekzistues ` +
             "të instaluar në adresën:",
         );
         labeled("Adresa e instalimit:", variables.installAddress ?? variables.address, 1);
@@ -596,7 +596,7 @@ export class PdfService {
       });
       doc.moveDown(2);
 
-      drawHeaderBlock(doc, "MEMO", "Sipas Aneksit 1 - Udhëzimi ISHMT për regjistrimin e ashensorëve");
+      drawHeaderBlock(doc, "MEMO", "Sipas Aneksit 1 - Udhëzimi IQMT për regjistrimin e ashensorëve");
 
       doc.font("Helvetica").fontSize(10);
       doc.text(`Lloji i aplikimit: ${variables.applicationType}`, left, doc.y);

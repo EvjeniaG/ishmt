@@ -1,7 +1,7 @@
 import { MaintenanceContractStatus } from "@prisma/client";
 import { db } from "@/lib/db";
 
-/** Certifikuesi/OMI menaxhon mirëmbajtjen vetëm kur i është caktuar edhe si kompani mirëmbajtëse. */
+/** Certifikuesi/OM menaxhon mirëmbajtjen vetëm kur i është caktuar edhe si kompani mirëmbajtëse. */
 export async function certifierOrgHasMaintenanceAssignments(orgId: string): Promise<boolean> {
   const count = await db.maintenanceContract.count({
     where: {

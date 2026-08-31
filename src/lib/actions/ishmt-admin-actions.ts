@@ -116,7 +116,7 @@ export async function backfillBuildingsAction(): Promise<ActionResult<{ linked: 
 export async function requireIshmtAccess() {
   const ctx = await requireAuth();
   if (!hasPermission(ctx, PERMISSIONS.APPLICATIONS_VIEW_ALL)) {
-    throw new AuthError("Nuk keni leje ISHMT.", 403);
+    throw new AuthError("Nuk keni leje IQMT.", 403);
   }
   return ctx;
 }

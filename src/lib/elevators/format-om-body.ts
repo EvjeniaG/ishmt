@@ -9,7 +9,7 @@ export function formatOmBodyNumber(value: string | null | undefined): string | n
   return null;
 }
 
-/** Për shfaqje: OM + numri, jo "OMI OM …" ose emër organizate. */
+/** Për shfaqje: OM + numri, jo "OM OM …" ose emër organizate. */
 export function displayOmBody(
   approvedBodyNumber: string | null | undefined,
   orgName?: string | null,
@@ -33,7 +33,7 @@ export function displayOmBody(
   return "OM";
 }
 
-/** Emër i normalizuar vetëm për trupat OM (p.sh. "OMI OM 013" → "OM 013"). */
+/** Emër i normalizuar vetëm për trupat OM (p.sh. "OM OM 013" → "OM 013"). */
 export function normalizeOmBodyOrganizationName(name: string): string | null {
   const trimmed = name.trim();
   if (!trimmed) return null;
@@ -43,7 +43,7 @@ export function normalizeOmBodyOrganizationName(name: string): string | null {
   return normalized;
 }
 
-/** Emri i shfaqur për organizatën certifikuese (normalizon "OMI OM 013" → "OM 013"). */
+/** Emri i shfaqur për organizatën certifikuese (normalizon "OM OM 013" → "OM 013"). */
 export function displayCertifierOrganizationName(
   orgName: string | null | undefined,
   omiNumber?: string | null,

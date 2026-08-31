@@ -1,14 +1,19 @@
 "use server";
 
 import { AuthService } from "@/lib/services/auth-service";
+import { OmLicenseRegistrationService, InstallLicenseRegistrationService } from "@/lib/services/om-license-registration-service";
 import {
   accountRegisterSchema,
   forgotPasswordSchema,
   maintenanceRegisterSchema,
   ownerRegisterSchema,
+  parseCapabilityFlag,
   resetPasswordSchema,
 } from "@/lib/validations/auth";
 import { enforcePublicActionRateLimit, RATE_LIMITS } from "@/lib/security/rate-limit";
+import { buildRegisterDemoCompanyPrefill, type RegisterDemoCompanyMode } from "@/lib/demo/register-demo-prefill-service";
+import { LicensedCompanyRegistrationService } from "@/lib/services/licensed-company-registration-service";
+import { isRegisterDemoEnabled } from "@/lib/demo/demo-data-mode";
 
 async function checkRateLimit(action: string) {
   try {
@@ -19,11 +24,83 @@ async function checkRateLimit(action: string) {
   }
 }
 
+export async function fetchRegisterDemoCompanyPrefillAction(mode: RegisterDemoCompanyMode) {
+  if (!isRegisterDemoEnabled()) {
+    return { success: false as const, error: "Mjetet demo nuk janë të aktivizuara." };
+  }
+
+  try {
+    const data = await buildRegisterDemoCompanyPrefill(mode);
+    return { success: true as const, data };
+  } catch (error) {
+    return {
+      success: false as const,
+      error: error instanceof Error ? error.message : "Plotësimi demo dështoi.",
+    };
+  }
+}
+
+export async function lookupCompanyNiptAction(nipt: string) {
+  const limited = await checkRateLimit("lookup-company-nipt");
+  if (limited) return limited;
+
+  try {
+    const data = await LicensedCompanyRegistrationService.lookupNiptStatus(nipt);
+    return { success: true as const, data };
+  } catch (error) {
+    return {
+      success: false as const,
+      error: error instanceof Error ? error.message : "Verifikimi i NIPT-it dështoi.",
+    };
+  }
+}
+
+export async function lookupInstallLicenseAction(licenseNumber: string, nipt?: string) {
+  const limited = await checkRateLimit("lookup-install-license");
+  if (limited) return limited;
+
+  try {
+    const data = await InstallLicenseRegistrationService.lookupLicenseStatus({
+      licenseNumber,
+      nipt,
+    });
+    return { success: true as const, data };
+  } catch (error) {
+    return {
+      success: false as const,
+      error: error instanceof Error ? error.message : "Verifikimi i licencës dështoi.",
+    };
+  }
+}
+
+export async function lookupOmLicenseAction(licenseNumber: string, nipt?: string) {
+  const limited = await checkRateLimit("lookup-om-license");
+  if (limited) return limited;
+
+  try {
+    const data = await OmLicenseRegistrationService.lookupLicenseStatus({
+      licenseNumber,
+      nipt,
+    });
+    return { success: true as const, data };
+  } catch (error) {
+    return {
+      success: false as const,
+      error: error instanceof Error ? error.message : "Verifikimi i licencës dështoi.",
+    };
+  }
+}
+
 export async function registerAccountAction(formData: FormData) {
   const limited = await checkRateLimit("register");
   if (limited) return limited;
   const parsed = accountRegisterSchema.safeParse({
     level: formData.get("level"),
+    capInstall: parseCapabilityFlag(formData.get("capInstall")),
+    capMaintenance: parseCapabilityFlag(formData.get("capMaintenance")),
+    capOm: parseCapabilityFlag(formData.get("capOm")),
+    omLicenseNumber: formData.get("omLicenseNumber") || undefined,
+    installLicenseNumber: formData.get("installLicenseNumber") || undefined,
     personalNumber: formData.get("personalNumber") || undefined,
     idCardNumber: formData.get("idCardNumber") || undefined,
     firstName: formData.get("firstName"),
@@ -34,6 +111,7 @@ export async function registerAccountAction(formData: FormData) {
     email: formData.get("email"),
     phone: formData.get("phone") || undefined,
     organizationName: formData.get("organizationName") || undefined,
+    ownerBuildingRole: formData.get("ownerBuildingRole") || undefined,
     nipt: formData.get("nipt") || undefined,
     municipalityId: formData.get("municipalityId") || undefined,
     password: formData.get("password"),

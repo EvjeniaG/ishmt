@@ -1,5 +1,6 @@
 import {
   ApplicationStatus,
+  ApplicationType,
   AuditAction,
   DocumentAccessAction,
   DocumentClassification,
@@ -15,6 +16,8 @@ import { StorageService } from "@/lib/storage/storage-service";
 import type { AuthContext } from "@/lib/permissions/guards";
 import { hasPermission } from "@/lib/permissions/guards";
 import { PERMISSIONS } from "@/lib/permissions/codes";
+import { canRoleEditApplicationDocuments } from "@/lib/documents/application-document-editing";
+import { resolveRegistrationPhase, buildRegistrationPhaseInput } from "@/lib/registration/phase-router";
 
 const MAX_FILE_SIZE = 20 * 1024 * 1024; // 20 MB
 
@@ -90,6 +93,15 @@ export class DocumentService {
   static async uploadAndLink(ctx: AuthContext, input: UploadDocumentInput) {
     this.validateUpload(input.mimeType, input.buffer.length);
     await this.assertCanAttachToEntity(ctx, input.entityType, input.entityId);
+    if (input.entityType === "application") {
+      const fieldVerificationUpload =
+        this.isFieldVerificationReportUpload(input) &&
+        (await this.fieldInspectorCanAttachToApplication(ctx, input.entityId));
+
+      if (!fieldVerificationUpload) {
+        await this.assertCanEditApplicationDocuments(ctx, input.entityId);
+      }
+    }
 
     const checksum = createHash("sha256").update(input.buffer).digest("hex");
     const storagePath = StorageService.buildObjectKey(
@@ -358,6 +370,37 @@ export class DocumentService {
     return Boolean(assignment);
   }
 
+  /** Field inspector with an open field-verification assignment on this application. */
+  private static async fieldInspectorCanAttachToApplication(ctx: AuthContext, applicationId: string) {
+    if (!hasPermission(ctx, PERMISSIONS.INSPECTIONS_FIELD_CONDUCT)) {
+      return false;
+    }
+
+    const assignment = await db.fieldInspectionAssignment.findFirst({
+      where: {
+        applicationId,
+        assigneeId: ctx.userId,
+        status: {
+          in: [
+            FieldInspectionAssignmentStatus.SCHEDULED,
+            FieldInspectionAssignmentStatus.IN_PROGRESS,
+          ],
+        },
+      },
+      select: { id: true },
+    });
+
+    return Boolean(assignment);
+  }
+
+  private static isFieldVerificationReportUpload(input: UploadDocumentInput) {
+    return (
+      input.entityType === "application" &&
+      input.purpose === "FIELD_VERIFICATION_REPORT" &&
+      input.classification === DocumentClassification.INSPECTION_REPORT
+    );
+  }
+
   /** Owner, assigned maintenance/certifier org, or org with pending/active service contract. */
   private static async orgCanAccessElevator(
     ctx: AuthContext,
@@ -423,7 +466,7 @@ export class DocumentService {
     return { doc: access.doc, ...file };
   }
 
-  // Statuses where the dossier is locked (submitted to ISHMT or finalized): documents
+  // Statuses where the dossier is locked (submitted to IQMT or finalized): documents
   // can no longer be removed by the applicant once review has begun.
   private static readonly LOCKED_FOR_DELETE: ReadonlySet<ApplicationStatus> = new Set([
     ApplicationStatus.SUBMITTED,
@@ -438,10 +481,37 @@ export class DocumentService {
     ApplicationStatus.EXPIRED,
   ]);
 
+  private static async assertCanEditApplicationDocuments(ctx: AuthContext, applicationId: string) {
+    const application = await db.application.findFirst({
+      where: { id: applicationId, deletedAt: null },
+      include: { delegations: true, data: true },
+    });
+    if (!application) {
+      throw new Error("Aplikimi nuk u gjet.");
+    }
+
+    const registrationPhase =
+      application.type === ApplicationType.NEW_REGISTRATION
+        ? resolveRegistrationPhase(buildRegistrationPhaseInput(application), ctx.roleCode)
+        : null;
+
+    if (!canRoleEditApplicationDocuments(ctx.roleCode, application, registrationPhase)) {
+      throw new Error(
+        "Dokumentet nuk mund të ndryshohen pasi keni përfunduar hapin tuaj. Do të mund t'i ndryshoni vetëm nëse aplikimi kthehet për korrigjim.",
+      );
+    }
+
+    if (this.LOCKED_FOR_DELETE.has(application.status)) {
+      throw new Error("Dokumentet nuk mund të hiqen pasi aplikimi është dorëzuar në IQMT.");
+    }
+
+    return application;
+  }
+
   /**
    * Soft-deletes a document the user uploaded by mistake. Only allowed for documents
-   * attached to an application that is still being prepared (not yet under ISHMT review),
-   * and only by the uploader or a member of the owning organization.
+   * attached to an application that is still being prepared (not yet under IQMT review),
+   * and only by the user who uploaded it.
    */
   static async softDelete(ctx: AuthContext, documentId: string) {
     const access = await this.canAccessDocument(ctx, documentId);
@@ -455,20 +525,10 @@ export class DocumentService {
       throw new Error("Ky dokument nuk mund të hiqet.");
     }
 
-    const application = await db.application.findFirst({
-      where: { id: appLink.entityId, deletedAt: null },
-    });
-    if (!application) {
-      throw new Error("Aplikimi nuk u gjet.");
-    }
-    if (this.LOCKED_FOR_DELETE.has(application.status)) {
-      throw new Error("Dokumentet nuk mund të hiqen pasi aplikimi është dorëzuar në ISHMT.");
-    }
+    const application = await this.assertCanEditApplicationDocuments(ctx, appLink.entityId);
 
-    const isUploader = doc.uploadedById === ctx.userId;
-    const isOwnerOrg = application.ownerOrgId === ctx.activeOrgId;
-    if (!isUploader && !isOwnerOrg) {
-      throw new Error("Vetëm ngarkuesi ose organizata e personit përgjegjës mund ta heqë dokumentin.");
+    if (doc.uploadedById !== ctx.userId) {
+      throw new Error("Vetëm personi që e ngarkoi dokumentin mund ta heqë.");
     }
 
     await db.$transaction(async (tx) => {
@@ -526,6 +586,7 @@ export class DocumentService {
       classification: doc.classification,
       storagePending: false,
       uploadedAt: doc.createdAt,
+      uploadedById: doc.uploadedById,
       uploadedBy: doc.uploadedBy
         ? `${doc.uploadedBy.firstName} ${doc.uploadedBy.lastName}`
         : null,

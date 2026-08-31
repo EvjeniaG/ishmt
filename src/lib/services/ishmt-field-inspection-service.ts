@@ -12,18 +12,24 @@ import type { AuthContext } from "@/lib/permissions/guards";
 import { hasPermission } from "@/lib/permissions/guards";
 import { PERMISSIONS } from "@/lib/permissions/codes";
 import { INSPECTION_RESULT_LABELS } from "@/lib/ishmt/field-inspection-labels";
-import { completeApplicationFieldVerification } from "@/lib/services/application-field-verification";
+import {
+  completeApplicationFieldVerification,
+  isChiefLockedFieldVerification,
+} from "@/lib/services/application-field-verification";
 import {
   ISHMT_FIELD_INSPECTOR_ROLES,
   canAssignFieldInspections,
   isFieldInspectorRole,
 } from "@/lib/permissions/ishmt-roles";
+import { ROLE_CODES, type RoleCode } from "@/lib/constants/roles";
 
 const assignmentInclude = {
   application: {
     select: {
       id: true,
       applicationNumber: true,
+      inspectorAssignmentLockedBy: true,
+      fieldVerificationRequestedBy: true,
       data: {
         select: {
           buildingAddress: true,
@@ -63,6 +69,48 @@ export type FieldInspectorOption = {
 };
 
 export class IshmtFieldInspectionService {
+  private static async enrichChiefLockedAssignedBy<
+    T extends {
+      application: {
+        id: string;
+        inspectorAssignmentLockedBy: string | null;
+        fieldVerificationRequestedBy: string | null;
+      } | null;
+      assignedBy: { id: string; firstName: string; lastName: string };
+    },
+  >(assignments: T[]): Promise<T[]> {
+    const chiefLockedAppIds = assignments
+      .filter((a) => a.application && isChiefLockedFieldVerification(a.application))
+      .map((a) => a.application!.id);
+
+    if (chiefLockedAppIds.length === 0) return assignments;
+
+    const histories = await db.applicationWorkflowHistory.findMany({
+      where: {
+        applicationId: { in: chiefLockedAppIds },
+        action: "DELEGATE_TO_DIRECTOR",
+      },
+      orderBy: { createdAt: "desc" },
+      include: { actor: { select: { id: true, firstName: true, lastName: true } } },
+    });
+
+    const actorByApp = new Map<string, (typeof histories)[number]["actor"]>();
+    for (const history of histories) {
+      if (!actorByApp.has(history.applicationId)) {
+        actorByApp.set(history.applicationId, history.actor);
+      }
+    }
+
+    return assignments.map((assignment) => {
+      if (!assignment.application || !isChiefLockedFieldVerification(assignment.application)) {
+        return assignment;
+      }
+      const actor = actorByApp.get(assignment.application.id);
+      if (!actor) return assignment;
+      return { ...assignment, assignedBy: actor };
+    });
+  }
+
   private static assertAssigner(ctx: AuthContext) {
     if (!canAssignFieldInspections(ctx.roleCode) || !hasPermission(ctx, PERMISSIONS.INSPECTIONS_FIELD_ASSIGN)) {
       throw new Error("Nuk keni leje të caktoni inspektim në terren.");
@@ -147,7 +195,7 @@ export class IshmtFieldInspectionService {
       },
     });
     if (!assigneeMembership) {
-      throw new Error("Inspektori i zgjedhur nuk është anëtar i vlefshëm i ISHMT.");
+      throw new Error("Inspektori i zgjedhur nuk është anëtar i vlefshëm i IQMT.");
     }
 
     const assignment = await db.fieldInspectionAssignment.create({
@@ -186,7 +234,10 @@ export class IshmtFieldInspectionService {
     return assignment;
   }
 
-  static async listForAssigner(ctx: AuthContext, status?: FieldInspectionAssignmentStatus) {
+  static async listForAssigner(
+    ctx: AuthContext,
+    filters?: { status?: FieldInspectionAssignmentStatus; applicationId?: string },
+  ) {
     if (
       !canAssignFieldInspections(ctx.roleCode) &&
       !hasPermission(ctx, PERMISSIONS.INSPECTIONS_FIELD_VIEW_ALL)
@@ -194,18 +245,21 @@ export class IshmtFieldInspectionService {
       throw new Error("Nuk keni leje të shihni caktimet e inspektimit.");
     }
 
-    return db.fieldInspectionAssignment.findMany({
-      where: {
-        ...(status ? { status } : {}),
-        OR: [
-          { elevator: { deletedAt: null } },
-          { application: { deletedAt: null } },
-        ],
-      },
-      include: assignmentInclude,
-      orderBy: [{ scheduledDate: "desc" }, { createdAt: "desc" }],
-      take: 200,
-    });
+    return this.enrichChiefLockedAssignedBy(
+      await db.fieldInspectionAssignment.findMany({
+        where: {
+          ...(filters?.status ? { status: filters.status } : {}),
+          ...(filters?.applicationId ? { applicationId: filters.applicationId } : {}),
+          OR: [
+            { elevator: { deletedAt: null } },
+            { application: { deletedAt: null } },
+          ],
+        },
+        include: assignmentInclude,
+        orderBy: [{ scheduledDate: "desc" }, { createdAt: "desc" }],
+        take: 200,
+      }),
+    );
   }
 
   static async listMine(ctx: AuthContext, status?: FieldInspectionAssignmentStatus) {
@@ -370,8 +424,27 @@ export class IshmtFieldInspectionService {
           in: [FieldInspectionAssignmentStatus.SCHEDULED, FieldInspectionAssignmentStatus.IN_PROGRESS],
         },
       },
+      include: {
+        application: {
+          select: {
+            inspectorAssignmentLockedBy: true,
+            fieldVerificationRequestedBy: true,
+          },
+        },
+      },
     });
     if (!assignment) throw new Error("Caktimi nuk u gjet ose është përfunduar.");
+
+    if (
+      assignment.application &&
+      isChiefLockedFieldVerification(assignment.application) &&
+      ctx.roleCode !== ROLE_CODES.CHIEF_INSPECTOR &&
+      ctx.roleCode !== ROLE_CODES.ADMIN
+    ) {
+      throw new Error(
+        "Ky caktim u vendos nga kryeinspektori. Vetëm kryeinspektori mund ta anulojë.",
+      );
+    }
 
     const updated = await db.fieldInspectionAssignment.update({
       where: { id: assignmentId },

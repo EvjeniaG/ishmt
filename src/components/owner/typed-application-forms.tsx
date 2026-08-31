@@ -1,6 +1,6 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { useRouter } from "@/lib/navigation/use-app-router";
 import { useState } from "react";
 import { createDeregistrationApplicationAction, createModernizationApplicationAction, createOwnershipTransferApplicationAction, createTypedApplicationAction } from "@/lib/actions/owner-actions";
 import { ApplicationType, ModernizationType } from "@prisma/client";

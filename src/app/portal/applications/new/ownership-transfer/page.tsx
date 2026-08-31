@@ -27,7 +27,7 @@ export default async function OwnershipTransferApplicationPage({
       <StandardPageLayout
         eyebrow="Portali · Personi përgjegjës i ashensorit"
         title="Transferim pronësie"
-        description="Kaloni kartelën te subjekt tjetër - marrësi pranon, pastaj ISHMT miraton"
+        description="Kaloni kartelën te subjekt tjetër - marrësi pranon, pastaj IQMT miraton"
         actions={
           <Link href="/portal/applications/new" className="text-sm text-primary hover:underline">
             ← Kthehu te llojet e aplikimeve

@@ -19,7 +19,7 @@ export default async function QkbValidationPage() {
   return (
     <AppShell title="Validimi manual QKB">
       <StandardPageLayout
-        eyebrow="ISHMT · Administrim"
+        eyebrow="IQMT · Administrim"
         title="Radha e validimit QKB"
         description="Verifikoni manualisht NIPT-in e kompanive të mirëmbajtjes (Faza 1 - pa integrim API)"
       >

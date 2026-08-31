@@ -5,12 +5,14 @@ import type { InspectionRegistryView } from "@/lib/elevators/registry-view-model
 import { PortalEmptyState, PortalTableWrap } from "@/components/shared/portal-table";
 import {
   buildYearFilterOptions,
-  DocumentDownload,
+  ContractDocumentCell,
+  ContractStatusCell,
   fmtDateSq,
   fmtDateTimeSq,
   RegistryDropdownFilter,
   RegistryFilterBar,
-  StatusPill,
+  registryFilterCountLabel,
+  contractToneFromLabel,
 } from "@/components/elevators/registry-shared";
 import { cn } from "@/lib/utils";
 
@@ -20,19 +22,25 @@ const STATUS_FILTERS = [
   { value: "all", label: "Të gjitha" },
   { value: "Aktive", label: "Aktive" },
   { value: "Në pritje", label: "Në pritje" },
-  { value: "Përfunduar", label: "Përfunduar" },
+  { value: "Përfunduar", label: "Të ndërprera" },
   { value: "Skaduar", label: "Skaduar" },
   { value: "Refuzuar", label: "Refuzuar" },
 ] as const;
 
 function contractTone(contract: Contract) {
-  if (contract.isActive && contract.statusLabel === "Aktive") return "success" as const;
-  if (contract.statusLabel === "Në pritje") return "warning" as const;
-  if (contract.statusLabel === "Refuzuar") return "danger" as const;
-  return "neutral" as const;
+  return contractToneFromLabel({
+    isActive: contract.isActive,
+    statusLabel: contract.statusLabel,
+  });
 }
 
-export function InspectionContractsSection({ contracts }: { contracts: Contract[] }) {
+export function InspectionContractsSection({
+  contracts,
+  showUploadHint = false,
+}: {
+  contracts: Contract[];
+  showUploadHint?: boolean;
+}) {
   const [statusFilter, setStatusFilter] = useState("all");
   const [yearFilter, setYearFilter] = useState("all");
 
@@ -55,10 +63,12 @@ export function InspectionContractsSection({ contracts }: { contracts: Contract[
     });
   }, [contracts, statusFilter, yearFilter]);
 
+  const documentPendingHint = showUploadHint ? "Ngarkoni PDF-in" : "Pa ngarkuar";
+
   if (contracts.length === 0) {
     return (
       <PortalEmptyState>
-        Nuk ka kontratë inspektimi. Caktoni OMI-n pas mirëmbajtjes aktive.
+        Nuk ka kontratë kontrolli periodik. Caktoni OM-n për këtë ashensor.
       </PortalEmptyState>
     );
   }
@@ -79,18 +89,18 @@ export function InspectionContractsSection({ contracts }: { contracts: Contract[
           options={yearOptions}
         />
         <p className="ml-auto self-end text-xs text-muted-foreground tabular-nums">
-          {filtered.length} / {contracts.length} kontrata
+          {registryFilterCountLabel(filtered.length, contracts.length)}
         </p>
       </RegistryFilterBar>
 
       {filtered.length === 0 ? (
-        <PortalEmptyState>Asnjë kontratë për filtrat e zgjedhur.</PortalEmptyState>
+        <PortalEmptyState>Nuk u gjet asnjë kontratë me këto filtra.</PortalEmptyState>
       ) : (
         <PortalTableWrap>
           <thead>
             <tr>
               <th>Nr. kontratës</th>
-              <th>OMI</th>
+              <th>Organizata OM</th>
               <th>Statusi</th>
               <th>Periudha</th>
               <th>Dokumenti</th>
@@ -99,7 +109,10 @@ export function InspectionContractsSection({ contracts }: { contracts: Contract[
           </thead>
           <tbody>
             {filtered.map((contract) => (
-              <tr key={contract.id} className={cn(contract === activeContract && "bg-gov-primary/[0.04]")}>
+              <tr
+                key={contract.id}
+                className={cn("align-top", contract === activeContract && "bg-gov-primary/[0.04]")}
+              >
                 <td className="font-mono text-xs font-semibold">{contract.contractNumber}</td>
                 <td>
                   <p className="font-medium">{contract.companyName}</p>
@@ -108,21 +121,22 @@ export function InspectionContractsSection({ contracts }: { contracts: Contract[
                   )}
                 </td>
                 <td>
-                  <StatusPill tone={contractTone(contract)}>{contract.statusLabel}</StatusPill>
+                  <ContractStatusCell
+                    statusLabel={contract.statusLabel}
+                    tone={contractTone(contract)}
+                    respondedAt={contract.respondedAt}
+                    rejectionReason={contract.rejectionReason}
+                  />
                 </td>
                 <td className="whitespace-nowrap text-sm">
                   {fmtDateSq(contract.startDate)} – {fmtDateSq(contract.endDate)}
                 </td>
                 <td>
-                  {contract.documentId ? (
-                    <DocumentDownload
-                      documentId={contract.documentId}
-                      label={contract.documentName ?? "PDF kontratë"}
-                      variant="link"
-                    />
-                  ) : (
-                    <span className="text-xs text-muted-foreground">-</span>
-                  )}
+                  <ContractDocumentCell
+                    documentId={contract.documentId}
+                    documentName={contract.documentName}
+                    pendingHint={documentPendingHint}
+                  />
                 </td>
                 <td className="hidden text-sm text-muted-foreground lg:table-cell">
                   {fmtDateTimeSq(contract.createdAt)}

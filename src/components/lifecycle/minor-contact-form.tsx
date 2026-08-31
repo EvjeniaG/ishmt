@@ -1,6 +1,6 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { useRouter } from "@/lib/navigation/use-app-router";
 import { useState } from "react";
 import { applyMinorContactChangeAction } from "@/lib/actions/lifecycle-actions";
 import { Button } from "@/components/ui/button";
@@ -39,7 +39,7 @@ export function MinorContactForm({
   return (
     <form onSubmit={onSubmit} className="grid gap-3 md:grid-cols-0">
       <p className="text-xs text-muted-foreground">
-        Ndryshim dytësor - pa nevojë për miratim ISHMT (telefon, email, adresë kontakti).
+        Ndryshim dytësor - pa nevojë për miratim IQMT (telefon, email, adresë kontakti).
       </p>
       <div className="space-y-1">
         <Label>Telefon</Label>

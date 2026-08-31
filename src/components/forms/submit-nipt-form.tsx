@@ -1,6 +1,6 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { useRouter } from "@/lib/navigation/use-app-router";
 import { useState } from "react";
 import { submitNiptAction } from "@/lib/actions/qkb-actions";
 import { Button } from "@/components/ui/button";
@@ -34,7 +34,7 @@ export function SubmitNiptForm({ currentNipt }: { currentNipt: string | null }) 
             <Input id="nipt" name="nipt" defaultValue={currentNipt ?? ""} required />
           </div>
           <p className="text-xs text-muted-foreground">
-            ISHMT do të verifikojë manualisht NIPT-in tuaj në QKB.
+            IQMT do të verifikojë manualisht NIPT-in tuaj në QKB.
           </p>
           {error && <p className="text-sm text-destructive">{error}</p>}
           <Button type="submit">Parashtro</Button>

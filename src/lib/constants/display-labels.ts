@@ -46,37 +46,75 @@ export const DELEGATION_STATUS_LABELS: Record<DelegationStatus, string> = {
   EXPIRED: "Skaduar",
 };
 
+export const AUDIT_ACTION_LABELS: Record<string, string> = {
+  CREATE: "Regjistrim i ri",
+  UPDATE: "Përditësim",
+  DELETE: "Fshirje",
+  STATUS_CHANGE: "Ndryshim statusi",
+  DOCUMENT_UPLOAD: "Ngarkim dokumenti",
+  DOCUMENT_DOWNLOAD: "Shkarkim dokumenti",
+  VIEW_SENSITIVE_RECORD: "Shikim i të dhënave",
+  DOWNLOAD_DOCUMENT: "Shkarkim dokumenti",
+  LOGIN: "Hyrje në sistem",
+  LOGOUT: "Dalje nga sistemi",
+  WORKFLOW_TRANSITION: "Kalim në proces",
+  IMPORT: "Importim",
+  ROLLBACK: "Kthim prapa",
+  PERMISSION_DENIED: "Akses i refuzuar",
+};
+
+export function labelAuditAction(action: string | null | undefined): string {
+  if (!action) return "-";
+  return AUDIT_ACTION_LABELS[action] ?? action.replaceAll("_", " ").toLowerCase();
+}
+
 export const WORKFLOW_ACTION_LABELS: Record<string, string> = {
-  SAVE_BASIC_DATA: "Ruajtja e të dhënave bazë",
-  ASSIGN_INSTALLER: "Caktimi i instaluesit",
-  ACCEPT_DELEGATION: "Pranimi i delegimit",
-  REJECT_DELEGATION: "Refuzimi i delegimit",
-  COMPLETE_INSTALLER: "Përfundimi i hapës së instaluesit",
-  ASSIGN_CERTIFIER: "Caktimi i certifikuesit",
-  ACCEPT_CERTIFIER: "Pranimi nga certifikuesi",
-  COMPLETE_CERTIFIER: "Përfundimi i certifikimit",
-  CREATE: "Krijimi i aplikimit",
-  SUBMIT: "Aplikim për rregjistrim te ISHMT",
-  PICKUP_REVIEW: "Marrja në shqyrtim",
-  APPROVE: "Miratimi",
-  REJECT: "Refuzimi",
-  RETURN: "Kthimi për korrigjim",
-  INSTALLER_DELEGATED: "Caktimi i instaluesit",
-  INSTALLER_ACCEPTED: "Pranimi i ftesës nga instaluesi",
-  INSTALLER_REJECTED: "Refuzimi i ftesës nga instaluesi",
-  TECHNICAL_DATA_COMPLETED: "Përfundimi i të dhënave teknike",
-  CERTIFIER_DELEGATED: "Caktimi i certifikuesit",
-  CERTIFIER_ACCEPTED: "Pranimi i ftesës nga certifikuesi",
-  CERTIFIER_REJECTED: "Refuzimi i ftesës nga certifikuesi",
-  CERTIFICATION_COMPLETED: "Përfundimi i certifikimit",
-  APPLICATION_SUBMITTED_TO_ISHMT: "Aplikim për rregjistrim te ISHMT",
-  DELEGATE_TO_DIRECTOR: "Delegim te Drejtori i Drejtorisë",
-  DELEGATE_TO_SECTOR_HEAD: "Delegim te Përgjegjësi i sektorit",
-  ASSIGN_FIELD_INSPECTORS: "Caktimi i inspektorëve",
+  CREATE: "Aplikimi u krijua",
+  SAVE_BASIC_DATA: "Të dhënat bazë u ruajtën",
+  ASSIGN_INSTALLER: "Ftesë te instaluesi",
+  INSTALLER_DELEGATED: "Ftesë te instaluesi",
+  ACCEPT_DELEGATION: "Ftesa u pranua",
+  REJECT_DELEGATION: "Ftesa u refuzua",
+  INSTALLER_ACCEPTED: "Instaluesi pranoi",
+  INSTALLER_REJECTED: "Instaluesi refuzoi",
+  START_TECHNICAL_DATA: "Filloi plotësimi teknik",
+  COMPLETE_INSTALLER: "Të dhënat teknike u plotësuan",
+  TECHNICAL_DATA_COMPLETED: "Të dhënat teknike u plotësuan",
+  ASSIGN_CERTIFIER: "Ftesë te certifikuesi",
+  CERTIFIER_DELEGATED: "Ftesë te certifikuesi",
+  ACCEPT_CERTIFIER: "Certifikuesi pranoi",
+  CERTIFIER_ACCEPTED: "Certifikuesi pranoi",
+  CERTIFIER_REJECTED: "Certifikuesi refuzoi",
+  START_CERTIFICATION: "Filloi certifikimi",
+  INSTALLER_TECHNICAL_CORRECTIONS_REQUESTED: "Kërkuar korrigjim teknik nga certifikuesi",
+  INSTALLER_TECHNICAL_RESUBMITTED: "Instaluesi dërgoi korrigjime teknike",
+  COMPLETE_CERTIFIER: "Certifikimi u plotësua",
+  CERTIFICATION_COMPLETED: "Certifikimi u plotësua",
+  APPLICATION_SUBMITTED_TO_ISHMT: "Dorëzuar te IQMT",
+  SUBMIT: "Dorëzuar te IQMT",
+  CANCEL: "Aplikimi u anulua",
+  PICKUP_REVIEW: "Marrë në shqyrtim",
+  DELEGATE_TO_DIRECTOR: "Deleguar te Drejtori",
+  DELEGATE_TO_SECTOR_HEAD: "Deleguar te Përgjegjësi",
+  ASSIGN_FIELD_INSPECTORS: "Inspektorë të caktuar",
+  UPDATE_PLANNED_INSPECTORS: "Inspektorët u ndryshuan",
   SUBMIT_FIELD_REPORT: "Raport i inspektorit",
-  ALL_FIELD_REPORTS_COMPLETE: "Raportet e inspektorëve u përfunduan",
-  FORWARD_TO_DIRECTOR: "Raport i Përgjegjësit — drejt Drejtorit",
-  FORWARD_TO_CHIEF: "Raport i Drejtorit — drejt Kryeinspektorit",
+  ALL_FIELD_REPORTS_COMPLETE: "Raportet u mbyllën",
+  FORWARD_TO_DIRECTOR: "Dërguar te Drejtori",
+  FORWARD_TO_CHIEF: "Dërguar te Kryeinspektori",
+  APPROVE: "Miratuar",
+  REJECT: "Refuzuar",
+  RETURN: "Kthyer për korrigjim",
+  RETURN_TO_INSPECTORS: "Kthyer te inspektorët",
+  RETURN_TO_SECTOR_HEAD: "Kthyer te Përgjegjësi",
+  RETURN_TO_DIRECTOR: "Kthyer te Drejtori",
+  ELEVATOR_CREATED: "Ashensori u regjistrua",
+  ASSETS_GENERATED: "Certifikata u gjenerua",
+  CLOSE: "Aplikimi u mbyll",
+  INSTALLER_DELEGATION_REVOKED: "Ftesa e instaluesit u tërhoq",
+  CERTIFIER_DELEGATION_REVOKED: "Ftesa e certifikuesit u tërhoq",
+  OWNERSHIP_DELEGATION_REVOKED: "Ftesa e transferimit u tërhoq",
+  MAINTENANCE_DELEGATION_REVOKED: "Ftesa e mirëmbajtjes u tërhoq",
 };
 
 export function labelApplicationStatus(status: ApplicationStatus | string | null | undefined): string {
@@ -130,8 +168,8 @@ export function formatWorkflowHistoryLine(input: {
   action: string;
   statusLabels: Record<ApplicationStatus, string>;
 }): string {
-  const from = input.fromStatus ? input.statusLabels[input.fromStatus] : "-";
-  const to = input.statusLabels[input.toStatus];
-  const action = labelWorkflowAction(input.action);
-  return `${from} → ${to} (${action})`;
+  if (WORKFLOW_ACTION_LABELS[input.action]) {
+    return WORKFLOW_ACTION_LABELS[input.action];
+  }
+  return input.statusLabels[input.toStatus] ?? labelWorkflowAction(input.action);
 }

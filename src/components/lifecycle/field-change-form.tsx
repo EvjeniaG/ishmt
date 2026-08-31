@@ -1,6 +1,6 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { useRouter } from "@/lib/navigation/use-app-router";
 import { useState } from "react";
 import { saveLifecycleFieldChangesAction } from "@/lib/actions/lifecycle-actions";
 import { getEditableFields } from "@/lib/lifecycle/editable-fields";
@@ -24,6 +24,7 @@ export function FieldChangeForm({
   maintenanceCompanies = [],
   excludeElevatorId,
   existingChanges = [],
+  suggestedValues = {},
 }: {
   applicationId: string;
   mode: "correction" | "update";
@@ -32,6 +33,8 @@ export function FieldChangeForm({
   maintenanceCompanies?: { id: string; name: string }[];
   excludeElevatorId?: string;
   existingChanges?: FieldChange[];
+  /** Vlera të sugjeruara nga profili/llogaria - plotësohen kur fillon redaktimi. */
+  suggestedValues?: Record<string, string | undefined>;
 }) {
   const router = useRouter();
   const [editing, setEditing] = useState<string | null>(null);
@@ -62,7 +65,7 @@ export function FieldChangeForm({
     setEditing(field);
     const existing = changes.find((c) => c.field === field);
     setDraft({
-      newValue: existing?.newValue ?? "",
+      newValue: existing?.newValue ?? suggestedValues[field]?.trim() ?? "",
       reason: existing?.reason ?? "",
     });
   }

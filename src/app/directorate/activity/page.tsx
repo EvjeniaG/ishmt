@@ -1,14 +1,14 @@
 import { Suspense } from "react";
 import { AppShell } from "@/components/layout/app-shell";
 import { DirectorateActivityFilters } from "@/components/directorate/directorate-activity-filters";
-import { DirectorateElevatorSheet } from "@/components/directorate/directorate-elevator-sheet";
-import { DirectoratePageHeader } from "@/components/directorate/directorate-page-header";
+import { DirectorateActivityList } from "@/components/directorate/directorate-activity-list";
+import { DirectoratePageShell } from "@/components/directorate/directorate-page-header";
 import { SectionCard } from "@/components/shared/institutional";
-import { PortalEmptyState } from "@/components/shared/portal-table";
 import { requireDirectoratePage } from "@/lib/directorate/access";
 import {
   DirectorateActivityService,
   parseCompanyActivityFilters,
+  serializeCompanyActivityQuery,
 } from "@/lib/services/directorate-activity-service";
 
 export default async function DirectorateActivityPage({
@@ -19,6 +19,7 @@ export default async function DirectorateActivityPage({
   await requireDirectoratePage();
   const params = await searchParams;
   const filters = parseCompanyActivityFilters(params);
+  const returnQuery = serializeCompanyActivityQuery(params);
 
   const [items, filterOptions] = await Promise.all([
     DirectorateActivityService.listCompanyActivity(filters),
@@ -27,12 +28,10 @@ export default async function DirectorateActivityPage({
 
   return (
     <AppShell title="Aktiviteti i kompanive">
-      <div className="space-y-6">
-        <DirectoratePageHeader
-          title="Aktiviteti i kompanive"
-          description="Skeda e plotë e çdo ashensori / aplikimi ku janë të përfshira kompanitë instaluese ose certifikuese."
-        />
-
+      <DirectoratePageShell
+        title="Aktiviteti i kompanive"
+        description="Çdo ashensor ose aplikim ku janë të përfshira kompanitë instaluese ose certifikuese / OM."
+      >
         <Suspense fallback={<div className="h-40 animate-pulse rounded-lg border bg-muted/30" />}>
           <DirectorateActivityFilters
             companies={filterOptions.companies}
@@ -41,25 +40,17 @@ export default async function DirectorateActivityPage({
         </Suspense>
 
         <SectionCard
-          title="Skedat e aktivitetit"
+          title="Lista e aktivitetit"
           meta={
             <span className="text-sm tabular-nums text-muted-foreground">
-              {items.length} {items.length === 1 ? "skedë" : "skeda"} të gjetura
+              {items.length} {items.length === 1 ? "skedë" : "skeda"}
             </span>
           }
           padded
         >
-          {items.length === 0 ? (
-            <PortalEmptyState>Nuk u gjet asnjë aktivitet për filtrat e zgjedhur.</PortalEmptyState>
-          ) : (
-            <div className="space-y-6">
-              {items.map((app) => (
-                <DirectorateElevatorSheet key={app.id} app={app} />
-              ))}
-            </div>
-          )}
+          <DirectorateActivityList items={items} returnQuery={returnQuery} />
         </SectionCard>
-      </div>
+      </DirectoratePageShell>
     </AppShell>
   );
 }

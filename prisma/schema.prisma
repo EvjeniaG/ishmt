@@ -1,5 +1,5 @@
 // =============================================================================
-// ISHMT Digital Elevator Registry System - Prisma Schema
+// IQMT Digital Elevator Registry System - Prisma Schema
 // Version: 1.0 (Phase 1 Scaffolding)
 // Aligned with: docs/architecture/06-database-design.md + approved extensions
 // =============================================================================
@@ -114,7 +114,6 @@ enum UsagePurpose {
 
 enum OwnerBuildingRole {
   ADMINISTRATOR
-  OWNERS_ASSEMBLY_REP
   PHYSICAL_PERSON
   LEGAL_PERSON
   CONSTRUCTOR
@@ -774,6 +773,9 @@ model Organization {
   qkbValidated        Boolean   @default(false) @map("qkb_validated")
   qkbValidatedAt      DateTime? @map("qkb_validated_at") @db.Timestamptz
   qkbValidationData   Json?     @map("qkb_validation_data")
+  capInstall          Boolean   @default(false) @map("cap_install")
+  capMaintenance      Boolean   @default(false) @map("cap_maintenance")
+  capOm               Boolean   @default(false) @map("cap_om")
   createdAt           DateTime  @default(now()) @map("created_at") @db.Timestamptz
   updatedAt           DateTime  @updatedAt @map("updated_at") @db.Timestamptz
   deletedAt           DateTime? @map("deleted_at") @db.Timestamptz

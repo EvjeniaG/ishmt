@@ -20,7 +20,10 @@ import {
   assertTransition,
   resolveReturnResumeStatus,
 } from "@/lib/workflows/application-workflow";
+import { initialInstallerTechnicalReviewExtended } from "@/lib/registration/installer-technical-review";
+import { activeCertifierOrgWhere } from "@/lib/organizations/licensed-org-filters";
 import { ApplicationService } from "@/lib/services/application-service";
+import { assertInstallerDistinctFromCertifier } from "@/lib/registration/registration-party-rules";
 import { NotificationService } from "@/lib/services/notification-service";
 import {
   mapConformityResult,
@@ -29,6 +32,8 @@ import {
   mapSpeedRangeToMs,
 } from "@/lib/registration/building-type-map";
 import type { RegistrationBasicDataInput } from "@/lib/validations/registration-basic-data";
+import { parseRegistrationBuildingGps } from "@/lib/validations/registration-basic-data";
+import { reverseGeocodeCoordinates } from "@/lib/geo/reverse-geocode";
 import type { RegistrationTechnicalDataInput } from "@/lib/validations/registration-technical-data";
 import type { RegistrationCertificationDataInput } from "@/lib/validations/registration-certification-data";
 import {
@@ -37,6 +42,7 @@ import {
   getRegistrationDocumentSpecsByPhase,
 } from "@/lib/documents/application-document-checklist";
 import { DocumentService } from "@/lib/services/document-service";
+import { OrganizationCapabilityService } from "@/lib/services/organization-capability-service";
 import { resolveLegacyDistrictCode } from "@/lib/registration/municipality-legacy-district";
 
 const DELEGATION_EXPIRY_DAYS = 7;
@@ -79,7 +85,7 @@ export class RegistrationService {
       throw new Error(`Nuk mund të përditësohen të dhënat bazë në statusin '${application.status}'.`);
     }
     if (application.status === ApplicationStatus.RETURNED && !isReturnedToRole(application, ReturnTargetRole.OWNER)) {
-      throw new Error("Korrigjimi duhet të bëhet nga roli i caktuar nga ISHMT.");
+      throw new Error("Korrigjimi duhet të bëhet nga roli i caktuar nga IQMT.");
     }
     if (ctx.roleCode !== ROLE_CODES.OWNER) throw new Error("Vetëm personi përgjegjës mund të plotësojë të dhënat bazë.");
 
@@ -93,15 +99,34 @@ export class RegistrationService {
       throw new Error(`Nuk u llogarit dot kodi i distriktit për bashkinë ${municipality.nameSq}.`);
     }
 
+    const isAdministrator = input.responsibleEntityType === "ADMINISTRATOR";
+
+    let buildingAddress = input.buildingAddress?.trim() || "";
+    let gpsLatitude: number | null = null;
+    let gpsLongitude: number | null = null;
+
+    if (input.buildingAddressMode === "gps") {
+      const gps = parseRegistrationBuildingGps(input);
+      if (gps) {
+        gpsLatitude = gps.latitude;
+        gpsLongitude = gps.longitude;
+        if (!buildingAddress) {
+          buildingAddress =
+            (await reverseGeocodeCoordinates(gps.latitude, gps.longitude)) ?? buildingAddress;
+        }
+      }
+    }
+
     const extended = {
       elevatorConditionType: input.elevatorConditionType,
       applicationSubtype: input.applicationSubtype,
       existingRegisteredElevatorsCount: input.existingRegisteredElevatorsCount,
+      elevatorInServiceDate: input.elevatorInServiceDate,
+      buildingAddressMode: input.buildingAddressMode,
       responsibleEntityType: input.responsibleEntityType,
       responsibleIdentifierType: input.responsibleIdentifierType,
-      responsibleAddress: input.responsibleAddress,
-      representedBy: input.representedBy,
-      representativePosition: input.representativePosition,
+      representedBy: isAdministrator ? undefined : input.representedBy,
+      representativePosition: isAdministrator ? undefined : input.representativePosition,
       registrationBuildingType: input.registrationBuildingType,
       buildingMainUse: input.buildingMainUse,
       businessNameIfWorkplace: input.businessNameIfWorkplace,
@@ -153,12 +178,23 @@ export class RegistrationService {
       : null;
 
     // Data update + status transition + history + audit are committed atomically.
+    const existingTechnical =
+      (application.data?.additionalTechnical as Record<string, unknown> | null) ?? {};
+    const additionalTechnical = {
+      ...existingTechnical,
+      installationDate: input.elevatorInServiceDate,
+      commissioningDate:
+        (existingTechnical.commissioningDate as string | undefined) ?? input.elevatorInServiceDate,
+    };
+
     await db.$transaction(async (tx) => {
       await tx.applicationData.update({
         where: { applicationId },
         data: {
           applicationDate: new Date(input.applicationDate),
-          buildingAddress: input.buildingAddress,
+          buildingAddress: buildingAddress || null,
+          gpsLatitude,
+          gpsLongitude,
           municipalityId: input.municipalityId,
           administrativeUnitId: input.administrativeUnitId || null,
           buildingName: input.buildingName,
@@ -173,6 +209,7 @@ export class RegistrationService {
           responsibleEntityPhone: input.responsiblePhone,
           notes: input.ownerNotes,
           registrationExtendedData: extended,
+          additionalTechnical,
         },
       });
 
@@ -222,7 +259,8 @@ export class RegistrationService {
       throw new Error(`Caktimi i instaluesit nuk lejohet në statusin '${application.status}'.`);
     }
 
-    await this.assertActiveLicensedCompany(installerOrgId, OrgType.INSTALLER);
+    await OrganizationCapabilityService.assertInstallerProvider(installerOrgId);
+    assertInstallerDistinctFromCertifier(installerOrgId, application.certifierOrgId);
 
     const expiresAt = new Date();
     expiresAt.setDate(expiresAt.getDate() + DELEGATION_EXPIRY_DAYS);
@@ -381,7 +419,7 @@ export class RegistrationService {
       application.status === ApplicationStatus.RETURNED &&
       !isReturnedToRole(application, ReturnTargetRole.INSTALLER)
     ) {
-      throw new Error("Korrigjimi duhet të bëhet nga roli i caktuar nga ISHMT.");
+      throw new Error("Korrigjimi duhet të bëhet nga roli i caktuar nga IQMT.");
     }
 
     await this.assertSerialUnique(input.serialNumber, applicationId);
@@ -505,6 +543,7 @@ export class RegistrationService {
     const expiresAt = new Date();
     expiresAt.setDate(expiresAt.getDate() + DELEGATION_EXPIRY_DAYS);
     await this.assertActiveLicensedCompany(certifierOrgId, OrgType.CERTIFIER);
+    assertInstallerDistinctFromCertifier(application.installerOrgId, certifierOrgId);
 
     const toStatus = assertTransition(application.type, application.status, "ASSIGN_CERTIFIER", ctx.roleCode);
 
@@ -555,7 +594,7 @@ export class RegistrationService {
   static async acceptCertifierDelegation(ctx: AuthContext, applicationId: string) {
     const application = await db.application.findFirst({
       where: { id: applicationId, deletedAt: null },
-      include: { delegations: true },
+      include: { delegations: true, data: true },
     });
     if (!application) throw new Error("Aplikimi nuk u gjet.");
     if (application.certifierOrgId !== ctx.activeOrgId) throw new Error("Ky aplikim nuk është për organizatën tuaj.");
@@ -574,6 +613,16 @@ export class RegistrationService {
         data: { status: DelegationStatus.ACCEPTED, acceptedAt: new Date() },
       });
       await tx.application.update({ where: { id: applicationId }, data: { status: toStatus } });
+      if (application.data) {
+        await tx.applicationData.update({
+          where: { applicationId },
+          data: {
+            registrationExtendedData: initialInstallerTechnicalReviewExtended(
+              application.data.registrationExtendedData,
+            ) as Prisma.InputJsonValue,
+          },
+        });
+      }
       await tx.applicationWorkflowHistory.create({
         data: { applicationId, fromStatus: application.status, toStatus, action: "CERTIFIER_ACCEPTED", actorId: ctx.userId },
       });
@@ -581,7 +630,7 @@ export class RegistrationService {
 
     await NotificationService.notifyOrgMembers(application.ownerOrgId, {
       title: "Certifikuesi pranoi ftesën",
-      body: `OMI / certifikuesi pranoi aplikimin ${application.applicationNumber}.`,
+      body: `OM / certifikuesi pranoi aplikimin ${application.applicationNumber}.`,
       entityType: "application",
       entityId: applicationId,
     });
@@ -617,7 +666,7 @@ export class RegistrationService {
 
     await NotificationService.notifyOrgMembers(application.ownerOrgId, {
       title: "Certifikuesi refuzoi ftesën",
-      body: `Duhet të zgjidhni një OMI tjetër për ${application.applicationNumber}.`,
+      body: `Duhet të zgjidhni një OM tjetër për ${application.applicationNumber}.`,
       entityType: "application",
       entityId: applicationId,
     });
@@ -650,13 +699,11 @@ export class RegistrationService {
       application.status === ApplicationStatus.RETURNED &&
       !isReturnedToRole(application, ReturnTargetRole.CERTIFIER)
     ) {
-      throw new Error("Korrigjimi duhet të bëhet nga roli i caktuar nga ISHMT.");
+      throw new Error("Korrigjimi duhet të bëhet nga roli i caktuar nga IQMT.");
     }
 
     const allCertificationPurposes = [
       "INITIAL_INSPECTION_CERT",
-      "TECHNICAL_DOSSIER",
-      "INSTALLATION_DOCUMENT",
       "EU_DECLARATION_CE",
       "EU_DECLARATION_INSTALLER",
       "SAFETY_COMPONENTS_LIST",
@@ -746,7 +793,7 @@ export class RegistrationService {
       entityId: applicationId,
     });
 
-    // Raportim i dyfishtë: njoftohen njëkohësisht ISHMT dhe Drejtoria e Tregut.
+    // Raportim i dyfishtë: njoftohen njëkohësisht IQMT dhe Drejtoria e Tregut.
     if (conformity !== "NON_CONFORM") {
       const reportTargets = await db.organization.findMany({
         where: { type: { in: [OrgType.ISHMT, OrgType.DIRECTORATE] }, deletedAt: null },
@@ -757,13 +804,13 @@ export class RegistrationService {
           org.type === OrgType.ISHMT
             ? NotificationService.notifyIshmtOperationsStaff(org.id, {
                 title: "Raport certifikimi i ri",
-                body: `Raporti i certifikimit për ${application.applicationNumber} u përcoll njëkohësisht tek ISHMT dhe Drejtoria e Politikave të Tregut.`,
+                body: `Raporti i certifikimit për ${application.applicationNumber} u përcoll njëkohësisht tek IQMT dhe Drejtoria e Politikave të Tregut.`,
                 entityType: "application",
                 entityId: applicationId,
               })
             : NotificationService.notifyOrgMembers(org.id, {
                 title: "Raport certifikimi i ri",
-                body: `Raporti i certifikimit për ${application.applicationNumber} u përcoll njëkohësisht tek ISHMT dhe Drejtoria e Politikave të Tregut.`,
+                body: `Raporti i certifikimit për ${application.applicationNumber} u përcoll njëkohësisht tek IQMT dhe Drejtoria e Politikave të Tregut.`,
                 entityType: "application",
                 entityId: applicationId,
               }),
@@ -901,16 +948,13 @@ export class RegistrationService {
   }
 
   private static async assertActiveLicensedCompany(organizationId: string, type: OrgType) {
-    const now = new Date();
+    if (type !== OrgType.CERTIFIER) {
+      throw new Error("Verifikimi i licencës mbështetet vetëm për kompanitë OM.");
+    }
+
     const org = await db.organization.findFirst({
-      where: {
-        id: organizationId,
-        type,
-        status: { in: ["ACTIVE", "ACTIVE_AUTHORIZED"] },
-        deletedAt: null,
-        licenses: { some: { status: "ACTIVE", expiryDate: { gte: now } } },
-      },
+      where: { ...activeCertifierOrgWhere(), id: organizationId },
     });
-    if (!org) throw new Error("Kompania e zgjedhur nuk është aktive ose licenca ka skaduar.");
+    if (!org) throw new Error("Kompania e zgjedhur nuk është aktive ose licenca OM ka skaduar.");
   }
 }

@@ -18,106 +18,23 @@ import {
 import bcrypt from "bcryptjs";
 import { ROLE_CODES } from "../src/lib/constants/roles";
 import { PdfService } from "../src/lib/services/pdf-service";
+import { seedDemoLicensedClaimPools } from "./lib/seed-demo-om-claim-pool";
 import { buildNormalizedRegistrationExtended } from "../src/lib/registration/anneks-codes";
 import { seedPipelineDemos } from "./lib/seed-pipeline-demos";
 import { seedChiefApprovalDemo } from "./lib/seed-chief-approval-demo";
+import { seedDemoOwnerProfiles } from "./lib/demo-owner";
+import { backfillOneElevator } from "../src/lib/elevators/backfill-registration-assets";
+import {
+  DEMO_CERTIFIER_PROFILES,
+  DEMO_INSTALLER_PROFILES,
+  DEMO_MAINTENANCE_PROFILES,
+  DEMO_OWNER_ADMINISTRATOR,
+  type DemoCompanySeedProfile,
+} from "../src/lib/demo/demo-seed-profiles";
 
 const prisma = new PrismaClient();
 
 const DEMO_PASSWORD = process.env.DEMO_PASSWORD ?? "Ishmt2026";
-
-type CompanySpec = {
-  name: string;
-  nipt: string;
-  email: string;
-  phone?: string;
-  address?: string;
-  contactFirst: string;
-  contactLast: string;
-  loginEmail: string;
-};
-
-/** Demo installer companies - owner can pick any during registration. */
-const INSTALLER_SPECS: CompanySpec[] = [
-  {
-    name: "Ashensorë Pro Sh.p.k.",
-    nipt: "K11111111A",
-    email: "info@ashensorepro.al",
-    phone: "+355 4 2100100",
-    address: "Rruga e Durrësit, Tiranë",
-    contactFirst: "Genti",
-    contactLast: "Hoxha",
-    loginEmail: "installer@ashensorepro.al",
-  },
-  {
-    name: "Lift Master Albania Sh.p.k.",
-    nipt: "L10000001A",
-    email: "zyra@liftmaster.al",
-    phone: "+355 4 2200200",
-    address: "Rruga Kavajës, Tiranë",
-    contactFirst: "Ardit",
-    contactLast: "Leka",
-    loginEmail: "installer@liftmaster.al",
-  },
-  {
-    name: "Euro Ashensorë Sh.p.k.",
-    nipt: "L10000002B",
-    email: "info@euroashensore.al",
-    phone: "+355 4 2300300",
-    address: "Rruga e Elbasanit, Tiranë",
-    contactFirst: "Sara",
-    contactLast: "Doçi",
-    loginEmail: "installer@euroashensore.al",
-  },
-];
-
-/** Demo certifier / OMI companies. */
-const CERTIFIER_SPECS: CompanySpec[] = [
-  {
-    name: "OMI Certifikim Sh.p.k.",
-    nipt: "K22222222B",
-    email: "info@omicert.al",
-    contactFirst: "Eda",
-    contactLast: "Krasniqi",
-    loginEmail: "cert@omicert.al",
-  },
-  {
-    name: "Inspekt OMI Sh.p.k.",
-    nipt: "M20000001A",
-    email: "kontakt@inspektomi.al",
-    contactFirst: "Blerim",
-    contactLast: "Vata",
-    loginEmail: "cert@inspektomi.al",
-  },
-  {
-    name: "Quality Lift Cert Sh.p.k.",
-    nipt: "M20000002B",
-    email: "info@qualitylift.al",
-    contactFirst: "Nora",
-    contactLast: "Shehu",
-    loginEmail: "cert@qualitylift.al",
-  },
-];
-
-/** Demo maintenance companies (QKB-validated, ACTIVE). */
-const MAINTENANCE_SPECS: CompanySpec[] = [
-  {
-    name: "Mirëmbajtje Ashensorësh Sh.p.k.",
-    nipt: "K33333333C",
-    email: "info@servisashensore.al",
-    contactFirst: "Florian",
-    contactLast: "Beqiri",
-    loginEmail: "mirembajtje@servisashensore.al",
-  },
-  {
-    name: "Servis Lift 24 Sh.p.k.",
-    nipt: "N30000001A",
-    email: "info@servislift24.al",
-    contactFirst: "Klodian",
-    contactLast: "Rama",
-    loginEmail: "mirembajtje@servislift24.al",
-  },
-];
 
 /**
  * Tables that hold fictitious / transactional data. Reference data
@@ -219,7 +136,7 @@ type DemoUser = {
 };
 
 async function main() {
-  console.log("Demo reset & seed për ISHMT Elevator Registry...\n");
+  console.log("Demo reset & seed për IQMT Elevator Registry...\n");
 
   await clearFictitiousData();
   const roleIdMap = await getRoleIdMap();
@@ -238,7 +155,7 @@ async function main() {
   const ishmt = await prisma.organization.create({
     data: {
       type: OrgType.ISHMT,
-      name: "ISHMT - Inspektorati Shtetëror i Tregut të Brendshëm",
+      name: "IQMT - Inspektorati Qendror i Mbikeqyrjes së Tregut",
       nipt: "ISHMT-GOV-0001",
       status: OrgStatus.ACTIVE,
       municipalityId,
@@ -257,22 +174,12 @@ async function main() {
     },
   });
 
-  const ownerOrg = await prisma.organization.create({
-    data: {
-      type: OrgType.OWNER,
-      name: "Personi Përgjegjës Shembull (Person Fizik)",
-      status: OrgStatus.ACTIVE,
-      municipalityId,
-      address: "Rruga Myslym Shyri, Tiranë",
-    },
-  });
-
   // Licenses valid for 2 years so companies are selectable during registration.
   const licenseExpiry = new Date();
   licenseExpiry.setFullYear(licenseExpiry.getFullYear() + 2);
 
   async function createLicensedCompany(
-    spec: CompanySpec,
+    spec: DemoCompanySeedProfile,
     type: typeof OrgType.INSTALLER | typeof OrgType.CERTIFIER,
     licenseType: string,
     licensePrefix: string,
@@ -281,13 +188,13 @@ async function main() {
     const org = await prisma.organization.create({
       data: {
         type,
-        name: spec.name,
+        name: spec.orgName,
         nipt: spec.nipt,
         status: OrgStatus.ACTIVE,
         municipalityId,
-        address: spec.address,
-        email: spec.email,
-        phone: spec.phone,
+        address: spec.orgAddress,
+        email: spec.orgEmail,
+        phone: spec.orgPhone,
       },
     });
     await prisma.organizationLicense.create({
@@ -305,34 +212,36 @@ async function main() {
   }
 
   const installerOrgs = [];
-  for (let i = 0; i < INSTALLER_SPECS.length; i += 1) {
+  for (let i = 0; i < DEMO_INSTALLER_PROFILES.length; i += 1) {
     installerOrgs.push(
-      await createLicensedCompany(INSTALLER_SPECS[i], OrgType.INSTALLER, "INSTALLATION", "INST", i),
+      await createLicensedCompany(DEMO_INSTALLER_PROFILES[i], OrgType.INSTALLER, "INSTALLATION", "INST", i),
     );
   }
 
   const certifierOrgs = [];
-  for (let i = 0; i < CERTIFIER_SPECS.length; i += 1) {
+  for (let i = 0; i < DEMO_CERTIFIER_PROFILES.length; i += 1) {
     certifierOrgs.push(
-      await createLicensedCompany(CERTIFIER_SPECS[i], OrgType.CERTIFIER, "CERTIFICATION", "OMI", i),
+      await createLicensedCompany(DEMO_CERTIFIER_PROFILES[i], OrgType.CERTIFIER, "CERTIFICATION", "OMI", i),
     );
   }
 
+  await seedDemoLicensedClaimPools(prisma, municipalityId, licenseExpiry);
+
   const maintenanceOrgs = [];
-  for (const spec of MAINTENANCE_SPECS) {
+  for (const spec of DEMO_MAINTENANCE_PROFILES) {
     maintenanceOrgs.push(
       await prisma.organization.create({
         data: {
           type: OrgType.MAINTENANCE,
-          name: spec.name,
+          name: spec.orgName,
           nipt: spec.nipt,
           status: OrgStatus.ACTIVE,
           qkbValidated: true,
           qkbValidatedAt: new Date(),
           municipalityId,
-          address: spec.address,
-          email: spec.email,
-          phone: spec.phone,
+          address: spec.orgAddress,
+          email: spec.orgEmail,
+          phone: spec.orgPhone,
         },
       }),
     );
@@ -368,7 +277,7 @@ async function main() {
       idCardNumber: "AB1010101",
       firstName: "Admin",
       fatherName: "Petrit",
-      lastName: "ISHMT",
+      lastName: "IQMT",
       motherName: "Drita",
       role: ROLE_CODES.ADMIN,
       org: ishmt,
@@ -415,9 +324,9 @@ async function main() {
       email: "terren@ishmt.gov.al",
       nid: "I90909009I",
       idCardNumber: "AB9090909",
-      firstName: "Inspektor",
+      firstName: "Dritan",
       fatherName: "Flamur",
-      lastName: "Terreni",
+      lastName: "Gjoka",
       motherName: "Ornela",
       role: ROLE_CODES.FIELD_INSPECTOR,
       org: ishmt,
@@ -427,9 +336,9 @@ async function main() {
       email: "terren2@ishmt.gov.al",
       nid: "I90909010J",
       idCardNumber: "AB9090910",
-      firstName: "Inspektor",
+      firstName: "Elona",
       fatherName: "Arben",
-      lastName: "Demo 2",
+      lastName: "Marku",
       motherName: "Elira",
       role: ROLE_CODES.FIELD_INSPECTOR,
       org: ishmt,
@@ -447,21 +356,10 @@ async function main() {
       org: directorate,
       loginNote: "Numri Personal: I90303003C",
     },
-    {
-      email: "personi përgjegjës i ashensorit@example.al",
-      nid: "I90404004D",
-      idCardNumber: "AB4040404",
-      firstName: "Personi",
-      fatherName: "Sokol",
-      lastName: "Shembull",
-      motherName: "Lindita",
-      role: ROLE_CODES.OWNER,
-      org: ownerOrg,
-      loginNote: "Numri Personal: I90404004D",
-    },
   ];
 
   let ownerUserId = "";
+  let ownerOrg = { id: "" };
   let adminUserId = "";
   const summary: DemoUser[] = [];
 
@@ -496,7 +394,6 @@ async function main() {
       },
     });
 
-    if (u.role === ROLE_CODES.OWNER) ownerUserId = user.id;
     if (u.role === ROLE_CODES.ADMIN) adminUserId = user.id;
 
     summary.push({
@@ -509,10 +406,29 @@ async function main() {
     });
   }
 
+  const ownerRoleId = roleIdMap.get(ROLE_CODES.OWNER);
+  if (ownerRoleId) {
+    const ownerResults = await seedDemoOwnerProfiles(prisma, passwordHash, municipalityId, ownerRoleId);
+    const primaryOwner = ownerResults[0];
+    ownerUserId = primaryOwner.user.id;
+    ownerOrg = primaryOwner.org;
+    for (const { user, org } of ownerResults) {
+      summary.push({
+        email: user.email,
+        nid: user.nid,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        role: ROLE_CODES.OWNER,
+        loginNote: `Numri Personal: ${user.nid}`,
+      });
+      void org;
+    }
+  }
+
   // One login per demo company (login via NIPT, password = DEMO_PASSWORD).
   async function createCompanyUsers(
     orgs: { id: string }[],
-    specs: CompanySpec[],
+    specs: DemoCompanySeedProfile[],
     roleCode: string,
   ) {
     const roleId = roleIdMap.get(roleCode);
@@ -524,10 +440,11 @@ async function main() {
       const spec = specs[i];
       const user = await prisma.authUser.create({
         data: {
-          email: spec.loginEmail,
+          email: spec.contactEmail,
           passwordHash,
-          firstName: spec.contactFirst,
-          lastName: spec.contactLast,
+          firstName: spec.contactFirstName,
+          lastName: spec.contactLastName,
+          phone: spec.contactPhone,
           isActive: true,
           emailVerified: true,
         },
@@ -541,19 +458,19 @@ async function main() {
         },
       });
       summary.push({
-        email: spec.loginEmail,
+        email: spec.contactEmail,
         nid: null,
-        firstName: spec.contactFirst,
-        lastName: spec.contactLast,
+        firstName: spec.contactFirstName,
+        lastName: spec.contactLastName,
         role: roleCode,
         loginNote: `NIPT: ${spec.nipt}`,
       });
     }
   }
 
-  await createCompanyUsers(installerOrgs, INSTALLER_SPECS, ROLE_CODES.INSTALLER);
-  await createCompanyUsers(certifierOrgs, CERTIFIER_SPECS, ROLE_CODES.CERTIFIER);
-  await createCompanyUsers(maintenanceOrgs, MAINTENANCE_SPECS, ROLE_CODES.MAINTENANCE);
+  await createCompanyUsers(installerOrgs, DEMO_INSTALLER_PROFILES, ROLE_CODES.INSTALLER);
+  await createCompanyUsers(certifierOrgs, DEMO_CERTIFIER_PROFILES, ROLE_CODES.CERTIFIER);
+  await createCompanyUsers(maintenanceOrgs, DEMO_MAINTENANCE_PROFILES, ROLE_CODES.MAINTENANCE);
 
   console.log(`✓ ${summary.length} përdorues u krijuan`);
 
@@ -563,7 +480,7 @@ async function main() {
   if (adminUserId) {
     for (const tpl of [
       {
-        name: "Certifikatë Regjistrimi ISHMT",
+        name: "Certifikatë Regjistrimi IQMT",
         type: TemplateType.CERTIFICATE,
         content: PdfService.defaultRegistrationCertificateTemplate(),
       },
@@ -638,9 +555,9 @@ async function main() {
       entrance: "Vila 12",
       buildingType: BuildingType.RESIDENTIAL,
       usagePurpose: UsagePurpose.HYDRAULIC_PASSENGER,
-      responsible: "Personi Përgjegjës Shembull",
-      email: "personi përgjegjës i ashensorit@example.al",
-      phone: "+355 69 200 0005",
+      responsible: "Arben Demo",
+      email: DEMO_OWNER_ADMINISTRATOR.email,
+      phone: DEMO_OWNER_ADMINISTRATOR.phone,
     },
   ];
 
@@ -931,11 +848,27 @@ async function main() {
 
   console.log(`✓ ${registeredPlan.length} ashensorë të regjistruar u krijuan\n`);
 
+  const assetActor =
+    (await prisma.authUser.findFirst({ where: { email: "admin@ishmt.gov.al" }, select: { id: true } }))?.id ??
+    ownerUserId;
+  if (assetActor) {
+    console.log("→ Gjenerim PDF certifikate dhe imazhe QR për ashensorët e regjistruar...");
+    for (const seeded of seededElevators) {
+      const assetResult = await backfillOneElevator(seeded.id, assetActor);
+      if (assetResult.ok) {
+        console.log(`  ✓ ${seeded.registryNumber}`);
+      } else {
+        console.warn(`  ⚠ ${seeded.registryNumber}: ${assetResult.error}`);
+      }
+    }
+    console.log("");
+  }
+
   const maintenanceUser = await prisma.authUser.findFirst({
-    where: { email: MAINTENANCE_SPECS[0].loginEmail },
+    where: { email: DEMO_MAINTENANCE_PROFILES[0].contactEmail },
   });
   const certifierUser = await prisma.authUser.findFirst({
-    where: { email: CERTIFIER_SPECS[0].loginEmail },
+    where: { email: DEMO_CERTIFIER_PROFILES[0].contactEmail },
   });
   const fieldInspectorUser = await prisma.authUser.findFirst({
     where: { email: "terren@ishmt.gov.al" },

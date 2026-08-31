@@ -20,6 +20,7 @@ import {
   REPORT_PRIORITY_CLASS,
   REPORT_PRIORITY_LABELS,
 } from "@/lib/registration/report-labels";
+import { formatCitizenReportLocationDisplay } from "@/lib/ishmt/citizen-report-location";
 
 export default async function CitizenReportDetailPage({
   params,
@@ -68,10 +69,12 @@ export default async function CitizenReportDetailPage({
         })
       : [];
 
+  const location = formatCitizenReportLocationDisplay(report);
+
   return (
     <AppShell title="Raporti i qytetarit">
       <StandardPageLayout
-        eyebrow="ISHMT · Raportime publike"
+        eyebrow="IQMT · Raportime publike"
         title={report.reportNumber}
         description={CITIZEN_REPORT_TYPE_LABELS[report.type]}
         actions={
@@ -107,7 +110,34 @@ export default async function CitizenReportDetailPage({
                 ),
               },
               { label: "Bashkia", value: report.municipality?.nameSq ?? "-" },
-              { label: "Vendndodhja", value: report.locationAddress ?? "-" },
+              {
+                label: "Vendndodhja",
+                value:
+                  location.placeName && location.mapsUrl ? (
+                    <span className="space-y-1">
+                      <span className="block">{location.placeName}</span>
+                      <Link
+                        href={location.mapsUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-primary hover:underline"
+                      >
+                        Shiko në hartë
+                      </Link>
+                    </span>
+                  ) : location.mapsUrl ? (
+                    <Link
+                      href={location.mapsUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-primary hover:underline"
+                    >
+                      Shiko në hartë
+                    </Link>
+                  ) : (
+                    location.text
+                  ),
+              },
               {
                 label: "Inspektori i caktuar",
                 value: hasAssignedInspector && report.assignedInspector
@@ -138,13 +168,13 @@ export default async function CitizenReportDetailPage({
           />
         </SectionCard>
 
-        <SectionCard title="Kontakti i raportuesit" subtitle="Të dhënat e kontaktit (nëse janë dhënë)" padded>
+        <SectionCard title="Kontakti i raportuesit" subtitle="Të dhënat e kontaktit" padded>
           <DataSheet
             columns={2}
             items={[
-              { label: "Emri", value: report.reporterName ?? "Anonim" },
-              { label: "Email", value: report.reporterEmail ?? "-" },
+              { label: "Emri dhe mbiemri", value: report.reporterName ?? "-" },
               { label: "Telefoni", value: report.reporterPhone ?? "-" },
+              { label: "Email", value: report.reporterEmail ?? "-" },
             ]}
           />
         </SectionCard>

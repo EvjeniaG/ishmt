@@ -11,13 +11,23 @@ import { db } from "@/lib/db";
 import { ApplicationService } from "@/lib/services/application-service";
 import type { AuthContext } from "@/lib/permissions/guards";
 import { ROLE_CODES } from "@/lib/constants/roles";
-import { registrationPhasePath, resolveRegistrationPhase, POST_CERTIFIER_WORK_STATUSES, CERTIFIER_IN_PROGRESS_STATUSES, CERTIFIER_AWAITING_START_STATUSES, CERTIFIER_ACTIVE_WORK_STATUSES } from "@/lib/registration/phase-router";
+import { hasServiceCapability } from "@/lib/organizations/org-capabilities";
+import { registrationPhasePath, resolveRegistrationPhase, buildRegistrationPhaseInput, POST_CERTIFIER_WORK_STATUSES, CERTIFIER_IN_PROGRESS_STATUSES, CERTIFIER_AWAITING_START_STATUSES, CERTIFIER_ACTIVE_WORK_STATUSES } from "@/lib/registration/phase-router";
 import { applicationReturnedToRoleWhere } from "@/lib/workflows/return-targets";
+import { isDelegationRevokedForOrg } from "@/lib/delegation/delegation-revoked";
+import { stakeholderRequiresApplicationAction } from "@/lib/applications/stakeholder-required-action";
 
 function certifierAppWhere(orgId: string) {
   return {
     deletedAt: null,
-    certifierOrgId: orgId,
+    OR: [
+      { certifierOrgId: orgId },
+      {
+        delegations: {
+          some: { organizationId: orgId, accessType: DelegationType.CERTIFIER },
+        },
+      },
+    ],
     status: {
       notIn: [
         ApplicationStatus.DRAFT,
@@ -35,17 +45,27 @@ function taskHref(app: {
   returnToRole?: ReturnTargetRole | null;
   installerOrgId?: string | null;
   certifierOrgId?: string | null;
+  delegations?: {
+    accessType: DelegationType;
+    organizationId: string;
+    status: DelegationStatus;
+    expiresAt?: Date | null;
+  }[];
+  data?: { registrationExtendedData?: unknown } | null;
 }) {
   if (app.type === "NEW_REGISTRATION") {
-    return registrationPhasePath(app.id, resolveRegistrationPhase(app, ROLE_CODES.CERTIFIER));
+    return registrationPhasePath(
+      app.id,
+      resolveRegistrationPhase(buildRegistrationPhaseInput(app), ROLE_CODES.CERTIFIER),
+    );
   }
   return `/portal/applications/${app.id}`;
 }
 
 export class CertifierDashboardService {
   static async getDashboard(ctx: AuthContext) {
-    if (ctx.roleCode !== ROLE_CODES.CERTIFIER) {
-      throw new Error("Vetëm certifikuesi / OMI mund të shohë këtë panel.");
+    if (!hasServiceCapability(ctx, "om")) {
+      throw new Error("Vetëm certifikuesi / OM mund të shohë këtë panel.");
     }
 
     const orgId = ctx.activeOrgId;
@@ -86,8 +106,7 @@ export class CertifierDashboardService {
       }),
       db.application.count({
         where: {
-          ...baseWhere,
-          ...applicationReturnedToRoleWhere(ReturnTargetRole.CERTIFIER),
+          AND: [baseWhere, applicationReturnedToRoleWhere(ReturnTargetRole.CERTIFIER)],
         },
       }),
       db.application.count({
@@ -98,20 +117,24 @@ export class CertifierDashboardService {
       }),
       db.application.findMany({
         where: {
-          ...baseWhere,
-          OR: [
+          AND: [
+            baseWhere,
             {
-              delegations: {
-                some: {
-                  organizationId: orgId,
-                  accessType: DelegationType.CERTIFIER,
-                  status: { in: [DelegationStatus.INVITED, DelegationStatus.PENDING] },
+              OR: [
+                {
+                  delegations: {
+                    some: {
+                      organizationId: orgId,
+                      accessType: DelegationType.CERTIFIER,
+                      status: { in: [DelegationStatus.INVITED, DelegationStatus.PENDING] },
+                    },
+                  },
                 },
-              },
-            },
-            applicationReturnedToRoleWhere(ReturnTargetRole.CERTIFIER),
-            {
-              status: { in: CERTIFIER_IN_PROGRESS_STATUSES },
+                applicationReturnedToRoleWhere(ReturnTargetRole.CERTIFIER),
+                {
+                  status: { in: CERTIFIER_IN_PROGRESS_STATUSES },
+                },
+              ],
             },
           ],
         },
@@ -119,7 +142,10 @@ export class CertifierDashboardService {
           data: { include: { municipality: true } },
           ownerOrg: true,
           installerOrg: true,
-          delegations: { where: { organizationId: orgId, accessType: DelegationType.CERTIFIER } },
+          delegations: {
+            where: { organizationId: orgId, accessType: DelegationType.CERTIFIER },
+            include: { organization: { select: { name: true } } },
+          },
         },
         orderBy: { updatedAt: "desc" },
         take: 12,
@@ -130,6 +156,10 @@ export class CertifierDashboardService {
           data: { include: { municipality: true } },
           ownerOrg: true,
           installerOrg: true,
+          delegations: {
+            where: { organizationId: orgId, accessType: DelegationType.CERTIFIER },
+            include: { organization: { select: { name: true } } },
+          },
         },
         orderBy: { updatedAt: "desc" },
         take: 8,
@@ -207,17 +237,51 @@ export class CertifierDashboardService {
         status: "PENDING_CONTRACT" as const,
         type: "PERIODIC_INSPECTION" as const,
         dueDate: c.endDate,
-        href: c.elevatorId
-          ? `/portal/elevators/${c.elevatorId}?tab=inspections`
-          : "/portal/omi/inspektim-periodik",
+        href: `/portal/omi/kontratat-kontrolli?contract=${c.id}`,
         actionLabel: "Ngarko kontratën dhe prano",
         severity: "warning" as const,
       })),
-      ...actionApps.map((app) => {
+      ...actionApps
+        .filter((app) => ApplicationService.canAccess(ctx, app))
+        .filter((app) =>
+          stakeholderRequiresApplicationAction(
+            {
+              id: app.id,
+              type: app.type,
+              status: app.status,
+              returnToRole: app.returnToRole,
+              returnToRoles: app.returnToRoles,
+              installerOrgId: app.installerOrgId,
+              certifierOrgId: app.certifierOrgId,
+              delegations: app.delegations,
+              registrationExtendedData: app.data?.registrationExtendedData,
+            },
+            ROLE_CODES.CERTIFIER,
+            orgId,
+          ),
+        )
+        .map((app) => {
       const delegation = app.delegations[0];
       const isInvite =
         delegation?.status === DelegationStatus.INVITED ||
         delegation?.status === DelegationStatus.PENDING;
+      const actionLabel = isInvite
+        ? "Prano ftesën"
+        : ApplicationService.getNextRequiredAction(
+            {
+              id: app.id,
+              type: app.type,
+              status: app.status,
+              returnToRole: app.returnToRole,
+              returnToRoles: app.returnToRoles,
+              installerOrgId: app.installerOrgId,
+              certifierOrgId: app.certifierOrgId,
+              delegations: app.delegations,
+              registrationExtendedData: app.data?.registrationExtendedData,
+            },
+            ROLE_CODES.CERTIFIER,
+            orgId,
+          );
       return {
         id: app.id,
         applicationNumber: app.applicationNumber,
@@ -227,10 +291,8 @@ export class CertifierDashboardService {
         type: app.type,
         dueDate: delegation?.expiresAt ?? null,
         href: isInvite ? `/portal/applications/${app.id}` : taskHref(app),
-        actionLabel: isInvite ? "Prano ftesën" : "Plotëso certifikimin",
-        severity: (isInvite || app.status === ApplicationStatus.RETURNED
-          ? "warning"
-          : "info") as "info" | "warning" | "danger",
+        actionLabel,
+        severity: "warning" as const,
       };
       }),
     ].slice(0, 15);
@@ -279,7 +341,7 @@ export class CertifierDashboardService {
           subtitle:
             inspectionPending > 0
               ? `${inspectionPending} kontrata në pritje · ${activeInspectionContracts} aktive`
-              : `${activeInspectionContracts} kontrata aktive OMI`,
+              : `${activeInspectionContracts} kontrata aktive OM`,
         },
       },
       requiredActions,
@@ -291,14 +353,29 @@ export class CertifierDashboardService {
         address: app.data?.buildingAddress ?? "-",
         status: app.status,
         type: app.type,
-        nextAction: ApplicationService.getNextRequiredAction(app, ROLE_CODES.CERTIFIER),
+        delegationRevoked: isDelegationRevokedForOrg(app.delegations, ROLE_CODES.CERTIFIER, orgId, app),
+        nextAction: ApplicationService.getNextRequiredAction(
+          {
+            id: app.id,
+            type: app.type,
+            status: app.status,
+            returnToRole: app.returnToRole,
+            returnToRoles: app.returnToRoles,
+            installerOrgId: app.installerOrgId,
+            certifierOrgId: app.certifierOrgId,
+            delegations: app.delegations,
+            registrationExtendedData: app.data?.registrationExtendedData,
+          },
+          ROLE_CODES.CERTIFIER,
+          orgId,
+        ),
         href: taskHref(app),
       })),
     };
   }
 
   static async listCertificationTasks(ctx: AuthContext) {
-    if (ctx.roleCode !== ROLE_CODES.CERTIFIER) throw new Error("Leje e refuzuar.");
+    if (!hasServiceCapability(ctx, "om")) throw new Error("Leje e refuzuar.");
     const orgId = ctx.activeOrgId;
     return db.application.findMany({
       where: certifierAppWhere(orgId),

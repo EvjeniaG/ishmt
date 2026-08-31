@@ -2,7 +2,6 @@
 
 import {
   ApplicationElevatorSummary,
-  ApplicationReturnBanner,
   ApplicationWorkflowLayout,
   ApplicationWorkflowSection,
   type WorkflowStep,
@@ -25,6 +24,7 @@ export function CorrectionApplicationView({
   elevatorDefaults,
   existingChanges,
   excludeElevatorId,
+  suggestedFieldValues,
 }: {
   applicationId: string;
   status: ApplicationStatus;
@@ -37,6 +37,7 @@ export function CorrectionApplicationView({
   elevatorDefaults: ElevatorDefaults;
   existingChanges: unknown[];
   excludeElevatorId: string;
+  suggestedFieldValues?: Record<string, string | undefined>;
 }) {
   const hasChanges = existingChanges.length > 0;
   const editable = status === ApplicationStatus.DRAFT || status === ApplicationStatus.RETURNED;
@@ -49,8 +50,6 @@ export function CorrectionApplicationView({
 
   return (
     <ApplicationWorkflowLayout steps={steps}>
-      <ApplicationReturnBanner returnReason={returnReason} requiredCorrection={requiredCorrection} />
-
       <ApplicationWorkflowSection title="Ashensori">
         <ApplicationElevatorSummary
           registryNumber={elevatorRegistry}
@@ -79,6 +78,7 @@ export function CorrectionApplicationView({
             excludeElevatorId={excludeElevatorId}
             elevatorDefaults={elevatorDefaults}
             existingChanges={existingChanges as never[]}
+            suggestedValues={suggestedFieldValues}
           />
           {hasChanges && (
             <p className="mt-4 text-sm text-muted-foreground">

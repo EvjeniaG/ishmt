@@ -1,11 +1,10 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { useRouter } from "@/lib/navigation/use-app-router";
 import { useState } from "react";
 import { AssetGenerationStatus } from "@prisma/client";
 import { retryAssetGenerationAction } from "@/lib/actions/application-actions";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 const STATUS_LABELS: Record<AssetGenerationStatus, string> = {
   PENDING: "Në pritje",
@@ -44,22 +43,24 @@ export function AssetGenerationStatusCard({
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Gjenerimi i dokumenteve</CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-3 text-sm">
-        <p>
-          <strong>Statusi:</strong> {STATUS_LABELS[status]}
-        </p>
-        {error && <p className="text-red-600">{error}</p>}
-        {retryError && <p className="text-red-600">{retryError}</p>}
+    <section className="workflow-section">
+      <div className="workflow-section-header">
+        <h2 className="workflow-section-title">Gjenerimi i dokumenteve</h2>
+        <p className="workflow-section-desc">Certifikata dhe QR pas miratimit final</p>
+      </div>
+      <div className="workflow-section-body space-y-3 text-sm">
+        <div className="workflow-data-cell">
+          <p className="workflow-data-label">Statusi</p>
+          <p className="workflow-data-value">{STATUS_LABELS[status]}</p>
+        </div>
+        {error && <p className="text-sm text-destructive">{error}</p>}
+        {retryError && <p className="text-sm text-destructive">{retryError}</p>}
         {status === AssetGenerationStatus.FAILED && (
           <Button type="button" onClick={onRetry} disabled={retrying}>
             {retrying ? "Duke riprovuar..." : "Riprovo gjenerimin"}
           </Button>
         )}
-      </CardContent>
-    </Card>
+      </div>
+    </section>
   );
 }

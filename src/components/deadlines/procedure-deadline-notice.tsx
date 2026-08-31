@@ -11,9 +11,9 @@ export function ProcedureDeadlineNotice({
   if (!submittedAt) return null;
 
   const ownerText =
-    "Aplikimi u protokollua. ISHMT ka afat ligjor prej 10 ditëve pune për shqyrtim dhe përgjigje.";
+    "Aplikimi u protokollua. IQMT ka afat ligjor prej 10 ditëve pune për shqyrtim dhe përgjigje.";
   const ishmtText =
-    "Afati maksimal i procedurës: 10 ditë pune nga protokollimi i kërkesës së plotë (Udhëzim ISHMT).";
+    "Afati maksimal i procedurës: 10 ditë pune nga protokollimi i kërkesës së plotë (Udhëzim IQMT).";
 
   return (
     <div className="workflow-notice workflow-notice-waiting flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-muted/30 px-4 py-3">

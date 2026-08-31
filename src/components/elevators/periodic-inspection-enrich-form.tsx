@@ -1,6 +1,6 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { useRouter } from "@/lib/navigation/use-app-router";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -60,7 +60,7 @@ export function PeriodicInspectionEnrichForm({
 
   return (
     <form onSubmit={onSubmit} className="mt-3 space-y-3 rounded-md border border-dashed border-gov-primary/40 bg-gov-primary/5 p-3">
-      <p className="text-xs font-medium text-foreground">OMI - plotësoni raportin dhe dokumentin</p>
+      <p className="text-xs font-medium text-foreground">OM - plotësoni raportin dhe dokumentin</p>
       <div className="grid gap-3 sm:grid-cols-2">
         <div className="space-y-1">
           <Label htmlFor={`omi-${inspectionId}`} className="text-xs">

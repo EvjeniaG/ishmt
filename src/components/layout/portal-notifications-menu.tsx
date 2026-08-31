@@ -1,11 +1,9 @@
 "use client";
 
-import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter } from "@/lib/navigation/use-app-router";
 import { useEffect, useRef, useState } from "react";
 import { Bell } from "lucide-react";
-import { markAllNotificationsReadAction } from "@/lib/actions/notification-actions";
-import { getNotificationHref } from "@/lib/notifications/get-notification-href";
+import { markAllNotificationsReadAction, markNotificationReadAction } from "@/lib/actions/notification-actions";
 
 export type HeaderNotification = {
   id: string;
@@ -13,8 +11,7 @@ export type HeaderNotification = {
   body: string;
   createdAt: string;
   readAt: string | null;
-  entityType: string | null;
-  entityId: string | null;
+  href: string | null;
 };
 
 export function PortalNotificationsMenu({
@@ -29,11 +26,38 @@ export function PortalNotificationsMenu({
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [unreadCount, setUnreadCount] = useState(initialUnreadCount);
+  const [readLocally, setReadLocally] = useState<Set<string>>(() => new Set());
   const rootRef = useRef<HTMLDivElement>(null);
+  const markingAllRef = useRef(false);
 
   useEffect(() => {
     setUnreadCount(initialUnreadCount);
   }, [initialUnreadCount]);
+
+  async function markAllUnreadOnPanelOpen() {
+    if (markingAllRef.current || unreadCount <= 0) return;
+    markingAllRef.current = true;
+    const previousCount = unreadCount;
+    setUnreadCount(0);
+    setReadLocally(new Set(notifications.map((n) => n.id)));
+    const result = await markAllNotificationsReadAction();
+    markingAllRef.current = false;
+    if (!result.success) {
+      setUnreadCount(previousCount);
+      setReadLocally(new Set());
+      return;
+    }
+    router.refresh();
+  }
+
+  function onBellClick() {
+    if (open) {
+      setOpen(false);
+      return;
+    }
+    setOpen(true);
+    void markAllUnreadOnPanelOpen();
+  }
 
   useEffect(() => {
     function onPointerDown(event: MouseEvent) {
@@ -54,22 +78,42 @@ export function PortalNotificationsMenu({
     };
   }, [open]);
 
-  async function toggleOpen() {
-    const willOpen = !open;
-    setOpen(willOpen);
-
-    if (willOpen && unreadCount > 0) {
-      setUnreadCount(0);
-      await markAllNotificationsReadAction();
-      router.refresh();
+  async function markReadIfNeeded(notificationId: string, readAt: string | null) {
+    if (readAt || readLocally.has(notificationId)) return false;
+    setReadLocally((prev) => new Set(prev).add(notificationId));
+    setUnreadCount((count) => Math.max(0, count - 1));
+    const result = await markNotificationReadAction(notificationId);
+    if (!result.success) {
+      setReadLocally((prev) => {
+        const next = new Set(prev);
+        next.delete(notificationId);
+        return next;
+      });
+      setUnreadCount((count) => count + 1);
+      return false;
     }
+    return true;
+  }
+
+  async function onNotificationClick(notification: HeaderNotification) {
+    setOpen(false);
+    await markReadIfNeeded(notification.id, notification.readAt);
+    if (notification.href) router.push(notification.href);
+    else router.push(notificationsHref);
+    router.refresh();
+  }
+
+  async function onViewAllClick() {
+    setOpen(false);
+    router.push(notificationsHref);
+    router.refresh();
   }
 
   return (
     <div ref={rootRef} className="relative">
       <button
         type="button"
-        onClick={toggleOpen}
+        onClick={onBellClick}
         className="relative flex h-10 w-10 items-center justify-center rounded-xl bg-white/10 ring-1 ring-white/10 transition-colors hover:bg-white/15"
         title="Njoftimet"
         aria-expanded={open}
@@ -101,40 +145,34 @@ export function PortalNotificationsMenu({
               </p>
             ) : (
               <ul className="divide-y divide-border/70">
-                {notifications.map((n) => {
-                  const href = getNotificationHref(n.entityType, n.entityId, notificationsHref);
-                  return (
-                    <li key={n.id}>
-                      {href ? (
-                        <Link
-                          href={href}
-                          role="menuitem"
-                          onClick={() => setOpen(false)}
-                          className="block px-4 py-3 transition-colors hover:bg-gov-primary/[0.06]"
-                        >
-                          <NotificationRow notification={n} />
-                        </Link>
-                      ) : (
-                        <div role="menuitem" className="px-4 py-3">
-                          <NotificationRow notification={n} />
-                        </div>
-                      )}
-                    </li>
-                  );
-                })}
+                {notifications.map((n) => (
+                  <li key={n.id}>
+                    <button
+                      type="button"
+                      role="menuitem"
+                      onClick={() => void onNotificationClick(n)}
+                      className="block w-full px-4 py-3 text-left transition-colors hover:bg-gov-primary/[0.06]"
+                    >
+                      <NotificationRow
+                        notification={n}
+                        readLocally={readLocally.has(n.id)}
+                      />
+                    </button>
+                  </li>
+                ))}
               </ul>
             )}
           </div>
 
           <div className="border-t border-border/80 bg-gov-surface/40 p-2">
-            <Link
-              href={notificationsHref}
+            <button
+              type="button"
               role="menuitem"
-              onClick={() => setOpen(false)}
-              className="block rounded-lg px-3 py-2.5 text-center text-sm font-medium text-gov-primary transition-colors hover:bg-gov-primary/[0.06]"
+              onClick={() => void onViewAllClick()}
+              className="block w-full rounded-lg px-3 py-2.5 text-center text-sm font-medium text-gov-primary transition-colors hover:bg-gov-primary/[0.06]"
             >
               Shiko të gjitha
-            </Link>
+            </button>
           </div>
         </div>
       )}
@@ -142,10 +180,22 @@ export function PortalNotificationsMenu({
   );
 }
 
-function NotificationRow({ notification: n }: { notification: HeaderNotification }) {
+function NotificationRow({
+  notification: n,
+  readLocally,
+}: {
+  notification: HeaderNotification;
+  readLocally: boolean;
+}) {
+  const showUnread = !n.readAt && !readLocally;
   return (
     <>
-      <p className="line-clamp-1 text-sm font-medium text-foreground">{n.title}</p>
+      <p className="line-clamp-1 text-sm font-medium text-foreground">
+        {showUnread && (
+          <span className="mr-1.5 inline-block h-1.5 w-1.5 rounded-full bg-gov-danger align-middle" aria-hidden />
+        )}
+        {n.title}
+      </p>
       <p className="mt-0.5 line-clamp-2 text-xs leading-relaxed text-muted-foreground">{n.body}</p>
       <p className="mt-1 text-[11px] text-muted-foreground/80">
         {new Date(n.createdAt).toLocaleString("sq-AL")}

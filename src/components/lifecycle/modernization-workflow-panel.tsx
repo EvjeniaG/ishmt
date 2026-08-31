@@ -1,23 +1,28 @@
 "use client";
 
-import { ApplicationStatus, ApplicationType } from "@prisma/client";
+import { ApplicationStatus, ApplicationType, DelegationStatus } from "@prisma/client";
 import {
   AssignCertifierFormWrapper,
   AssignInstallerFormWrapper,
 } from "@/components/owner/owner-application-forms";
 import { ModernizationForm } from "@/components/lifecycle/modernization-form";
+import type { SelectableRegistryCompany } from "@/lib/organizations/registry-company-display";
 import {
-  ApplicationReturnBanner,
   ApplicationWorkflowLayout,
   ApplicationWorkflowSection,
   type WorkflowStep,
 } from "@/components/applications/application-workflow-layout";
 import { ApplicationDemoButton } from "@/components/demo/application-demo-button";
+import { RegistrationWaitingPanel } from "@/components/registration/registration-waiting-panel";
+import {
+  revokeCertifierDelegationAction,
+  revokeInstallerDelegationAction,
+} from "@/lib/actions/delegation-actions";
 import { MODERNIZATION_TYPE_LABELS } from "@/lib/constants/lifecycle-labels";
 import { SummaryField, SummaryGrid } from "@/components/registration/registration-ui";
 import type { ModernizationType } from "@prisma/client";
 
-type Company = { id: string; name: string };
+type Company = SelectableRegistryCompany;
 
 export function ModernizationWorkflowPanel({
   applicationId,
@@ -30,8 +35,9 @@ export function ModernizationWorkflowPanel({
   certifierName,
   hasInstaller,
   hasCertifier,
-  installers,
   certifiers,
+  installers,
+  installerOrgId,
 }: {
   applicationId: string;
   status: ApplicationStatus;
@@ -43,8 +49,9 @@ export function ModernizationWorkflowPanel({
   certifierName?: string | null;
   hasInstaller: boolean;
   hasCertifier: boolean;
-  installers: Company[];
   certifiers: Company[];
+  installers: Company[];
+  installerOrgId?: string | null;
 }) {
   const editable = status === ApplicationStatus.DRAFT || status === ApplicationStatus.RETURNED;
 
@@ -58,8 +65,6 @@ export function ModernizationWorkflowPanel({
 
   return (
     <ApplicationWorkflowLayout steps={steps}>
-      <ApplicationReturnBanner returnReason={returnReason} requiredCorrection={requiredCorrection} />
-
       {editable && !modernizationType && (
         <ApplicationWorkflowSection
           title="Të dhënat e modernizimit"
@@ -109,7 +114,17 @@ export function ModernizationWorkflowPanel({
         </ApplicationWorkflowSection>
       )}
 
-      {hasInstaller && (
+      {status === ApplicationStatus.PENDING_INSTALLER && hasInstaller && (
+        <ApplicationWorkflowSection title="Instaluesi">
+          <RegistrationWaitingPanel
+            companyName={installerName}
+            roleLabel="instaluesit"
+            onRevoke={(reason) => revokeInstallerDelegationAction(applicationId, reason)}
+          />
+        </ApplicationWorkflowSection>
+      )}
+
+      {hasInstaller && status !== ApplicationStatus.PENDING_INSTALLER && (
         <ApplicationWorkflowSection title="Instaluesi">
           <SummaryField label="Kompania" value={installerName} />
         </ApplicationWorkflowSection>
@@ -129,11 +144,25 @@ export function ModernizationWorkflowPanel({
             />
           }
         >
-          <AssignCertifierFormWrapper applicationId={applicationId} certifiers={certifiers} />
+          <AssignCertifierFormWrapper
+            applicationId={applicationId}
+            certifiers={certifiers}
+            installerOrgId={installerOrgId}
+          />
         </ApplicationWorkflowSection>
       )}
 
-      {hasCertifier && (
+      {status === ApplicationStatus.PENDING_CERTIFIER && hasCertifier && (
+        <ApplicationWorkflowSection title="Certifikuesi">
+          <RegistrationWaitingPanel
+            companyName={certifierName}
+            roleLabel="certifikuesit"
+            onRevoke={(reason) => revokeCertifierDelegationAction(applicationId, reason)}
+          />
+        </ApplicationWorkflowSection>
+      )}
+
+      {hasCertifier && status !== ApplicationStatus.PENDING_CERTIFIER && (
         <ApplicationWorkflowSection title="Certifikuesi">
           <SummaryField label="Kompania" value={certifierName} />
         </ApplicationWorkflowSection>

@@ -10,7 +10,7 @@ export type GuideStep = {
   description: string;
 };
 
-/** Rrjedha e plotë e regjistrimit fillestar (wizard + palët + ISHMT). */
+/** Rrjedha e plotë e regjistrimit fillestar (wizard + palët + IQMT). */
 export const NEW_REGISTRATION_FULL_FLOW: GuideStep[] = [
   ...OWNER_REGISTRATION_STEPS.map((s) => ({
     step: s.step,
@@ -33,26 +33,26 @@ export const NEW_REGISTRATION_FULL_FLOW: GuideStep[] = [
               : s.id === "certification-data"
                 ? "Certifikimi, numri OM, ekzaminimi, konformiteti dhe dokumentet e certifikuesit."
                 : s.id === "final-review"
-                  ? "Rishikim i dosjes, checklist dhe dërgim i aplikimit për rregjistrim te ISHMT."
+                  ? "Rishikim i dosjes, checklist dhe dërgim i aplikimit për rregjistrim te IQMT."
                   : s.label,
   })),
   {
     step: 7,
-    actor: "ISHMT - Kryeinspektor",
+    actor: "IQMT - Kryeinspektor",
     title: "Delegim dhe caktim inspektorësh",
     description:
       "Merr aplikimin, cakton numrin e inspektorëve dhe e delegon te drejtori i drejtorisë.",
   },
   {
     step: 8,
-    actor: "ISHMT - Drejtor → Përgjegjës → Inspektor(ët)",
+    actor: "IQMT - Drejtor → Përgjegjës → Inspektor(ët)",
     title: "Shqyrtim hierarkik me raporte",
     description:
       "Zinxhiri: drejtor delegon te përgjegjësi, përgjegjësi cakton inspektorët, secili dorëzon raportin e vet.",
   },
   {
     step: 9,
-    actor: "ISHMT - Kryeinspektor",
+    actor: "IQMT - Kryeinspektor",
     title: "Miratim final",
     description:
       "Pas raporteve të drejtorit, kryeinspektori miraton, refuzon ose kthen për korrigjim.",
@@ -101,16 +101,16 @@ export const ELEVATOR_DOSSIER_GUIDE = [
   {
     tab: "Mirëmbajtje",
     description:
-      "Kontratat e mirëmbajtjes dhe inspektimit periodik, regjistrat e ndërhyrjeve, raportet mujore.",
+      "Kontratat e mirëmbajtjes dhe të kontrollit periodik, regjistrat e ndërhyrjeve, raportet mujore.",
   },
   {
-    tab: "Inspektime",
+    tab: "Kontrolle",
     description:
-      "Historiku i inspektimeve fillestare, periodike dhe jashtëzakonshme; trupi OM, raportet, statusi kalues.",
+      "Historiku i kontrolleve fillestare, periodike dhe jashtëzakonshme; trupi OM, raportet, statusi kalues.",
   },
   {
     tab: "Historiku",
-    description: "Timeline i ngjarjeve: status, pronësi, aplikime, inspektime, mirëmbajtje.",
+    description: "Timeline i ngjarjeve: status, pronësi, aplikime, kontrolle periodike, mirëmbajtje.",
   },
   {
     tab: "Aplikime",
@@ -130,7 +130,7 @@ export const ROLE_PLAYBOOK = [
       "Ndryshim, përditësim, çregjistrim, modernizim, transferim pronësie",
       "Caktim instaluesi, certifikuesit dhe kompanisë së mirëmbajtjes",
       "Dosja e ashensorit, afatet, certifikatat, QR",
-      "Aplikim për rregjistrim te ISHMT",
+      "Aplikim për rregjistrim te IQMT",
     ],
   },
   {
@@ -149,12 +149,12 @@ export const ROLE_PLAYBOOK = [
     code: ROLE_CODES.CERTIFIER,
     label: ROLE_LABELS[ROLE_CODES.CERTIFIER],
     portal: "Portali i certifikuesit / OM",
-    summary: "Certifikon dhe menaxhon inspektimet periodike.",
+    summary: "Certifikon dhe menaxhon kontrollet periodike.",
     actions: [
       "Pranim/refuzim i ftesës",
       "Plotësim i certifikimit dhe konformitetit",
-      "Kontrata inspektimi periodik",
-      "Ngarkim raportesh për periodiket legacy (pa PDF historik)",
+      "Kontratat e kontrollit periodik",
+      "Ngarkim raportesh për kontrollet legacy (pa PDF historik)",
     ],
   },
   {
@@ -171,7 +171,7 @@ export const ROLE_PLAYBOOK = [
   {
     code: ROLE_CODES.SECTOR_HEAD,
     label: ROLE_LABELS[ROLE_CODES.SECTOR_HEAD],
-    portal: "Portali ISHMT",
+    portal: "Portali IQMT",
     summary: "Caktim inspektorësh dhe raport drejt drejtorit.",
     actions: [
       "Caktim inspektorësh për shqyrtim dosjeje",
@@ -183,7 +183,7 @@ export const ROLE_PLAYBOOK = [
   {
     code: ROLE_CODES.CHIEF_INSPECTOR,
     label: ROLE_LABELS[ROLE_CODES.CHIEF_INSPECTOR],
-    portal: "Portali ISHMT - Kryeinspektor",
+    portal: "Portali IQMT - Kryeinspektor",
     summary: "Vendimi final për regjistrimin dhe aplikimet.",
     actions: [
       "Miratim / refuzim / kthim aplikimesh",
@@ -194,21 +194,21 @@ export const ROLE_PLAYBOOK = [
   {
     code: ROLE_CODES.ISHMT_DIRECTOR,
     label: ROLE_LABELS[ROLE_CODES.ISHMT_DIRECTOR],
-    portal: "Portali ISHMT - Drejtor i Drejtorisë",
+    portal: "Portali IQMT - Drejtor i Drejtorisë",
     summary: "Delegim dhe raport drejt kryeinspektorit.",
     actions: ["Delegim te përgjegjësi sektori", "Raport dhe dërgim te kryeinspektori", "Caktim inspektimesh terreni"],
   },
   {
     code: ROLE_CODES.FIELD_INSPECTOR,
     label: ROLE_LABELS[ROLE_CODES.FIELD_INSPECTOR],
-    portal: "Portali ISHMT - Terren",
+    portal: "Portali IQMT - Terren",
     summary: "Verifikim fizik në objekt.",
     actions: ["Inspektime terreni të caktuara", "Regjistrim rezultati verifikimi"],
   },
   {
     code: ROLE_CODES.ADMIN,
     label: ROLE_LABELS[ROLE_CODES.ADMIN],
-    portal: "Administrimi ISHMT",
+    portal: "Administrimi IQMT",
     summary: "Menaxhim i sistemit.",
     actions: ["Përdorues, role, audit, konfigurime"],
   },
@@ -271,15 +271,15 @@ export const UX_HIGHLIGHTS = [
   },
   {
     title: "Afatet ligjore",
-    text: "Shfaqen afatet 10-ditore të shqyrtimit dhe detyrimet e mirëmbajtjes/inspektimit për personin përgjegjës.",
+    text: "Shfaqen afatet 10-ditore të shqyrtimit dhe detyrimet e mirëmbajtjes/kontrollit periodik për personin përgjegjës.",
   },
   {
     title: "Dosja digjitale",
-    text: "Pas regjistrimit, çdo ashensor ka dosje me skeda, timeline dhe historik inspektimesh.",
+    text: "Pas regjistrimit, çdo ashensor ka dosje me skeda, timeline dhe historik kontrollesh periodike.",
   },
   {
     title: "Regjistër legacy",
-    text: "Të dhënat historike nga regjistri i mëparshëm u ngarkuan nga sistemi; periodiket dhe inspektimet fillestare shfaqen pa përsëritje të panevojshme.",
+    text: "Të dhënat historike nga regjistri i mëparshëm u ngarkuan nga sistemi; kontrollet periodike dhe fillestare shfaqen pa përsëritje të panevojshme.",
   },
   {
     title: "Transparencë publike",

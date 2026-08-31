@@ -1,5 +1,9 @@
 import { redirect } from "next/navigation";
 import { AuthError, requireAuth, type AuthContext } from "@/lib/permissions/guards";
+import {
+  hasServiceCapability,
+  type ServiceCapability,
+} from "@/lib/organizations/org-capabilities";
 
 /**
  * Page-level auth guard for React Server Components.
@@ -27,4 +31,15 @@ export async function requireAuthForPage(): Promise<AuthContext> {
     }
     throw error;
   }
+}
+
+/** Faqe portali sipas funksionit të licencuar (instalim, mirëmbajtje, OM). */
+export async function requireServiceCapabilityForPage(
+  cap: ServiceCapability,
+): Promise<AuthContext> {
+  const ctx = await requireAuthForPage();
+  if (!hasServiceCapability(ctx, cap)) {
+    redirect("/unauthorized");
+  }
+  return ctx;
 }

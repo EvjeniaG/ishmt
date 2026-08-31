@@ -1,6 +1,6 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { useRouter } from "@/lib/navigation/use-app-router";
 import { useRef, useState } from "react";
 import { ORG_STATUS_LABELS } from "@/lib/constants/org-status";
 import { ProfileSectionHeader } from "@/components/account/profile-section-header";

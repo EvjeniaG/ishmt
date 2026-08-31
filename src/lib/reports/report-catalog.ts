@@ -96,8 +96,8 @@ const REPORT_DEFINITIONS: Record<ReportId, Omit<ReportDefinition, "id">> = {
     ],
   },
   inspections: {
-    label: "Inspektimet periodike",
-    description: "Inspektime të kryera nga OMI / certifikuesi",
+    label: "Kontrollet periodike",
+    description: "Kontrolle të kryera nga OM / certifikuesi",
     filters: [
       { key: "dateFrom", label: "Nga data", type: "date" },
       { key: "dateTo", label: "Deri më", type: "date" },
@@ -135,7 +135,7 @@ const REPORT_DEFINITIONS: Record<ReportId, Omit<ReportDefinition, "id">> = {
         type: "select",
         options: [
           { value: "INSTALLER", label: "Instaluese" },
-          { value: "CERTIFIER", label: "Certifikuese / OMI" },
+          { value: "CERTIFIER", label: "Certifikuese / OM" },
           { value: "MAINTENANCE", label: "Mirëmbajtje" },
         ],
       },

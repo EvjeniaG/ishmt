@@ -1,4 +1,6 @@
 import { ROLE_CODES, type RoleCode } from "@/lib/constants/roles";
+import { PERMISSIONS } from "@/lib/permissions/codes";
+import { roleHasPermission } from "@/lib/permissions/matrix";
 import {
   canApproveApplications,
   canReviewApplications,
@@ -47,7 +49,7 @@ export function getDashboardPathForRole(roleCode: RoleCode): string {
     case ROLE_CODES.SECTOR_HEAD:
       return "/ishmt/dashboard";
     case ROLE_CODES.FIELD_INSPECTOR:
-      return "/ishmt/my-field-inspections";
+      return "/ishmt/inspector/dashboard";
     case ROLE_CODES.DIRECTORATE:
       return "/directorate/dashboard";
     default:
@@ -66,6 +68,27 @@ export function getNotificationsPathForRole(roleCode: RoleCode): string {
   return "/portal/notifications";
 }
 
+/** Rruga e kërkimit në header sipas rolit. */
+export function getSearchPathForRole(roleCode: RoleCode): string | null {
+  if (
+    roleCode === ROLE_CODES.OWNER ||
+    roleCode === ROLE_CODES.INSTALLER ||
+    roleCode === ROLE_CODES.CERTIFIER
+  ) {
+    return "/portal/search";
+  }
+
+  if (
+    ISHMT_STAFF_ROLES.includes(roleCode) ||
+    roleCode === ROLE_CODES.DIRECTORATE ||
+    roleCode === ROLE_CODES.INSPECTOR
+  ) {
+    return "/ishmt/search";
+  }
+
+  return null;
+}
+
 export function isIshmtReviewRole(roleCode: RoleCode): boolean {
   return canReviewApplications(roleCode);
 }
@@ -76,4 +99,25 @@ export function isIshmtApproverRole(roleCode: RoleCode): boolean {
 
 export function isIshmtFieldRole(roleCode: RoleCode): boolean {
   return isFieldInspectorRole(roleCode);
+}
+
+/** Faqja e duhur e detyrave të inspektimit në terren sipas rolit. */
+export function getFieldInspectionTasksHref(
+  roleCode: RoleCode,
+  applicationId?: string,
+): string | null {
+  if (
+    isFieldInspectorRole(roleCode) &&
+    roleHasPermission(roleCode, PERMISSIONS.INSPECTIONS_FIELD_VIEW_OWN)
+  ) {
+    const base = "/ishmt/my-field-inspections";
+    return applicationId ? `${base}?applicationId=${applicationId}` : base;
+  }
+
+  if (roleHasPermission(roleCode, PERMISSIONS.INSPECTIONS_FIELD_VIEW_ALL)) {
+    const base = "/ishmt/field-inspections";
+    return applicationId ? `${base}?applicationId=${applicationId}` : base;
+  }
+
+  return null;
 }

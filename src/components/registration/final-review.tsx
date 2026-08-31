@@ -1,6 +1,6 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { useRouter } from "@/lib/navigation/use-app-router";
 import { useState } from "react";
 import { CheckCircle2, XCircle } from "lucide-react";
 import { submitRegistrationToIshmtAction } from "@/lib/actions/registration-actions";
@@ -85,7 +85,7 @@ export function RegistrationFinalReview({
         <CardContent className="pt-6">
           <label className="flex items-start gap-3 text-sm">
             <input type="checkbox" checked={confirmed} onChange={(e) => setConfirmed(e.target.checked)} className="mt-1" />
-            Konfirmoj se të dhënat e paraqitura në këtë aplikim janë të sakta dhe mbaj përgjegjësi për dorëzimin e tyre pranë ISHMT-së.
+            Konfirmoj se të dhënat e paraqitura në këtë aplikim janë të sakta dhe mbaj përgjegjësi për dorëzimin e tyre pranë IQMT-së.
           </label>
         </CardContent>
       </Card>
@@ -97,7 +97,7 @@ export function RegistrationFinalReview({
         disabled={!confirmed || !allOk}
         onClick={submit}
       >
-        Dërgo aplikimin tek ISHMT
+        Dërgo aplikimin tek IQMT
       </Button>
     </div>
   );

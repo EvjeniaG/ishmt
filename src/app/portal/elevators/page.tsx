@@ -15,6 +15,8 @@ import { roleHasPermission } from "@/lib/permissions/matrix";
 import { elevatorRowClassName } from "@/lib/utils/elevator-row-style";
 import { labelElevatorStatus } from "@/lib/constants/display-labels";
 import { ROLE_CODES } from "@/lib/constants/roles";
+import { hasServiceCapability } from "@/lib/organizations/org-capabilities";
+import { requireServiceCapabilityForPage } from "@/lib/auth/page-guards";
 
 export default async function OwnerElevatorsPage({
   searchParams,
@@ -32,8 +34,8 @@ export default async function OwnerElevatorsPage({
   const session = await getAuthSession();
   if (!session?.user) redirect("/auth/login");
 
-  if (session.user.roleCode === ROLE_CODES.MAINTENANCE) {
-    const ctx = await requireAuthForPage();
+  if (hasServiceCapability(session.user, "maintenance")) {
+    const ctx = await requireServiceCapabilityForPage("maintenance");
     const elevators = await MaintenanceWorkService.listAssignedElevators(ctx);
     return (
       <AppShell>
@@ -71,9 +73,19 @@ export default async function OwnerElevatorsPage({
                       <td>{e.contractNumber ?? "-"}</td>
                       <td>{e.contractExpiresInDays != null ? `${e.contractExpiresInDays} ditë` : "-"}</td>
                       <td className="whitespace-nowrap">
-                        <span className="inline-flex gap-3">
-                          <Link href="/portal/sherbimi/nderhyrje" className="text-gov-primary hover:underline">Ndërhyrje</Link>
-                          <Link href="/portal/sherbimi/raport-mujor" className="text-gov-primary hover:underline">Raport</Link>
+                        <span className="inline-flex flex-wrap gap-x-3 gap-y-1">
+                          <Link
+                            href={`/portal/elevators/${e.elevatorId}?tab=maintenance`}
+                            className="font-medium text-gov-primary hover:underline"
+                          >
+                            Dosja e plotë
+                          </Link>
+                          <Link href="/portal/sherbimi/nderhyrje" className="text-gov-primary hover:underline">
+                            Ndërhyrje
+                          </Link>
+                          <Link href="/portal/sherbimi/raport-mujor" className="text-gov-primary hover:underline">
+                            Raport
+                          </Link>
                         </span>
                       </td>
                     </tr>

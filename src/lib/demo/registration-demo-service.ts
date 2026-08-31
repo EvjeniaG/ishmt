@@ -1,4 +1,4 @@
-import { ApplicationStatus, ApplicationType, OrgType } from "@prisma/client";
+import { ApplicationStatus, ApplicationType } from "@prisma/client";
 import type { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { ApplicationService } from "@/lib/services/application-service";
@@ -14,6 +14,7 @@ import {
 } from "@/lib/demo/registration-demo-steps";
 import { buildNormalizedRegistrationExtended } from "@/lib/registration/anneks-codes";
 import { ROLE_CODES } from "@/lib/constants/roles";
+import { resolveDemoCertifierOrganization, resolveDemoInstallerOrganization } from "@/lib/demo/demo-seed-orgs";
 import type { AuthContext } from "@/lib/permissions/guards";
 
 function demoSerial(): string {
@@ -27,6 +28,8 @@ export type RegistrationDemoFillResult = {
   /** Zgjedh automatikisht organizatën në dropdown (pa e caktuar ende). */
   prefilledOrgField?: "installerOrgId" | "certifierOrgId";
   prefilledOrgId?: string;
+  /** Emri ose NIPT për formën e kërkimit të instaluesit. */
+  prefilledOrgQuery?: string;
 };
 
 export class RegistrationDemoService {
@@ -110,7 +113,7 @@ export class RegistrationDemoService {
         await db.applicationData.update({
           where: { applicationId },
           data: {
-            buildingName: "Godina Demo ISHMT",
+            buildingName: "Godina Demo IQMT",
             buildingAddress: "Rruga e Dibrës Nr. 15, Tiranë",
             municipalityId: municipality.id,
             legacyDistrictCode: municipality.legacyRegistryCode ?? municipality.code.slice(0, 2).toUpperCase(),
@@ -142,19 +145,17 @@ export class RegistrationDemoService {
         if (ctx.roleCode !== ROLE_CODES.OWNER) {
           throw new Error("Vetëm personi përgjegjës i ashensorit mund të zgjedhë instaluesin demo.");
         }
-        const installer = await db.organization.findFirst({
-          where: {
-            type: OrgType.INSTALLER,
-            status: { in: ["ACTIVE", "ACTIVE_AUTHORIZED"] },
-            deletedAt: null,
-          },
-          orderBy: { name: "asc" },
-        });
-        if (!installer) throw new Error("Nuk u gjet kompani instaluese - ekzekutoni seed-in.");
+        const installer = await resolveDemoInstallerOrganization();
+        if (!installer) {
+          throw new Error(
+            "Nuk u gjet kompani instaluese demo - ekzekutoni seed-demo (Ashensorë Pro, Lift Master ose Euro Ashensorë).",
+          );
+        }
         return {
           step,
           prefilledOrgField: "installerOrgId",
           prefilledOrgId: installer.id,
+          prefilledOrgQuery: installer.nipt ?? installer.name,
         };
       }
 
@@ -201,15 +202,12 @@ export class RegistrationDemoService {
         if (ctx.roleCode !== ROLE_CODES.OWNER) {
           throw new Error("Vetëm personi përgjegjës i ashensorit mund të zgjedhë certifikuesin demo.");
         }
-        const certifier = await db.organization.findFirst({
-          where: {
-            type: OrgType.CERTIFIER,
-            status: { in: ["ACTIVE", "ACTIVE_AUTHORIZED"] },
-            deletedAt: null,
-          },
-          orderBy: { name: "asc" },
-        });
-        if (!certifier) throw new Error("Nuk u gjet kompani certifikuese - ekzekutoni seed-in.");
+        const certifier = await resolveDemoCertifierOrganization();
+        if (!certifier) {
+          throw new Error(
+            "Nuk u gjet kompani certifikuese demo - ekzekutoni seed-demo (OM Certifikim, Inspekt OM ose Quality Lift).",
+          );
+        }
         return {
           step,
           prefilledOrgField: "certifierOrgId",
@@ -230,12 +228,12 @@ export class RegistrationDemoService {
           installationCertificateNumber: `DEMO-CERT-${today.getFullYear()}`,
           installationCertificateDate: certDate,
           certifierNotes: "Certifikim demo për testim.",
-          omiNumber: "OMI-DEMO-001",
+          omiNumber: "OM-DEMO-001",
           examinationType: "EKZAMINIM_I_PLOTE",
           examinationDate: examDate,
           conformityResult: "CONFORM",
           certificateReference: `REF-DEMO-${today.getFullYear()}`,
-          certifierTechnicalNotes: "Ashensor ekzistues - raport demo OMI.",
+          certifierTechnicalNotes: "Ashensor ekzistues - raport demo OM.",
         });
         return { step, refreshPage: true };
       }
@@ -255,21 +253,44 @@ export class RegistrationDemoService {
 
         const existingExt =
           (application.data?.registrationExtendedData as Record<string, unknown> | null) ?? {};
+        const existingTechnical =
+          (application.data?.additionalTechnical as Record<string, unknown> | null) ?? {};
         const legacyCode =
           municipality.legacyRegistryCode ?? municipality.code.slice(0, 2).toUpperCase();
+        const normalizedExtended = buildNormalizedRegistrationExtended(existingExt, {
+          buildingType: application.data?.buildingType,
+          usagePurpose: application.data?.usagePurpose,
+        });
 
         await db.applicationData.update({
           where: { applicationId },
           data: {
+            applicationDate: application.data?.applicationDate ?? today,
             legacyDistrictCode: application.data?.legacyDistrictCode ?? legacyCode,
             responsibleEntityIdentifier:
               application.data?.responsibleEntityIdentifier ?? owner.nipt ?? "L12345678A",
-            registrationExtendedData: buildNormalizedRegistrationExtended(existingExt, {
-              buildingType: application.data?.buildingType,
-              usagePurpose: application.data?.usagePurpose,
-            }) as Prisma.InputJsonValue,
+            registrationExtendedData: {
+              ...normalizedExtended,
+              elevatorInServiceDate:
+                normalizedExtended.elevatorInServiceDate ??
+                existingTechnical.installationDate ??
+                existingTechnical.commissioningDate ??
+                "2018-06-01",
+            } as Prisma.InputJsonValue,
           },
         });
+
+        const refreshed = await db.applicationData.findUnique({ where: { applicationId } });
+        const ownerPurposes = getRegistrationDocumentSpecsByPhase("owner", refreshed).map(
+          (s) => s.purpose,
+        );
+        await this.uploadMissingPurposes(
+          ctx,
+          applicationId,
+          ApplicationType.NEW_REGISTRATION,
+          ownerPurposes,
+          refreshed,
+        );
 
         return { step, refreshPage: true };
       }

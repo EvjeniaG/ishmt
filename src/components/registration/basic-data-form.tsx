@@ -1,19 +1,29 @@
 "use client";
 
-import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
+import { useRouter } from "@/lib/navigation/use-app-router";
+import { useState } from "react";
 import { FlaskConical } from "lucide-react";
+import { reverseGeocodePlaceAction } from "@/lib/actions/citizen-report-actions";
 import { saveRegistrationBasicDataAction } from "@/lib/actions/registration-actions";
+import { splitReverseGeocodeLabel } from "@/lib/geo/reverse-geocode";
+import { cn } from "@/lib/utils";
+import {
+  APPLICATION_OWNER_ENTITY_TYPES,
+  applicationOwnerEntityTypeLabel,
+  ownerRequiresNipt,
+  ownerSubjectNameRequired,
+} from "@/lib/registration/owner-entity-role";
+import type { OwnerProfileSnapshot } from "@/lib/registration/owner-registration-prefill";
+import { PROFILE_SECTION_TITLES } from "@/lib/registration/profile-sections";
 import {
   APPLICATION_SUBTYPE_LABELS,
-  ELEVATOR_CONDITION_LABELS,
-  IDENTIFIER_TYPE_LABELS,
   REGISTRATION_BUILDING_TYPE_LABELS,
   REGISTRATION_USAGE_PURPOSE_LABELS,
-  RESPONSIBLE_ENTITY_TYPE_LABELS,
 } from "@/lib/registration/labels";
 import { buildRegistrationBasicDataDummy } from "@/lib/demo/registration-basic-data-dummy";
 import { isDemoToolsEnabled } from "@/lib/demo/registration-demo-steps";
+import { inferElevatorConditionFromInServiceDate } from "@/lib/registration/registration-workflow-prefill";
 import { applyValuesToForm } from "@/lib/forms/apply-form-values";
 import { FormStep } from "@/components/shared/institutional";
 import {
@@ -35,7 +45,29 @@ type MunicipalityOption = {
   legacyRegistryCode?: string | null;
 };
 
-type AdminUnitOption = { id: string; nameSq: string };
+type BuildingAddressMode = "text" | "gps";
+type GpsCoords = { latitude: number; longitude: number };
+
+function mapsUrlForCoords(coords: GpsCoords) {
+  return `https://www.google.com/maps?q=${coords.latitude},${coords.longitude}`;
+}
+
+function ReadOnlyValue({ value }: { value?: string | null }) {
+  return (
+    <div className="rounded-lg border border-border/60 bg-muted/30 px-3 py-2 text-sm text-foreground">
+      {value?.trim() || "-"}
+    </div>
+  );
+}
+
+function SubFormSection({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div className="md:col-span-2 space-y-3 rounded-lg border border-border/70 bg-muted/15 p-4">
+      <p className="text-sm font-medium">{title}</p>
+      <RegistrationFieldGrid columns={2}>{children}</RegistrationFieldGrid>
+    </div>
+  );
+}
 
 function Field({ label, helper, children, required }: { label: string; helper?: string; children: React.ReactNode; required?: boolean }) {
   return (
@@ -50,15 +82,15 @@ function Field({ label, helper, children, required }: { label: string; helper?: 
 export function RegistrationBasicDataForm({
   applicationId,
   municipalities,
-  adminUnits,
   defaults,
+  layoutPlanSlot,
   documentsSlot,
   editMode = "wizard",
 }: {
   applicationId: string;
   municipalities: MunicipalityOption[];
-  adminUnits: AdminUnitOption[];
   defaults: Defaults;
+  layoutPlanSlot?: React.ReactNode;
   documentsSlot?: React.ReactNode;
   editMode?: "wizard" | "pre-submit";
 }) {
@@ -66,24 +98,130 @@ export function RegistrationBasicDataForm({
   const [error, setError] = useState<string | null>(null);
   const ext = (defaults.registrationExtendedData as Record<string, string> | null) ?? {};
 
-  const initialMunicipalityId = (defaults.municipalityId as string) ?? "";
+  const defaultApplicationSubtype =
+    ext.applicationSubtype === "ADDITIONAL" || ext.applicationSubtype === "FIRST"
+      ? ext.applicationSubtype
+      : "FIRST";
+  const defaultExistingRegisteredCount =
+    ext.existingRegisteredElevatorsCount != null
+      ? String(ext.existingRegisteredElevatorsCount)
+      : "";
+  const defaultInServiceDate =
+    (defaults.elevatorInServiceDate as string) ??
+    ext.elevatorInServiceDate ??
+    "";
+  const [applicationSubtype, setApplicationSubtype] = useState<"FIRST" | "ADDITIONAL">(
+    defaultApplicationSubtype,
+  );
+  const [usagePurposeCode, setUsagePurposeCode] = useState(ext.usagePurposeCode ?? "");
+  const [elevatorInServiceDate, setElevatorInServiceDate] = useState(defaultInServiceDate);
+  const [elevatorCondition, setElevatorCondition] = useState<"NEW" | "EXISTING" | "">(() => {
+    if (!defaultInServiceDate) return "";
+    const inferred = inferElevatorConditionFromInServiceDate(defaultInServiceDate);
+    if (inferred) return inferred;
+    const saved = ext.elevatorConditionType;
+    return saved === "NEW" || saved === "EXISTING" ? saved : "";
+  });
 
-  const NIPT_REGEX = /^[A-Z][0-9]{8}[A-Z]$/;
-  const [identifierType, setIdentifierType] = useState<string>(ext.responsibleIdentifierType ?? "NIPT");
-  const [identifier, setIdentifier] = useState<string>((defaults.responsibleEntityIdentifier as string) ?? "");
-  const [municipalityId, setMunicipalityId] = useState(initialMunicipalityId);
-  const [adminUnitId, setAdminUnitId] = useState((defaults.administrativeUnitId as string) ?? "");
-  const [adminUnitsList, setAdminUnitsList] = useState<AdminUnitOption[]>(adminUnits);
-  const [loadingUnits, setLoadingUnits] = useState(false);
+  function handleInServiceDateChange(value: string) {
+    setElevatorInServiceDate(value);
+    if (!value.trim()) {
+      setElevatorCondition("");
+      return;
+    }
+    const inferred = inferElevatorConditionFromInServiceDate(value);
+    if (inferred) setElevatorCondition(inferred);
+  }
+
+  const initialMunicipalityId = (defaults.municipalityId as string) ?? "";
+  const initialAdminUnitId = (defaults.administrativeUnitId as string) ?? "";
+
+  const ownerProfileSnapshot = defaults.ownerProfileSnapshot as OwnerProfileSnapshot | undefined;
+  const responsibleFromProfile = Boolean(ownerProfileSnapshot);
+  const initialEntityType = (ext.responsibleEntityType as string) || "ADMINISTRATOR";
+  const [responsibleEntityType] = useState(initialEntityType);
+  const [responsibleName] = useState((defaults.responsibleEntityName as string) ?? "");
+  const [identifier] = useState<string>((defaults.responsibleEntityIdentifier as string) ?? "");
+  const [responsiblePhone] = useState((defaults.responsibleEntityPhone as string) ?? "");
+  const [responsibleEmail] = useState((defaults.responsibleEntityEmail as string) ?? "");
+  const [representedBy] = useState((ext.representedBy as string) ?? "");
+  const isAdministrator = responsibleEntityType === "ADMINISTRATOR";
+  const isCompanySubject = ownerSubjectNameRequired(responsibleEntityType);
+  const usesNipt = ownerRequiresNipt(responsibleEntityType);
+  const responsibleIdentifierType = usesNipt ? "NIPT" : "NID";
   const [fillHint, setFillHint] = useState<string | null>(null);
   const showDemoTools = isDemoToolsEnabled();
-  const niptCheck =
-    identifierType === "NIPT" && identifier.trim().length > 0
-      ? NIPT_REGEX.test(identifier.trim().toUpperCase())
-      : null;
+  const defaultBuildingAddressMode =
+    (ext.buildingAddressMode as BuildingAddressMode | undefined) ??
+    (defaults.gpsLatitude != null && defaults.gpsLongitude != null ? "gps" : "text");
+  const [buildingAddressMode, setBuildingAddressMode] = useState<BuildingAddressMode>(defaultBuildingAddressMode);
+  const [buildingAddress, setBuildingAddress] = useState((defaults.buildingAddress as string) ?? "");
+  const [gpsCoords, setGpsCoords] = useState<GpsCoords | null>(() => {
+    const lat = defaults.gpsLatitude;
+    const lng = defaults.gpsLongitude;
+    if (lat == null || lng == null || lat === "" || lng === "") return null;
+    const latitude = Number(lat);
+    const longitude = Number(lng);
+    if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return null;
+    return { latitude, longitude };
+  });
+  const [gpsPlaceName, setGpsPlaceName] = useState<string | null>(
+    defaultBuildingAddressMode === "gps" ? ((defaults.buildingAddress as string) ?? null) : null,
+  );
+  const [gpsLoading, setGpsLoading] = useState(false);
+  const [gpsPlaceLoading, setGpsPlaceLoading] = useState(false);
+  const [gpsError, setGpsError] = useState<string | null>(null);
+
+  async function resolvePlaceName(coords: GpsCoords) {
+    setGpsPlaceLoading(true);
+    const placeName = await reverseGeocodePlaceAction(coords.latitude, coords.longitude);
+    setGpsPlaceName(placeName);
+    setGpsPlaceLoading(false);
+  }
+
+  function captureGps() {
+    if (!navigator.geolocation) {
+      setGpsError("Shfletuesi juaj nuk mbështet gjetjen e vendndodhjes.");
+      return;
+    }
+
+    setGpsLoading(true);
+    setGpsError(null);
+    setGpsCoords(null);
+    setGpsPlaceName(null);
+
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const coords = {
+          latitude: position.coords.latitude,
+          longitude: position.coords.longitude,
+        };
+        setGpsCoords(coords);
+        setGpsLoading(false);
+        void resolvePlaceName(coords);
+      },
+      (positionError) => {
+        setGpsLoading(false);
+        if (positionError.code === positionError.PERMISSION_DENIED) {
+          setGpsError("Lejoni aksesin te vendndodhja për të vazhduar.");
+        } else {
+          setGpsError("Nuk u lexua vendndodhja. Provoni përsëri ose shkruani adresën.");
+        }
+      },
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 },
+    );
+  }
 
   async function submit(saveAsDraft: boolean) {
     setError(null);
+    if (!elevatorInServiceDate.trim() || !elevatorCondition) {
+      setError("Plotësoni datën e instalimit të ashensorit për të përcaktuar nëse është i ri apo ekzistues.");
+      return;
+    }
+    if (buildingAddressMode === "gps" && !gpsCoords) {
+      setError("Përdorni vendndodhjen time ose shkruani adresën.");
+      return;
+    }
     const form = document.getElementById("reg-basic-form") as HTMLFormElement;
     const fd = new FormData(form);
     fd.set("saveAsDraft", saveAsDraft ? "true" : "false");
@@ -93,58 +231,6 @@ export function RegistrationBasicDataForm({
       return;
     }
     router.refresh();
-  }
-
-  const fetchAdminUnits = useCallback(async (munId: string, preferredUnitId?: string) => {
-    if (!munId) {
-      setAdminUnitsList([]);
-      setAdminUnitId("");
-      return [] as AdminUnitOption[];
-    }
-
-    setLoadingUnits(true);
-    try {
-      const res = await fetch(`/api/geo/administrative-units?municipalityId=${encodeURIComponent(munId)}`);
-      if (!res.ok) {
-        setAdminUnitsList([]);
-        setAdminUnitId("");
-        return [];
-      }
-      const data: unknown = await res.json();
-      const units = Array.isArray(data) ? (data as AdminUnitOption[]) : [];
-      setAdminUnitsList(units);
-      if (preferredUnitId && units.some((u) => u.id === preferredUnitId)) {
-        setAdminUnitId(preferredUnitId);
-      } else {
-        setAdminUnitId(units[0]?.id ?? "");
-      }
-      return units;
-    } catch {
-      setAdminUnitsList([]);
-      setAdminUnitId("");
-      return [];
-    } finally {
-      setLoadingUnits(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    if (!municipalityId) return;
-    if (adminUnitsList.length > 0) return;
-    void fetchAdminUnits(municipalityId, adminUnitId || undefined);
-  }, [municipalityId, adminUnitId, adminUnitsList.length, fetchAdminUnits]);
-
-  useEffect(() => {
-    if (adminUnitsList.length === 0 || !adminUnitId) return;
-    if (adminUnitsList.some((u) => u.id === adminUnitId)) return;
-    setAdminUnitId(adminUnitsList[0]?.id ?? "");
-  }, [adminUnitsList, adminUnitId]);
-
-  function handleMunicipalityChange(munId: string) {
-    setMunicipalityId(munId);
-    setAdminUnitsList([]);
-    setAdminUnitId("");
-    void fetchAdminUnits(munId);
   }
 
   async function fillWithDummyData() {
@@ -159,22 +245,30 @@ export function RegistrationBasicDataForm({
       ownerPhone: (defaults.responsibleEntityPhone as string) ?? undefined,
     });
 
-    setIdentifierType(dummy.responsibleIdentifierType);
-    setIdentifier(dummy.responsibleIdentifier);
-    setMunicipalityId(dummy.municipalityId);
+    setElevatorInServiceDate(dummy.elevatorInServiceDate);
+    setElevatorCondition(dummy.elevatorConditionType);
+    setApplicationSubtype(
+      dummy.applicationSubtype === "ADDITIONAL" ? "ADDITIONAL" : "FIRST",
+    );
+    setUsagePurposeCode(dummy.usagePurposeCode);
+    setBuildingAddressMode("text");
+    setBuildingAddress(dummy.buildingAddress);
+    setGpsCoords(null);
+    setGpsPlaceName(null);
+    setGpsError(null);
 
-    const units = await fetchAdminUnits(dummy.municipalityId);
-    const unitId = units[0]?.id ?? "";
-
-    applyValuesToForm(form, {
-      ...dummy,
-      administrativeUnitId: unitId,
-    });
+    applyValuesToForm(form, dummy);
     setFillHint("U plotësuan fushat demo. Kontrolloni dhe shtypni Ruaj ose Vazhdo.");
     setError(null);
   }
 
   const today = new Date().toISOString().slice(0, 10);
+  const hasSystemPrefill =
+    Boolean(defaults.responsibleEntityName) ||
+    Boolean(defaults.responsibleEntityIdentifier) ||
+    Boolean(ext.applicationSubtype) ||
+    Boolean(defaults.municipalityId) ||
+    Boolean(defaults.buildingAddress);
 
   return (
     <form id="reg-basic-form" className="space-y-2" onSubmit={(e) => e.preventDefault()}>
@@ -188,173 +282,503 @@ export function RegistrationBasicDataForm({
         </div>
       )}
 
-      <FormStep step={1} title="Aplikimi" description="Data, lloji i ashensorit dhe nënlloji i kërkesës.">
+      {hasSystemPrefill && (
+        <p className="mb-4 text-xs text-muted-foreground">
+          Disa fusha u plotësuan automatikisht nga sistemi.
+        </p>
+      )}
+
+      <FormStep step={1} title="Aplikimi">
+        <input
+          type="hidden"
+          name="applicationDate"
+          value={(defaults.applicationDate as string)?.slice(0, 10) ?? today}
+        />
         <RegistrationFieldGrid columns={2}>
-          <Field label="Data e aplikimit" required>
-            <Input name="applicationDate" type="date" defaultValue={(defaults.applicationDate as string)?.slice(0, 10) ?? today} required />
+          <Field label="Data e instalimit të ashensorit dhe vënies në shërbim" required>
+            <Input
+              name="elevatorInServiceDate"
+              type="date"
+              required
+              value={elevatorInServiceDate}
+              onChange={(e) => handleInServiceDateChange(e.target.value)}
+            />
           </Field>
-          <Field label="Ashensori është" required>
-            <div className="flex flex-wrap gap-4">
-              {Object.entries(ELEVATOR_CONDITION_LABELS).map(([v, l]) => (
-                <label key={v} className="flex items-center gap-2 text-sm">
-                  <input type="radio" name="elevatorConditionType" value={v} defaultChecked={ext.elevatorConditionType === v} required /> {l}
-                </label>
-              ))}
+
+          <div className="md:col-span-2 rounded-lg border border-border/70 bg-muted/20 p-4 space-y-3">
+            <div className="space-y-1">
+              <Label className="text-sm font-medium">Ashensori është *</Label>
+              <p className="text-xs text-muted-foreground">
+                Plotësohet vetë në varësi të datës së instalimit.
+              </p>
             </div>
-          </Field>
-          <div className="md:col-span-2 space-y-2">
-            <Label className="text-sm font-medium">Lloji i aplikimit *</Label>
-            {Object.entries(APPLICATION_SUBTYPE_LABELS).map(([v, l]) => (
-              <label key={v} className="flex items-center gap-2 text-sm">
-                <input type="radio" name="applicationSubtype" value={v} defaultChecked={ext.applicationSubtype === v} required /> {l}
-              </label>
-            ))}
+            <input type="hidden" name="elevatorConditionType" value={elevatorCondition} />
+            <div className="grid gap-2 sm:grid-cols-2">
+              {(
+                [
+                  {
+                    value: "NEW" as const,
+                    label: "I RI",
+                    description: "Instaluar nga 1 janar 2020 e në vazhdim",
+                  },
+                  {
+                    value: "EXISTING" as const,
+                    label: "EKZISTUES",
+                    description: "Instaluar para 31 dhjetor 2019",
+                  },
+                ] as const
+              ).map(({ value, label, description }) => {
+                const selected = elevatorCondition === value;
+                return (
+                  <div
+                    key={value}
+                    className={cn(
+                      "rounded-md border px-3 py-2.5 transition-colors",
+                      selected
+                        ? "border-gov-primary bg-gov-primary/10"
+                        : "border-border/70 bg-background/80 opacity-60",
+                    )}
+                  >
+                    <div className="flex items-center gap-2">
+                      <span
+                        className={cn(
+                          "flex h-4 w-4 shrink-0 items-center justify-center rounded-full border-2",
+                          selected ? "border-gov-primary" : "border-muted-foreground/40",
+                        )}
+                      >
+                        {selected ? <span className="h-2 w-2 rounded-full bg-gov-primary" /> : null}
+                      </span>
+                      <span
+                        className={cn(
+                          "text-sm font-medium",
+                          selected ? "text-gov-primary" : "text-foreground",
+                        )}
+                      >
+                        {label}
+                      </span>
+                    </div>
+                    <p
+                      className={cn(
+                        "mt-1.5 pl-6 text-xs",
+                        selected ? "text-gov-primary/90" : "text-muted-foreground",
+                      )}
+                    >
+                      {description}
+                    </p>
+                  </div>
+                );
+              })}
+            </div>
           </div>
-          <Field label="Ashensorë të regjistruar më parë" helper="Vetëm për aplikim shtesë">
-            <Input name="existingRegisteredElevatorsCount" type="number" min={0} defaultValue={ext.existingRegisteredElevatorsCount != null ? String(ext.existingRegisteredElevatorsCount) : undefined} />
-          </Field>
+
+          <div className="md:col-span-2 space-y-3">
+            <div className="space-y-1">
+              <Label className="text-sm font-medium">Lloji i aplikimit *</Label>
+              <p className="text-xs text-muted-foreground">
+                Merret automatikisht nga sistemi sipas regjistrit tuaj.
+              </p>
+            </div>
+            <input type="hidden" name="applicationSubtype" value={applicationSubtype} />
+            {applicationSubtype === "ADDITIONAL" && (
+              <input
+                type="hidden"
+                name="existingRegisteredElevatorsCount"
+                value={defaultExistingRegisteredCount}
+              />
+            )}
+            <div className="grid gap-2 sm:grid-cols-1">
+              {(
+                [
+                  {
+                    value: "FIRST" as const,
+                    label: APPLICATION_SUBTYPE_LABELS.FIRST,
+                    description: "Nuk keni ashensorë të r.",
+                  },
+                  {
+                    value: "ADDITIONAL" as const,
+                    label: APPLICATION_SUBTYPE_LABELS.ADDITIONAL,
+                    description: "Keni të paktën një ashensor të regjistruar më parë.",
+                  },
+                ] as const
+              ).map(({ value, label, description }) => {
+                const selected = applicationSubtype === value;
+                return (
+                  <div
+                    key={value}
+                    className={cn(
+                      "rounded-md border px-3 py-2.5 transition-colors",
+                      selected
+                        ? "border-gov-primary bg-gov-primary/10"
+                        : "border-border/70 bg-background/80 opacity-60",
+                    )}
+                  >
+                    <div className="flex items-center gap-2">
+                      <span
+                        className={cn(
+                          "flex h-4 w-4 shrink-0 items-center justify-center rounded-full border-2",
+                          selected ? "border-gov-primary" : "border-muted-foreground/40",
+                        )}
+                      >
+                        {selected ? <span className="h-2 w-2 rounded-full bg-gov-primary" /> : null}
+                      </span>
+                      <span
+                        className={cn(
+                          "text-sm font-medium",
+                          selected ? "text-gov-primary" : "text-foreground",
+                        )}
+                      >
+                        {label}
+                      </span>
+                    </div>
+                    <p
+                      className={cn(
+                        "mt-1.5 pl-6 text-xs",
+                        selected ? "text-gov-primary/90" : "text-muted-foreground",
+                      )}
+                    >
+                      {description}
+                    </p>
+                  </div>
+                );
+              })}
+            </div>
+            {applicationSubtype === "ADDITIONAL" && defaultExistingRegisteredCount && (
+              <div className="rounded-lg border border-border/60 bg-muted/30 px-3 py-2">
+                <p className="text-xs text-muted-foreground">Ashensorë të regjistruar më parë</p>
+                <p className="text-sm font-medium text-foreground">{defaultExistingRegisteredCount}</p>
+              </div>
+            )}
+          </div>
         </RegistrationFieldGrid>
       </FormStep>
 
-      <FormStep step={2} title="Personi përgjegjës i ashensorit" description="Kontakti dhe identifikimi i subjektit përgjegjës.">
-        <RegistrationFieldGrid columns={2}>
-          <Field label="Lloji i subjektit" required>
-            <RegistrationSelect name="responsibleEntityType" defaultValue={ext.responsibleEntityType ?? ""} required>
-              <option value="">Zgjidhni</option>
-              {Object.entries(RESPONSIBLE_ENTITY_TYPE_LABELS).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
-            </RegistrationSelect>
-          </Field>
-          <Field label="Emri" required>
-            <Input name="responsibleEntityName" defaultValue={defaults.responsibleEntityName as string ?? ""} required />
-          </Field>
-          <Field label="Lloji i identifikuesit" required>
-            <RegistrationSelect
-              name="responsibleIdentifierType"
-              value={identifierType}
-              onChange={(e) => setIdentifierType(e.target.value)}
-              required
-            >
-              {Object.entries(IDENTIFIER_TYPE_LABELS).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
-            </RegistrationSelect>
-          </Field>
-          <Field label="NID / NIPT" required helper={identifierType === "NIPT" ? "Format: K12345678L" : undefined}>
-            <Input
-              name="responsibleIdentifier"
-              value={identifier}
-              onChange={(e) => setIdentifier(e.target.value.toUpperCase())}
-              required
-              className={
-                niptCheck === true ? "border-green-500" : niptCheck === false ? "border-red-500" : undefined
-              }
-            />
-          </Field>
-          <Field label="Adresa" required>
-            <Input name="responsibleAddress" defaultValue={ext.responsibleAddress ?? ""} required />
-          </Field>
-          <Field label="Telefoni" required>
-            <Input name="responsiblePhone" defaultValue={defaults.responsibleEntityPhone as string ?? ""} required />
-          </Field>
-          <Field label="Email" required>
-            <Input name="responsibleEmail" type="email" defaultValue={defaults.responsibleEntityEmail as string ?? ""} required />
-          </Field>
-          <Field label="Përfaqësuar nga">
-            <Input name="representedBy" defaultValue={ext.representedBy ?? ""} />
-          </Field>
-          <Field label="Pozicioni">
-            <Input name="representativePosition" defaultValue={ext.representativePosition ?? ""} />
-          </Field>
-        </RegistrationFieldGrid>
+      <FormStep
+        step={2}
+        title="Personi përgjegjës i ashensorit"
+        description={
+          responsibleFromProfile ? undefined : "Kontakti dhe identifikimi i subjektit përgjegjës."
+        }
+      >
+        {responsibleFromProfile ? (
+          <>
+            <input type="hidden" name="responsibleEntityType" value={responsibleEntityType} />
+            <input type="hidden" name="responsibleEntityName" value={responsibleName} />
+            <input type="hidden" name="responsibleIdentifierType" value={responsibleIdentifierType} />
+            <input type="hidden" name="responsibleIdentifier" value={identifier} />
+            <input type="hidden" name="responsiblePhone" value={responsiblePhone} />
+            <input type="hidden" name="responsibleEmail" value={responsibleEmail} />
+            {!isAdministrator && <input type="hidden" name="representedBy" value={representedBy} />}
+
+            <p className="mb-4 text-xs text-muted-foreground">
+              Për ndryshime, shkoni te{" "}
+              <Link href="/portal/profile" className="font-medium text-gov-primary underline-offset-2 hover:underline">
+                Profili
+              </Link>
+              .
+            </p>
+
+            <RegistrationFieldGrid columns={2}>
+              {isCompanySubject ? (
+                <>
+                  <SubFormSection title={PROFILE_SECTION_TITLES.ownerSubject}>
+                    <Field label="Lloji i subjektit">
+                      <ReadOnlyValue value={applicationOwnerEntityTypeLabel(responsibleEntityType as typeof APPLICATION_OWNER_ENTITY_TYPES[number])} />
+                    </Field>
+                    <Field label="Emri i subjektit">
+                      <ReadOnlyValue value={responsibleName} />
+                    </Field>
+                    <Field label="NIPT">
+                      <ReadOnlyValue value={identifier} />
+                    </Field>
+                  </SubFormSection>
+
+                  <SubFormSection title={PROFILE_SECTION_TITLES.ownerContact}>
+                    <Field label="Emri">
+                      <ReadOnlyValue value={representedBy} />
+                    </Field>
+                    <Field label="Telefoni">
+                      <ReadOnlyValue value={responsiblePhone} />
+                    </Field>
+                    <Field label="Email">
+                      <ReadOnlyValue value={responsibleEmail} />
+                    </Field>
+                  </SubFormSection>
+                </>
+              ) : (
+                <>
+                  <Field label="Lloji i subjektit">
+                    <ReadOnlyValue value={applicationOwnerEntityTypeLabel(responsibleEntityType as typeof APPLICATION_OWNER_ENTITY_TYPES[number])} />
+                  </Field>
+                  <Field label="Emri">
+                    <ReadOnlyValue value={responsibleName} />
+                  </Field>
+                  <Field label="NID">
+                    <ReadOnlyValue value={identifier} />
+                  </Field>
+                  <Field label="Telefoni">
+                    <ReadOnlyValue value={responsiblePhone} />
+                  </Field>
+                  <Field label="Email">
+                    <ReadOnlyValue value={responsibleEmail} />
+                  </Field>
+                </>
+              )}
+            </RegistrationFieldGrid>
+          </>
+        ) : (
+          <RegistrationFieldGrid columns={2}>
+            {isCompanySubject ? (
+              <>
+                <SubFormSection title={PROFILE_SECTION_TITLES.ownerSubject}>
+                  <Field label="Lloji i subjektit" required>
+                    <RegistrationSelect name="responsibleEntityType" defaultValue={responsibleEntityType} required>
+                      {APPLICATION_OWNER_ENTITY_TYPES.map((value) => (
+                        <option key={value} value={value}>
+                          {applicationOwnerEntityTypeLabel(value)}
+                        </option>
+                      ))}
+                    </RegistrationSelect>
+                  </Field>
+                  <Field label="Emri i subjektit" required>
+                    <Input name="responsibleEntityName" defaultValue={responsibleName} required />
+                  </Field>
+                  <Field label="NIPT" required>
+                    <input type="hidden" name="responsibleIdentifierType" value="NIPT" />
+                    <Input name="responsibleIdentifier" defaultValue={identifier} required />
+                  </Field>
+                </SubFormSection>
+
+                <SubFormSection title={PROFILE_SECTION_TITLES.ownerContact}>
+                  <Field label="Emri" required>
+                    <Input name="representedBy" defaultValue={representedBy} required />
+                  </Field>
+                  <Field label="Telefoni" required>
+                    <Input name="responsiblePhone" defaultValue={responsiblePhone} required />
+                  </Field>
+                  <Field label="Email" required>
+                    <Input name="responsibleEmail" type="email" defaultValue={responsibleEmail} required />
+                  </Field>
+                </SubFormSection>
+              </>
+            ) : (
+              <>
+                <Field label="Lloji i subjektit" required>
+                  <RegistrationSelect name="responsibleEntityType" defaultValue={responsibleEntityType} required>
+                    {APPLICATION_OWNER_ENTITY_TYPES.map((value) => (
+                      <option key={value} value={value}>
+                        {applicationOwnerEntityTypeLabel(value)}
+                      </option>
+                    ))}
+                  </RegistrationSelect>
+                </Field>
+                <Field label="Emri" required>
+                  <Input name="responsibleEntityName" defaultValue={responsibleName} required />
+                </Field>
+                <Field label="NID" required>
+                  <input type="hidden" name="responsibleIdentifierType" value="NID" />
+                  <Input name="responsibleIdentifier" defaultValue={identifier} required />
+                </Field>
+                <Field label="Telefoni" required>
+                  <Input name="responsiblePhone" defaultValue={responsiblePhone} required />
+                </Field>
+                <Field label="Email" required>
+                  <Input name="responsibleEmail" type="email" defaultValue={responsibleEmail} required />
+                </Field>
+              </>
+            )}
+          </RegistrationFieldGrid>
+        )}
       </FormStep>
 
       <FormStep step={3} title="Godina" description="Vendndodhja e ashensorit në ndërtesë.">
+        <input type="hidden" name="buildingAddressMode" value={buildingAddressMode} />
+        <input type="hidden" name="gpsLatitude" value={gpsCoords?.latitude ?? ""} />
+        <input type="hidden" name="gpsLongitude" value={gpsCoords?.longitude ?? ""} />
+        <input type="hidden" name="municipalityId" value={initialMunicipalityId} />
+        <input type="hidden" name="administrativeUnitId" value={initialAdminUnitId} />
+
         <RegistrationFieldGrid columns={2}>
-          <Field label="Emri i godinës"><Input name="buildingName" defaultValue={defaults.buildingName as string ?? ""} /></Field>
-          <Field label="Adresa" required>
-            <Input name="buildingAddress" defaultValue={defaults.buildingAddress as string ?? ""} required />
+          <Field label="Emri i godinës">
+            <Input name="buildingName" defaultValue={defaults.buildingName as string ?? ""} />
           </Field>
-          <Field label="Bashkia" required>
-            <RegistrationSelect
-              name="municipalityId"
-              value={municipalityId}
-              onChange={(e) => handleMunicipalityChange(e.target.value)}
-              required
-            >
-              <option value="">Zgjidhni bashkinë</option>
-              {municipalityId && !municipalities.some((m) => m.id === municipalityId) && (
-                <option value={municipalityId}>Bashkia e ruajtur</option>
-              )}
-              {municipalities.map((m) => (
-                <option key={m.id} value={m.id}>{m.nameSq}</option>
-              ))}
-            </RegistrationSelect>
-          </Field>
-          <Field
-            label="Njësia administrative"
-            helper={
-              loadingUnits
-                ? "Duke ngarkuar…"
-                : municipalityId && adminUnitsList.length === 0
-                  ? "Nuk ka njësi për këtë bashki."
-                  : undefined
-            }
-          >
-            <RegistrationSelect
-              name="administrativeUnitId"
-              value={adminUnitId}
-              onChange={(e) => setAdminUnitId(e.target.value)}
-              disabled={!municipalityId || loadingUnits || adminUnitsList.length === 0}
-            >
-              <option value="">
-                {!municipalityId ? "Zgjidhni bashkinë" : adminUnitsList.length === 0 ? "-" : "Zgjidhni"}
-              </option>
-              {adminUnitId && !adminUnitsList.some((u) => u.id === adminUnitId) && (
-                <option value={adminUnitId}>Njësia e ruajtur</option>
-              )}
-              {adminUnitsList.map((u) => (
-                <option key={u.id} value={u.id}>{u.nameSq}</option>
-              ))}
-            </RegistrationSelect>
-          </Field>
-          <Field label="Hyrja"><Input name="entrance" defaultValue={defaults.entrance as string ?? ""} /></Field>
-          <Field label="Pozicioni i ashensorit" helper="Sipas planvendosjes">
-            <Input name="specificPosition" defaultValue={defaults.specificPosition as string ?? ""} />
-          </Field>
+
+          <div className="md:col-span-2 space-y-3">
+            <Label className="text-sm font-medium">Adresa *</Label>
+            <div className="grid gap-2 sm:grid-cols-2">
+              <label
+                className={cn(
+                  "flex cursor-pointer gap-3 rounded-md border px-3 py-3",
+                  buildingAddressMode === "text" && "border-gov-primary bg-gov-primary/5",
+                )}
+              >
+                <input
+                  type="radio"
+                  name="buildingAddressModeChoice"
+                  className="mt-1"
+                  checked={buildingAddressMode === "text"}
+                  onChange={() => {
+                    setBuildingAddressMode("text");
+                    setGpsError(null);
+                    setGpsCoords(null);
+                    setGpsPlaceName(null);
+                  }}
+                />
+                <span className="space-y-0.5">
+                  <span className="block text-sm font-medium">Shkruaj adresën</span>
+                  <span className="block text-xs text-muted-foreground">Rruga, ndërtesa, qyteti</span>
+                </span>
+              </label>
+              <label
+                className={cn(
+                  "flex cursor-pointer gap-3 rounded-md border px-3 py-3",
+                  buildingAddressMode === "gps" && "border-gov-primary bg-gov-primary/5",
+                )}
+              >
+                <input
+                  type="radio"
+                  name="buildingAddressModeChoice"
+                  className="mt-1"
+                  checked={buildingAddressMode === "gps"}
+                  onChange={() => {
+                    setBuildingAddressMode("gps");
+                    setGpsError(null);
+                    setGpsCoords(null);
+                    setGpsPlaceName(null);
+                  }}
+                />
+                <span className="space-y-0.5">
+                  <span className="block text-sm font-medium">Përdor vendndodhjen time</span>
+                  <span className="block text-xs text-muted-foreground">Nga telefoni ose pajisja juaj</span>
+                </span>
+              </label>
+            </div>
+
+            {buildingAddressMode === "text" ? (
+              <Input
+                name="buildingAddress"
+                value={buildingAddress}
+                onChange={(e) => setBuildingAddress(e.target.value)}
+                placeholder="Adresa, ndërtesa, qyteti"
+                required
+              />
+            ) : (
+              <div className="space-y-3 rounded-md border border-border p-3">
+                {!gpsCoords ? (
+                  <p className="text-sm text-muted-foreground">
+                    Lejoni aksesin te vendndodhja.
+                  </p>
+                ) : null}
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={captureGps}
+                  disabled={gpsLoading || gpsPlaceLoading}
+                >
+                  {gpsLoading
+                    ? "Duke lexuar vendndodhjen…"
+                    : gpsCoords
+                      ? "Përditëso vendndodhjen"
+                      : "Përdor vendndodhjen time"}
+                </Button>
+                {gpsCoords ? (
+                  <div className="space-y-2 text-sm">
+                    {gpsPlaceLoading ? (
+                      <p className="text-muted-foreground">Duke gjetur adresën…</p>
+                    ) : gpsPlaceName ? (
+                      (() => {
+                        const { headline, details } = splitReverseGeocodeLabel(gpsPlaceName);
+                        return (
+                          <div className="space-y-0.5">
+                            <p className="font-medium text-foreground">{headline}</p>
+                            {details.length > 0 ? (
+                              <p className="text-muted-foreground">{details.join(", ")}</p>
+                            ) : null}
+                          </div>
+                        );
+                      })()
+                    ) : (
+                      <p className="text-muted-foreground">
+                        Adresa nuk u gjet, por vendndodhja u ruajt.
+                      </p>
+                    )}
+                    <a
+                      href={mapsUrlForCoords(gpsCoords)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-block text-primary hover:underline"
+                    >
+                      Shiko në hartë
+                    </a>
+                  </div>
+                ) : null}
+                <input type="hidden" name="buildingAddress" value={gpsPlaceName ?? buildingAddress} />
+                {gpsError ? <p className="text-sm text-destructive">{gpsError}</p> : null}
+              </div>
+            )}
+          </div>
+
+          {layoutPlanSlot && (
+            <div className="md:col-span-2 space-y-2">
+              <Label className="text-sm font-medium">Planvendosje në ndërtesë *</Label>
+              <p className="text-xs text-muted-foreground">
+                Dokumenti që tregon pozicionin e ashensorit në ndërtesë.
+              </p>
+              {layoutPlanSlot}
+            </div>
+          )}
         </RegistrationFieldGrid>
       </FormStep>
 
       <FormStep step={4} title="Lloji dhe përdorimi" description="Ku është instaluar ashensori dhe për çfarë përdoret.">
-        <div className="space-y-4">
-          <div className="space-y-2">
-            <Label className="text-sm font-medium">Instaluar në *</Label>
-            {Object.entries(REGISTRATION_BUILDING_TYPE_LABELS).map(([v, l]) => (
-              <label key={v} className="flex items-center gap-2 text-sm">
-                <input type="radio" name="registrationBuildingType" value={v} defaultChecked={ext.registrationBuildingType === v} required /> {l}
-              </label>
-            ))}
-          </div>
-          <RegistrationFieldGrid columns={2}>
-            <Field label="Natyra e përdorimit" required>
-              <Input name="buildingMainUse" defaultValue={ext.buildingMainUse ?? ""} required />
+        <RegistrationFieldGrid columns={2}>
+          <Field label="Instaluar në" required>
+            <RegistrationSelect
+              name="registrationBuildingType"
+              defaultValue={ext.registrationBuildingType ?? ""}
+              required
+            >
+              <option value="">Zgjidhni</option>
+              {Object.entries(REGISTRATION_BUILDING_TYPE_LABELS).map(([value, label]) => (
+                <option key={value} value={value}>
+                  {label}
+                </option>
+              ))}
+            </RegistrationSelect>
+          </Field>
+          <Field label="Qëllimi i përdorimit" required>
+            <RegistrationSelect
+              name="usagePurposeCode"
+              value={usagePurposeCode}
+              onChange={(e) => setUsagePurposeCode(e.target.value)}
+              required
+            >
+              <option value="">Zgjidhni</option>
+              {Object.entries(REGISTRATION_USAGE_PURPOSE_LABELS).map(([value, label]) => (
+                <option key={value} value={value}>
+                  {label}
+                </option>
+              ))}
+            </RegistrationSelect>
+          </Field>
+          {usagePurposeCode === "TJETER" && (
+            <Field label="Qëllim tjetër" required>
+              <Input
+                name="usagePurposeOther"
+                defaultValue={ext.usagePurposeOther ?? ""}
+                required
+              />
             </Field>
-            <Field label="Emri tregtar (vend pune)"><Input name="businessNameIfWorkplace" defaultValue={ext.businessNameIfWorkplace ?? ""} /></Field>
-            <Field label="NIPT (vend pune)"><Input name="businessNiptIfWorkplace" defaultValue={ext.businessNiptIfWorkplace ?? ""} /></Field>
-          </RegistrationFieldGrid>
-          <div className="space-y-2">
-            <Label className="text-sm font-medium">Qëllimi i përdorimit *</Label>
-            {Object.entries(REGISTRATION_USAGE_PURPOSE_LABELS).map(([v, l]) => (
-              <label key={v} className="flex items-center gap-2 text-sm">
-                <input type="radio" name="usagePurposeCode" value={v} defaultChecked={ext.usagePurposeCode === v} required /> {l}
-              </label>
-            ))}
-          </div>
-          <Field label="Qëllim tjetër"><Input name="usagePurposeOther" defaultValue={ext.usagePurposeOther ?? ""} /></Field>
-        </div>
+          )}
+        </RegistrationFieldGrid>
       </FormStep>
 
-      <FormStep step={5} title="Shënime" last={!documentsSlot}>
-        <Field label="Shënime (opsionale)">
-          <textarea name="ownerNotes" defaultValue={(defaults.ownerNotes as string) ?? ""} className="min-h-[72px] w-full rounded-lg border px-3 py-2 text-sm" />
-        </Field>
+      <FormStep step={5} title="Shënime (opsionale)" last={!documentsSlot}>
+        <textarea
+          name="ownerNotes"
+          defaultValue={(defaults.ownerNotes as string) ?? ""}
+          className="min-h-[72px] w-full rounded-lg border px-3 py-2 text-sm"
+          placeholder="Shënime shtesë për aplikimin…"
+        />
       </FormStep>
 
       {documentsSlot && (
@@ -362,7 +786,7 @@ export function RegistrationBasicDataForm({
           <FormDocumentsSection title="Dokumentet e detyrueshme">
             <div className="space-y-3">
               <p className="text-xs text-muted-foreground">
-                Planvendosja dhe dokumentet e tjera duhen ngarkuar këtu para se të vazhdoni te instaluesi.
+                Dokumentet e tjera duhen ngarkuar këtu para se të vazhdoni te instaluesi.
               </p>
               {documentsSlot}
             </div>

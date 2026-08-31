@@ -1,13 +1,18 @@
 "use client";
 
-import { signIn } from "next-auth/react";
-import { useRouter, useSearchParams } from "next/navigation";
-import { useState } from "react";
+import { getSession, signIn } from "next-auth/react";
+import { useSearchParams } from "next/navigation";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { TermsAcceptanceLabel } from "@/components/forms/terms-acceptance-label";
+import {
+  loadPostRegisterCredentials,
+  type PostRegisterCredentials,
+} from "@/lib/auth/post-register-credentials";
 import { getDefaultRedirectForRole } from "@/lib/permissions/routes";
 import type { RoleCode } from "@/lib/constants/roles";
 import { isDemoToolsEnabled } from "@/lib/demo/demo-data-mode";
@@ -17,67 +22,73 @@ import {
   type DemoLoginCredential,
 } from "@/lib/demo/demo-login-credentials";
 
-type AccountLevel =
-  | "OWNER"
-  | "INSTALLER"
-  | "CERTIFIER"
-  | "MAINTENANCE"
-  | "ADMIN"
-  | "CHIEF_INSPECTOR"
-  | "ISHMT_DIRECTOR"
-  | "SECTOR_HEAD"
-  | "FIELD_INSPECTOR"
-  | "DIRECTORATE";
-
-const ACCOUNT_LEVELS: { value: AccountLevel; label: string }[] = [
-  { value: "OWNER", label: "Personi përgjegjës i ashensorit" },
-  { value: "INSTALLER", label: "Kompani instaluese" },
-  { value: "CERTIFIER", label: "Kompani certifikuese / OMI" },
-  { value: "MAINTENANCE", label: "Kompani mirëmbajtëse" },
-  { value: "ADMIN", label: "Administrator ISHMT" },
-  { value: "CHIEF_INSPECTOR", label: "Kryeinspektor" },
-  { value: "ISHMT_DIRECTOR", label: "Drejtor i Drejtorisë" },
-  { value: "SECTOR_HEAD", label: "Përgjegjës sektori" },
-  { value: "FIELD_INSPECTOR", label: "Inspektor" },
-  { value: "DIRECTORATE", label: "Drejtoria e Politikave" },
-];
-
-const LEVEL_HINTS: Record<AccountLevel, string> = {
-  OWNER: "Personat përgjegjës të ashensorit regjistrohen vetë dhe krijojnë aplikime.",
-  MAINTENANCE: "Kompanitë e mirëmbajtjes regjistrohen dhe presin validimin QKB para aktivizimit.",
-  INSTALLER: "Kompanitë instaluese regjistrohen dhe presin validimin para aktivizimit.",
-  CERTIFIER: "Trupat certifikues / OMI regjistrohen dhe presin validimin para aktivizimit.",
-  ADMIN: "Llogari institucionale e ISHMT për administrimin e sistemit.",
-  CHIEF_INSPECTOR: "Marrje aplikimesh, delegim dhe miratim final i regjistrimit.",
-  ISHMT_DIRECTOR: "Delegim dhe raport drejt kryeinspektorit; cakton inspektim terreni.",
-  SECTOR_HEAD: "Caktim inspektorësh për shqyrtim dosjeje dhe raport drejt drejtorit.",
-  FIELD_INSPECTOR: "Shqyrtim i dosjes së aplikimit dhe inspektim fizik në objekt.",
-  DIRECTORATE: "Llogari institucionale e Drejtorisë së Politikave (regjistrim kompanish).",
-};
-
-/** Përkohësisht — vetëm dev/demo. Kërkon `npm run db:seed:full-demo`. */
+/** Përkohësisht - vetëm dev/demo. */
 const DEMO_PASSWORD = DEMO_LOGIN_PASSWORD;
 
-const DEMO_CREDENTIALS = DEMO_LOGIN_CREDENTIALS;
-
 export function LoginForm() {
-  const router = useRouter();
   const searchParams = useSearchParams();
   const callbackUrl = searchParams.get("callbackUrl");
+  const registered = searchParams.get("registered");
+  const identifierFromUrl = searchParams.get("identifier");
+
+  const [registeredCredentials, setRegisteredCredentials] = useState<PostRegisterCredentials | null>(
+    null,
+  );
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const [level, setLevel] = useState<AccountLevel>("OWNER");
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [totpCode, setTotpCode] = useState("");
   const [needsTwoFactor, setNeedsTwoFactor] = useState(false);
+  const formRef = useRef<HTMLFormElement>(null);
+  const termsRef = useRef<HTMLInputElement>(null);
+  const [selectedDemoId, setSelectedDemoId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!registered) return;
+
+    const stored = loadPostRegisterCredentials();
+    const cred: PostRegisterCredentials | null =
+      stored ??
+      (identifierFromUrl
+        ? {
+            identifier: identifierFromUrl,
+            password: "",
+            accountType: registered === "company" ? "company" : "owner",
+          }
+        : null);
+
+    if (!cred) return;
+
+    setRegisteredCredentials(cred);
+    setIdentifier(cred.identifier.trim().toUpperCase());
+    if (cred.password) {
+      setPassword(cred.password);
+      if (termsRef.current) {
+        termsRef.current.checked = true;
+      }
+    }
+  }, [registered, identifierFromUrl]);
+
   const showDemoCredentials = isDemoToolsEnabled();
 
   function applyDemoCredential(cred: DemoLoginCredential) {
-    setIdentifier(cred.identifier);
+    const loginId = cred.identifier.trim().toUpperCase();
+
+    setSelectedDemoId(loginId);
+    setIdentifier(loginId);
     setPassword(DEMO_PASSWORD);
-    setLevel(cred.level as AccountLevel);
+    setRegisteredCredentials(null);
     setError(null);
+    setNeedsTwoFactor(false);
+    setTotpCode("");
+
+    if (termsRef.current) {
+      termsRef.current.checked = true;
+    }
+
+    formRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    formRef.current?.querySelector<HTMLInputElement>("#identifier")?.focus();
   }
 
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
@@ -89,7 +100,6 @@ export function LoginForm() {
     const result = await signIn("credentials", {
       identifier: formData.get("identifier"),
       password: formData.get("password"),
-      level: formData.get("level"),
       totpCode: formData.get("totpCode") || undefined,
       redirect: false,
     });
@@ -99,8 +109,6 @@ export function LoginForm() {
     if (result?.error) {
       if (result.error === "ACCOUNT_LOCKED") {
         setError("Llogaria është e bllokuar. Provoni përsëri pas 30 minutash.");
-      } else if (result.error === "LEVEL_MISMATCH") {
-        setError("Niveli i aksesit i zgjedhur nuk përputhet me llogarinë tuaj.");
       } else if (result.error === "2FA_REQUIRED") {
         setNeedsTwoFactor(true);
         setError("Shkruani kodin 6-shifror nga aplikacioni autentifikues.");
@@ -114,25 +122,60 @@ export function LoginForm() {
       return;
     }
 
-    router.push(
-      callbackUrl ?? getDefaultRedirectForRole(String(formData.get("level")) as RoleCode),
-    );
-    router.refresh();
+    const session = await getSession();
+    const roleCode = (session?.user?.roleCode ?? "OWNER") as RoleCode;
+    const destination = callbackUrl ?? getDefaultRedirectForRole(roleCode);
+    window.location.assign(destination);
   }
+
+  const identifierLabel =
+    registeredCredentials?.accountType === "company"
+      ? "NIPT (emri i përdoruesit)"
+      : "Numri Personal (emri i përdoruesit)";
 
   return (
     <Card className={`mx-auto w-full ${showDemoCredentials ? "max-w-2xl" : "max-w-md"}`}>
       <CardHeader>
         <CardTitle>Mirëseerdhët</CardTitle>
         <CardDescription>
-          ISHMT - Regjistri Digjital i Ashensorëve. Hyni në sistem me Numrin Personal ose NIPT-in
-          tuaj.
+          Hyni në sistem me Numrin Personal ose NIPT-in tuaj dhe fjalëkalimin.
         </CardDescription>
       </CardHeader>
       <CardContent>
-        <form onSubmit={onSubmit} className="space-y-4">
+        {registeredCredentials && (
+          <div className="mb-4 rounded-lg border border-emerald-300 bg-emerald-50 px-4 py-3 text-sm text-emerald-950">
+            <p className="font-semibold">
+              {registeredCredentials.accountType === "company"
+                ? "Regjistrimi i kompanisë u krye me sukses!"
+                : "Regjistrimi u krye me sukses!"}
+            </p>
+            <p className="mt-1 text-emerald-900/90">
+              Përdorni kredencialet më poshtë për të hyrë. Fushat janë plotësuar automatikisht.
+            </p>
+            <dl className="mt-3 space-y-2 rounded-md border border-emerald-200/80 bg-white/70 px-3 py-2.5 text-xs">
+              <div className="flex flex-wrap justify-between gap-x-4 gap-y-1">
+                <dt className="font-medium text-emerald-950/80">
+                  {registeredCredentials.accountType === "company" ? "NIPT" : "Numri Personal"}
+                </dt>
+                <dd className="font-mono font-semibold text-emerald-950">
+                  {registeredCredentials.identifier}
+                </dd>
+              </div>
+              {registeredCredentials.password ? (
+                <div className="flex flex-wrap justify-between gap-x-4 gap-y-1">
+                  <dt className="font-medium text-emerald-950/80">Fjalëkalimi</dt>
+                  <dd className="font-mono font-semibold text-emerald-950">
+                    {registeredCredentials.password}
+                  </dd>
+                </div>
+              ) : null}
+            </dl>
+          </div>
+        )}
+
+        <form ref={formRef} onSubmit={onSubmit} className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="identifier">Emri i Përdoruesit (Numri Personal / NIPT)</Label>
+            <Label htmlFor="identifier">{identifierLabel}</Label>
             <Input
               id="identifier"
               name="identifier"
@@ -173,27 +216,9 @@ export function LoginForm() {
               />
             </div>
           )}
-          <div className="space-y-2">
-            <Label htmlFor="level">Niveli i aksesit</Label>
-            <select
-              id="level"
-              name="level"
-              value={level}
-              onChange={(e) => setLevel(e.target.value as AccountLevel)}
-              className="flex h-10 w-full rounded-md border px-3 text-sm"
-              disabled={needsTwoFactor}
-            >
-              {ACCOUNT_LEVELS.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-            <p className="text-xs text-muted-foreground">{LEVEL_HINTS[level]}</p>
-          </div>
           <label className="flex items-start gap-2 text-sm">
-            <input type="checkbox" required className="mt-1" />
-            E lexova dhe bie dakord me termat dhe kushtet
+            <input ref={termsRef} type="checkbox" required className="mt-1" />
+            <TermsAcceptanceLabel />
           </label>
           {error && <p className="text-sm text-destructive">{error}</p>}
           <Button type="submit" className="w-full" disabled={loading}>
@@ -219,26 +244,31 @@ export function LoginForm() {
           <div className="mt-6 rounded-lg border border-amber-200 bg-amber-50/80 p-4 text-sm">
             <p className="font-semibold text-amber-950">Kredenciale demo (përkohësisht)</p>
             <p className="mt-1 text-xs text-amber-900/80">
-              Fjalëkalimi për të gjithë: <code className="rounded bg-white/70 px-1">{DEMO_PASSWORD}</code>
-              {" · "}
-              Kërkon <code className="rounded bg-white/70 px-1">npm run db:seed:demo</code>
+              Klikoni «Plotëso» për të mbushur automatikisht fushat e hyrjes.
             </p>
             <div className="mt-3 overflow-x-auto">
-              <table className="w-full min-w-[28rem] text-left text-xs">
+              <table className="w-full min-w-[24rem] text-left text-xs">
                 <thead>
                   <tr className="border-b border-amber-200/80 text-amber-900/70">
-                    <th className="py-1.5 pr-2 font-medium">Roli</th>
+                    <th className="py-1.5 pr-2 font-medium">Llogaria</th>
                     <th className="py-1.5 pr-2 font-medium">NID / NIPT</th>
-                    <th className="py-1.5 pr-2 font-medium">Niveli</th>
+                    <th className="py-1.5 pr-2 font-medium">Fjalëkalimi</th>
                     <th className="py-1.5 font-medium"></th>
                   </tr>
                 </thead>
                 <tbody>
-                  {DEMO_CREDENTIALS.map((cred) => (
-                    <tr key={cred.identifier} className="border-b border-amber-100/80 last:border-0">
+                  {DEMO_LOGIN_CREDENTIALS.map((cred) => {
+                    const loginId = cred.identifier.trim().toUpperCase();
+                    const isSelected = selectedDemoId === loginId;
+
+                    return (
+                    <tr
+                      key={cred.identifier}
+                      className={`border-b border-amber-100/80 last:border-0 ${isSelected ? "bg-amber-100/60" : ""}`}
+                    >
                       <td className="py-1.5 pr-2">{cred.role}</td>
-                      <td className="py-1.5 pr-2 font-mono">{cred.identifier}</td>
-                      <td className="py-1.5 pr-2 text-amber-900/80">{cred.level}</td>
+                      <td className="py-1.5 pr-2 font-mono">{loginId}</td>
+                      <td className="py-1.5 pr-2 font-mono">{DEMO_PASSWORD}</td>
                       <td className="py-1.5 text-right">
                         <button
                           type="button"
@@ -249,7 +279,8 @@ export function LoginForm() {
                         </button>
                       </td>
                     </tr>
-                  ))}
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -265,10 +296,7 @@ export function LoginForm() {
             <p className="mt-1 text-muted-foreground">
               Për një regjistrim të ri ose hyrje për herë të parë në sistem:
             </p>
-            <Link
-              href={`/auth/register?level=${level}`}
-              className="mt-1 inline-block text-primary hover:underline"
-            >
+            <Link href="/auth/register" className="mt-1 inline-block text-primary hover:underline">
               Regjistrohuni këtu
             </Link>
           </div>

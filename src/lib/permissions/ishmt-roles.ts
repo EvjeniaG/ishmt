@@ -1,6 +1,6 @@
 import { ROLE_CODES, type RoleCode } from "@/lib/constants/roles";
 
-/** Stafi i brendshëm ISHMT (jo Drejtoria e Politikave / kompanitë). */
+/** Stafi i brendshëm IQMT (jo Drejtoria e Politikave / kompanitë). */
 export const ISHMT_INTERNAL_ROLES: RoleCode[] = [
   ROLE_CODES.CHIEF_INSPECTOR,
   ROLE_CODES.ISHMT_DIRECTOR,
@@ -28,7 +28,7 @@ export const ISHMT_APPLICATION_DIRECTOR_ROLES: RoleCode[] = [ROLE_CODES.ISHMT_DI
 /** Marrje e aplikimit dhe miratim final. */
 export const ISHMT_APPLICATION_CHIEF_ROLES: RoleCode[] = [ROLE_CODES.CHIEF_INSPECTOR];
 
-/** Miratim final i aplikimeve — vetëm kryeinspektori. */
+/** Miratim final i aplikimeve - vetëm kryeinspektori. */
 export const ISHMT_APPLICATION_APPROVE_ROLES: RoleCode[] = [ROLE_CODES.CHIEF_INSPECTOR];
 
 export function isIshmtInternalRole(role: RoleCode): boolean {

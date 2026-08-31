@@ -25,6 +25,13 @@ import type { LucideIcon } from "lucide-react";
 import { SignOutButton } from "@/components/layout/sign-out-button";
 import { ROLE_CODES } from "@/lib/constants/roles";
 import { getProfilePathForRole } from "@/lib/permissions/nav-paths";
+import {
+  buildServiceProviderNav,
+  partitionFooterNavItems,
+  type NavGroup,
+} from "@/lib/organizations/service-provider-nav";
+import { PERIODIC_INSPECTION_CONTRACTS_LABEL, PERIODIC_INSPECTIONS_LABEL } from "@/lib/constants/periodic-inspection-labels";
+import type { OrgCapabilities } from "@/lib/organizations/org-capabilities";
 
 export type PortalNavItem = {
   href: string;
@@ -63,6 +70,7 @@ const OWNER_NAV: NavGroup[] = [
       { href: "/portal/applications", label: "Aplikimet e mia", icon: ClipboardList },
       { href: "/portal/elevators", label: "Ashensorët e mi", icon: Building2 },
       { href: "/portal/maintenance", label: "Kontratat e mirëmbajtjes", icon: ScrollText },
+      { href: "/portal/kontroll-periodik", label: PERIODIC_INSPECTION_CONTRACTS_LABEL, icon: ClipboardCheck },
       { href: "/portal/notifications", label: "Njoftimet", icon: Clock3 },
       EXPORT_REPORTS_NAV,
       { href: "/portal/profile", label: "Profili", icon: User },
@@ -84,12 +92,12 @@ const INSTALLER_NAV: NavGroup[] = [
 
 const CERTIFIER_NAV: NavGroup[] = [
   {
-    label: "Certifikues / OMI",
+    label: "Certifikues / OM",
     items: [
       { href: "/portal/dashboard", label: "Paneli", icon: LayoutDashboard },
       { href: "/portal/applications", label: "Aplikime për certifikim", icon: ClipboardList },
-      { href: "/portal/omi/kontratat", label: "Kontratat aktive", icon: ScrollText },
-      { href: "/portal/omi/inspektim-periodik", label: "Inspektimet periodike", icon: ClipboardCheck },
+      { href: "/portal/omi/kontratat-kontrolli", label: PERIODIC_INSPECTION_CONTRACTS_LABEL, icon: ScrollText },
+      { href: "/portal/omi/inspektim-periodik", label: PERIODIC_INSPECTIONS_LABEL, icon: ClipboardCheck },
       EXPORT_REPORTS_NAV,
       { href: "/portal/profile", label: "Profili", icon: User },
     ],
@@ -102,7 +110,7 @@ const MAINTENANCE_NAV: NavGroup[] = [
     items: [
       { href: "/portal/dashboard", label: "Paneli", icon: LayoutDashboard },
       { href: "/portal/elevators", label: "Ashensorët në mirëmbajtje", icon: Building2 },
-      { href: "/portal/sherbimi/contracts", label: "Kontratat", icon: ClipboardList },
+      { href: "/portal/sherbimi/contracts", label: "Kontratat e mirëmbajtjes", icon: ClipboardList },
       { href: "/portal/sherbimi/nderhyrje", label: "Ndërhyrjet & defektet", icon: Wrench },
       { href: "/portal/sherbimi/raport-mujor", label: "Kontrollet periodike", icon: FileText },
       EXPORT_REPORTS_NAV,
@@ -115,6 +123,7 @@ const FIELD_INSPECTOR_NAV: NavGroup[] = [
   {
     label: "Inspektor",
     items: [
+      { href: "/ishmt/inspector/dashboard", label: "Paneli", icon: LayoutDashboard },
       { href: "/ishmt/my-application-reviews", label: "Shqyrtimi i aplikimeve", icon: ClipboardList },
       { href: "/ishmt/my-field-inspections", label: "Detyrat e mia në terren", icon: ClipboardCheck },
       { href: "/ishmt/search", label: "Kërko ashensor", icon: Search },
@@ -196,11 +205,23 @@ const ADMIN_NAV: NavGroup[] = [
 
 const DIRECTORATE_NAV: NavGroup[] = [
   {
-    label: "Drejtoria e Politikave",
+    label: "Kryesore",
     items: [
       { href: "/directorate/dashboard", label: "Paneli", icon: LayoutDashboard },
-      { href: "/directorate/companies", label: "Regjistri i plotë i kompanive", icon: Building2 },
-      { href: "/directorate/companies/new", label: "Rregjistro një komp. të re", icon: FileText },
+      { href: "/portal/notifications", label: "Njoftimet", icon: Bell },
+    ],
+  },
+  {
+    label: "Regjistrimi i kompanive",
+    items: [
+      { href: "/directorate/companies", label: "Regjistri i kompanive", icon: Building2 },
+      { href: "/directorate/companies/new", label: "Shto kompani të re", icon: FileText },
+      { href: "/directorate/licenses", label: "Licencat aktive", icon: ShieldCheck },
+    ],
+  },
+  {
+    label: "Mbikëqyrje",
+    items: [
       { href: "/directorate/activity", label: "Aktiviteti i kompanive", icon: ClipboardList },
       EXPORT_REPORTS_NAV,
       { href: getProfilePathForRole(ROLE_CODES.DIRECTORATE), label: "Profili", icon: User },
@@ -229,21 +250,41 @@ function flattenGroups(groups: NavGroup[]): PortalNavItem[] {
 export function PortalSidebar({
   role,
   items,
+  orgCapabilities,
   onNavigate,
   className,
 }: {
   role?: string;
   items?: PortalNavItem[];
+  orgCapabilities?: OrgCapabilities | null;
   onNavigate?: () => void;
   className?: string;
 }) {
   const pathname = usePathname();
-  const groups = items ? [{ label: "", items }] : NAV_BY_ROLE[role ?? ""] ?? OWNER_NAV;
+  const capabilityNav =
+    orgCapabilities && (orgCapabilities.capInstall || orgCapabilities.capMaintenance || orgCapabilities.capOm)
+      ? buildServiceProviderNav(orgCapabilities)
+      : null;
+  const groups: NavGroup[] = partitionFooterNavItems(
+    items ? [{ label: "", items }] : capabilityNav ?? NAV_BY_ROLE[role ?? ""] ?? OWNER_NAV,
+  );
 
   function isActive(href: string) {
     const path = href.split("?")[0];
     if (path.endsWith("/dashboard")) return pathname === path;
-    if (path === "/directorate/companies") return pathname === path;
+    if (path === "/directorate/companies") {
+      return (
+        pathname === path ||
+        (pathname.startsWith("/directorate/companies/") &&
+          pathname !== "/directorate/companies/new" &&
+          !pathname.startsWith("/directorate/companies/pending") &&
+          !pathname.startsWith("/directorate/companies/rejected") &&
+          !pathname.startsWith("/directorate/companies/suspended"))
+      );
+    }
+    if (path === "/directorate/licenses") {
+      return pathname === path || pathname.startsWith("/directorate/licenses/");
+    }
     if (path === "/directorate/activity") return pathname === path || pathname.startsWith("/directorate/activity");
     return pathname === path || pathname.startsWith(`${path}/`);
   }

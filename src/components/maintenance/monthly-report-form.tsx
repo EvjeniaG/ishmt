@@ -1,6 +1,6 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { useRouter } from "@/lib/navigation/use-app-router";
 import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -34,9 +34,12 @@ function emptyChecklist(): Record<string, MonthlyControlCheckStatus | ""> {
 export function MonthlyReportForm({
   elevators,
   fixedElevatorId,
+  defaultTechnicianName,
 }: {
   elevators: ElevatorOption[];
   fixedElevatorId?: string;
+  /** Emri i teknikut nga llogaria e përdoruesit - plotësohet automatikisht. */
+  defaultTechnicianName?: string;
 }) {
   const router = useRouter();
   const now = new Date();
@@ -44,7 +47,7 @@ export function MonthlyReportForm({
   const [performedDate, setPerformedDate] = useState(now.toISOString().slice(0, 10));
   const [year, setYear] = useState(now.getFullYear());
   const [month, setMonth] = useState(now.getMonth() + 1);
-  const [technicianName, setTechnicianName] = useState("");
+  const [technicianName, setTechnicianName] = useState(defaultTechnicianName ?? "");
   const [startTime, setStartTime] = useState("");
   const [endTime, setEndTime] = useState("");
   const [checklist, setChecklist] = useState(emptyChecklist);

@@ -34,7 +34,7 @@ export function MaintenanceRegistryPanel({
 
   return (
     <div className="space-y-6">
-      {data.maintenanceOrg && (
+      {data.maintenanceOrg && audience !== "owner" && (
         <p className="text-sm text-muted-foreground">
           <span className="font-medium text-foreground">{data.maintenanceOrg.name}</span>
           {data.maintenanceOrg.nipt && (
@@ -75,17 +75,19 @@ export function MaintenanceRegistryPanel({
       </div>
 
       <SectionCard
-        title="Regjistri i kontratave"
+        title="Kontratat e mirëmbajtjes"
         subtitle={
           audience === "maintenance"
-            ? "Kontratat e mirëmbajtjes - ngarkoni dokumentin pas pranimit"
-            : "Kontratat e mirëmbajtjes - dokumentet ngarkohen nga kompania; personi përgjegjës i ashensorit dhe ISHMT i shohin këtu"
+            ? "Pranoni ftesën, pastaj ngarkoni kontratën e nënshkruar. Historiku mbetet i dukshëm për personin përgjegjës dhe IQMT-n."
+            : "Kontratat me kompaninë e mirëmbajtjes. Dokumenti i nënshkruar ngarkohet nga kompania pas pranimit."
         }
         meta={
-          <span className="portal-badge-neutral tabular-nums">{data.contracts.length} kontrata</span>
+          <span className="portal-badge-neutral tabular-nums">
+            {data.contracts.length === 1 ? "1 kontratë" : `${data.contracts.length} kontrata`}
+          </span>
         }
       >
-        <MaintenanceContractsSection contracts={data.contracts} />
+        <MaintenanceContractsSection contracts={data.contracts} showUploadHint={audience === "maintenance"} />
       </SectionCard>
 
       <SectionCard
@@ -93,7 +95,7 @@ export function MaintenanceRegistryPanel({
         subtitle={
           audience === "maintenance"
             ? "Ndërhyrjet dhe raportet që regjistron kompania juaj"
-            : "Interventet dhe raportet - çdo regjistrim ka dokument nga kompania; i dukshëm për personin përgjegjës të ashensorit dhe ISHMT-n"
+            : "Interventet dhe raportet - çdo regjistrim ka dokument nga kompania; i dukshëm për personin përgjegjës të ashensorit dhe IQMT-n"
         }
         meta={
           <span className="portal-badge-neutral tabular-nums">{data.records.length} regjistrime</span>

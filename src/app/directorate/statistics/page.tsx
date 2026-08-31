@@ -34,7 +34,7 @@ export default async function DirectorateStatisticsPage() {
           columns={3}
           items={[
             { label: "Instalues", value: installers.length },
-            { label: "OMI / Certifikues", value: certifiers.length },
+            { label: "OM / Certifikues", value: certifiers.length },
             { label: "Aplikime me licencë", value: metrics.cards.applicationsUsingLicensed },
           ]}
         />

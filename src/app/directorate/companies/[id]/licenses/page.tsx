@@ -1,14 +1,18 @@
 import Link from "next/link";
 import { redirect, notFound } from "next/navigation";
+import { OrgStatus } from "@prisma/client";
 import { AppShell } from "@/components/layout/app-shell";
-import { Button } from "@/components/ui/button";
-import { CreateLicenseForm } from "@/components/forms/create-license-form";
-import { LicenseRevokeButton, LicenseStatusBadge } from "@/components/directorate/license-actions";
-import { DirectoratePageHeader } from "@/components/directorate/directorate-page-header";
+import {
+  CompanyIssueLicenseSection,
+  CompanyLicenseOverview,
+  CompanyLicensesTable,
+} from "@/components/directorate/company-licenses-panel";
+import { DirectoratePageShell } from "@/components/directorate/directorate-page-header";
+import { OrgStatusBadge } from "@/components/directorate/org-status-badge";
 import { SectionCard } from "@/components/shared/institutional";
-import { PortalEmptyState } from "@/components/shared/portal-table";
 import { getAuthSession } from "@/lib/auth";
 import { ROLE_CODES } from "@/lib/constants/roles";
+import { directorateCompanyDetailTabs } from "@/lib/directorate/directorate-nav";
 import { OrganizationService } from "@/lib/services/organization-service";
 import { LicenseService } from "@/lib/services/license-service";
 
@@ -29,52 +33,67 @@ export default async function CompanyLicensesPage({
   if (!company) notFound();
 
   const licenses = await LicenseService.listByOrganization(id);
+  const now = new Date();
+  const hasValidLicense = (type: string) =>
+    licenses.some(
+      (license) =>
+        license.licenseType === type &&
+        license.status !== OrgStatus.REVOKED &&
+        license.expiryDate >= now,
+    );
+
+  const missingOm = !hasValidLicense("CERTIFICATION");
+  const missingInstall = !hasValidLicense("INSTALLATION");
 
   return (
-    <AppShell title={`Licencat - ${company.name}`}>
-      <div className="space-y-6">
-        <DirectoratePageHeader
-          title={`Licencat · ${company.name}`}
-          description="Licencat dhe autorizimet e regjistruara për këtë kompani"
-          actions={
-            <Button variant="outline" asChild>
-              <Link href={`/directorate/companies/${id}`}>← Kthehu te kompania</Link>
-            </Button>
-          }
-        />
-
-        {isDirectorate && <CreateLicenseForm organizationId={id} />}
-
-        <SectionCard title="Licencat ekzistuese" padded>
-          {licenses.length === 0 ? (
-            <PortalEmptyState>Nuk ka licenca të regjistruara.</PortalEmptyState>
-          ) : (
-            <ul className="space-y-3 text-sm">
-              {licenses.map((license) => (
-                <li key={license.id} className="rounded border p-3">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <p className="font-medium">{license.licenseNumber}</p>
-                    <LicenseStatusBadge status={license.status} />
-                  </div>
-                  <p>Lloji: {license.licenseType}</p>
-                  <p>
-                    {license.issuedDate.toLocaleDateString("sq-AL")} –{" "}
-                    {license.expiryDate.toLocaleDateString("sq-AL")}
-                  </p>
-                  {license.scope && <p>Shtrirja: {license.scope}</p>}
-                  {isDirectorate && (
-                    <LicenseRevokeButton
-                      licenseId={license.id}
-                      licenseNumber={license.licenseNumber}
-                      status={license.status}
-                    />
-                  )}
-                </li>
-              ))}
-            </ul>
-          )}
+    <AppShell title={`Licencat · ${company.name}`}>
+      <DirectoratePageShell
+        title={company.name}
+        description={company.nipt ? `NIPT ${company.nipt}` : undefined}
+        actions={
+          <Link href="/directorate/companies" className="text-sm font-medium text-gov-primary hover:underline">
+            ← Regjistri
+          </Link>
+        }
+        tabs={directorateCompanyDetailTabs(id)}
+      >
+        <SectionCard
+          title="Përmbledhje"
+          subtitle="Numrat e licencës u jepen kompanisë për portalin"
+          meta={<OrgStatusBadge status={company.status} />}
+          padded
+        >
+          <CompanyLicenseOverview licenses={licenses} />
         </SectionCard>
-      </div>
+
+        <SectionCard
+          title="Licencat e regjistruara"
+          meta={
+            <span className="text-sm tabular-nums text-muted-foreground">
+              {licenses.length} {licenses.length === 1 ? "licencë" : "licenca"}
+            </span>
+          }
+          padded
+        >
+          <CompanyLicensesTable licenses={licenses} canManage={isDirectorate} />
+        </SectionCard>
+
+        {isDirectorate && (missingInstall || missingOm) && (
+          <SectionCard
+            title="Gjenero licencë të re"
+            subtitle={
+              missingOm && !missingInstall
+                ? "Shtoni licencën OM që mungon"
+                : missingInstall && !missingOm
+                  ? "Shtoni licencën e instalimit që mungon"
+                  : "Shtoni licencat që mungojnë"
+            }
+            padded
+          >
+            <CompanyIssueLicenseSection organizationId={id} licenses={licenses} />
+          </SectionCard>
+        )}
+      </DirectoratePageShell>
     </AppShell>
   );
 }

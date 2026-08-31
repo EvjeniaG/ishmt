@@ -2,18 +2,9 @@
 
 import { useLayoutEffect, useRef } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
-
-function scrollAllRootsToTop() {
-  document.querySelectorAll<HTMLElement>("[data-scroll-root]").forEach((el) => {
-    el.scrollTop = 0;
-    el.scrollLeft = 0;
-  });
-  window.scrollTo(0, 0);
-  document.documentElement.scrollTop = 0;
-  document.body.scrollTop = 0;
-}
-
+import { scrollPageToTopAfterUpdate } from "@/lib/navigation/scroll-page-to-top";
 import { isContractsSearchParamsChange, ISHMT_COMPLIANCE_MONITOR_PATH } from "@/lib/ishmt/contract-issue-filters";
+
 export function ScrollToTop() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -30,7 +21,7 @@ export function ScrollToTop() {
       }
     }
 
-    scrollAllRootsToTop();
+    scrollPageToTopAfterUpdate();
     navigationRef.current = { pathname, search: searchKey };
   }, [pathname, searchKey]);
 

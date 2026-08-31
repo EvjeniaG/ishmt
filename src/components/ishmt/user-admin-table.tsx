@@ -1,6 +1,6 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { useRouter } from "@/lib/navigation/use-app-router";
 import { useState } from "react";
 import { KeyRound, Link2, LockOpen, Search, UserCheck, UserX } from "lucide-react";
 import {

@@ -3,17 +3,14 @@ import { notFound, redirect } from "next/navigation";
 import { ApplicationType, ApplicationStatus } from "@prisma/client";
 import { AppShell } from "@/components/layout/app-shell";
 import { StandardPageLayout } from "@/components/layout/standard-page-layout";
-import { SectionCard } from "@/components/shared/institutional";
 import { PortalTableWrap } from "@/components/shared/portal-table";
 import { ApplicationStatusBadge } from "@/components/applications/application-status-badge";
 import { AssetGenerationStatusCard } from "@/components/applications/asset-generation-status";
 import { IshmtReviewActions } from "@/components/applications/application-workflow-forms";
 import { PhysicalVerificationButton } from "@/components/elevators/physical-verification-button";
-import { ApplicationDocuments } from "@/components/applications/application-documents";
-import { ApplicationDataSummary } from "@/components/applications/application-data-summary";
-import { IshmtWorkflowTrail } from "@/components/applications/ishmt-workflow-trail";
-import { ApplicationFieldVerificationCard } from "@/components/applications/application-field-verification-card";
-import { DossierSectionsView } from "@/components/elevators/dossier-sections-view";
+import { ApplicationDocumentChecklistView } from "@/components/applications/application-document-checklist-view";
+import { RegistrationDossierView } from "@/components/registration/registration-dossier-view";
+import { WorkflowSection } from "@/components/applications/workflow-section";
 import { LegalDeadlineBadge } from "@/components/applications/legal-deadline-badge";
 import { DocumentService } from "@/lib/services/document-service";
 import { getAuthSession } from "@/lib/auth";
@@ -22,10 +19,21 @@ import { PERMISSIONS } from "@/lib/permissions/codes";
 import { roleHasPermission } from "@/lib/permissions/matrix";
 import { canReviewApplications, canDirectApplications } from "@/lib/permissions/ishmt-roles";
 import { MODERNIZATION_TYPE_LABELS } from "@/lib/constants/lifecycle-labels";
-import { getApplicationDocumentSpecs } from "@/lib/documents/application-document-checklist";
+import { ApplicationDocuments } from "@/components/applications/application-documents";
+import { ApplicationDataSummary } from "@/components/applications/application-data-summary";
+import { IshmtWorkflowTrail } from "@/components/applications/ishmt-workflow-trail";
+import { ApplicationFieldVerificationCard } from "@/components/applications/application-field-verification-card";
+import { getApplicationDocumentSpecs, getPhaseDocumentChecklist } from "@/lib/documents/application-document-checklist";
 import { buildRegistrationDossier } from "@/lib/registration/build-dossier";
 import type { FieldChange } from "@/lib/services/elevator-lifecycle-service";
 import { displayCertifierOrganizationName } from "@/lib/elevators/format-om-body";
+import { FieldInspectorReviewBriefing } from "@/components/applications/field-inspector-review-briefing";
+import { InspectorDossierTasksPanel } from "@/components/applications/inspector-dossier-tasks-panel";
+import { isFieldInspectorRole } from "@/lib/permissions/ishmt-roles";
+import { getFieldInspectionTasksHref } from "@/lib/permissions/nav-paths";
+import { ishmtReviewHasActionPanel } from "@/lib/ishmt/review-actions-visibility";
+import { FieldInspectorWorkloadService } from "@/lib/services/field-inspector-workload-service";
+import { cn } from "@/lib/utils";
 
 const TYPE_LABELS: Record<string, string> = {
   NEW_REGISTRATION: "Regjistrim i ri",
@@ -93,6 +101,9 @@ export default async function ReviewDetailPage({
     if (error instanceof ApplicationNotAccessibleError) notFound();
     throw error;
   });
+  if (isFieldInspectorRole(session.user.roleCode)) {
+    await ApplicationService.reconcileSupersededFieldReviewAssignments(id);
+  }
   const directorReview =
     application.status === ApplicationStatus.PENDING_CHIEF_INSPECTOR
       ? await ApplicationService.getInspectorReviewMetadata(id)
@@ -114,8 +125,17 @@ export default async function ReviewDetailPage({
     fieldReviewAssignments.find(
       (a) => a.inspectorId === session.user.id && a.status === "PENDING",
     )?.id ?? null;
+  const inspectorDossierContext = isFieldInspectorRole(session.user.roleCode)
+    ? await FieldInspectorWorkloadService.getApplicationContextForInspector(ctx, id)
+    : null;
   const data = application.data;
+  const isRegistration = application.type === ApplicationType.NEW_REGISTRATION;
+  const registrationDossierSections = isRegistration
+    ? buildRegistrationDossier(application).sections
+    : [];
+
   const rawDocuments = await DocumentService.listForEntity("application", id);
+  const linkedDocuments = await DocumentService.listLinkedForEntity("application", id);
   const uploadedPurposes = await DocumentService.listPurposesForEntity("application", id);
   const uploadedPurposeSet = new Set(uploadedPurposes);
   const documentChecklist = getApplicationDocumentSpecs({
@@ -125,12 +145,70 @@ export default async function ReviewDetailPage({
     ...item,
     uploaded: uploadedPurposeSet.has(item.purpose),
   }));
-  const documents = rawDocuments.map((doc) => ({
-    ...DocumentService.serializeDocument(doc),
-    uploadedAt: doc.createdAt.toISOString(),
-  }));
+  const documents =
+    linkedDocuments.length > 0
+      ? linkedDocuments
+      : rawDocuments.map((doc) => ({
+          purpose: undefined as string | undefined,
+          ...DocumentService.serializeDocument(doc),
+          uploadedAt: doc.createdAt.toISOString(),
+        }));
 
-  const isRegistration = application.type === ApplicationType.NEW_REGISTRATION;
+  const ownerChecklist = isRegistration
+    ? getPhaseDocumentChecklist({ phase: "owner", type: application.type, data }).map((item) => ({
+        ...item,
+        uploaded: uploadedPurposeSet.has(item.purpose),
+      }))
+    : documentChecklist.filter((item) => item.phase === "owner");
+  const installerChecklist = isRegistration
+    ? getPhaseDocumentChecklist({ phase: "installer", type: application.type, data }).map((item) => ({
+        ...item,
+        uploaded: uploadedPurposeSet.has(item.purpose),
+      }))
+    : documentChecklist.filter((item) => item.phase === "installer");
+  const certifierChecklist = isRegistration
+    ? getPhaseDocumentChecklist({ phase: "certifier", type: application.type, data }).map((item) => ({
+        ...item,
+        uploaded: uploadedPurposeSet.has(item.purpose),
+      }))
+    : documentChecklist.filter((item) => item.phase === "certifier");
+
+  const registrationDocSlots =
+    isRegistration && registrationDossierSections.length > 0
+      ? {
+          ownerDocsSlot:
+            ownerChecklist.length > 0 ? (
+              <ApplicationDocumentChecklistView
+                applicationId={id}
+                checklist={ownerChecklist}
+                documents={documents}
+                currentUserId={session.user.id}
+                supplementaryPhase="owner"
+              />
+            ) : undefined,
+          installerDocsSlot:
+            installerChecklist.length > 0 ? (
+              <ApplicationDocumentChecklistView
+                applicationId={id}
+                checklist={installerChecklist}
+                documents={documents}
+                currentUserId={session.user.id}
+                supplementaryPhase="installer"
+              />
+            ) : undefined,
+          certifierDocsSlot:
+            certifierChecklist.length > 0 ? (
+              <ApplicationDocumentChecklistView
+                applicationId={id}
+                checklist={certifierChecklist}
+                documents={documents}
+                currentUserId={session.user.id}
+                supplementaryPhase="certifier"
+              />
+            ) : undefined,
+        }
+      : null;
+
   const correctionChanges = Array.isArray(data?.correctionFields)
     ? (data.correctionFields as FieldChange[])
     : [];
@@ -138,19 +216,46 @@ export default async function ReviewDetailPage({
     ? (data.updateFields as FieldChange[])
     : [];
 
-  const registrationDossierSections = isRegistration
-    ? buildRegistrationDossier(application).sections
-    : [];
-
   const certifierDisplayName = displayCertifierOrganizationName(
     application.certifierOrg?.name,
     data?.omiNumber,
   );
 
+  const hasActionPanel = ishmtReviewHasActionPanel({
+    status: application.status,
+    roleCode: session.user.roleCode,
+    myFieldReviewAssignmentId,
+    inspectorAssignmentLockedBy: application.inspectorAssignmentLockedBy,
+    plannedInspectorIds,
+  });
+  const focusedDossier = !hasActionPanel;
+
+  const elevatorAsideExtras =
+    application.targetElevator?.requiresAttention || application.targetElevator ? (
+      <>
+        {application.targetElevator?.requiresAttention && (
+          <PhysicalVerificationButton elevatorId={application.targetElevator.id} />
+        )}
+        {application.targetElevator && (
+          <div className="reg-wizard-panel shrink-0">
+            <div className="reg-wizard-body">
+              <p className="text-sm font-semibold text-foreground">Dosja e ashensorit</p>
+              <Link
+                href={`/portal/elevators/${application.targetElevator.id}`}
+                className="mt-2 inline-block text-sm text-gov-primary hover:underline"
+              >
+                Shiko dosjen e ashensorit →
+              </Link>
+            </div>
+          </div>
+        )}
+      </>
+    ) : null;
+
   return (
     <AppShell title="Shqyrtimi i aplikimit">
       <StandardPageLayout
-        eyebrow="ISHMT · Shqyrtim administrativ"
+        eyebrow="IQMT · Shqyrtim administrativ"
         title={application.applicationNumber}
         description={TYPE_LABELS[application.type] ?? application.type}
         actions={
@@ -172,112 +277,155 @@ export default async function ReviewDetailPage({
               ] as ApplicationStatus[]).includes(application.status) && (
               <LegalDeadlineBadge submittedAt={application.submittedAt} />
             )}
-            <a
-              href={`/api/applications/${id}/memo`}
-              className="rounded-md border px-3 py-1 text-xs font-medium hover:bg-muted"
-            >
-              Shkarko Memo (Aneksi 1)
-            </a>
           </div>
         }
       >
-        <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(28rem,32rem)] xl:grid-cols-[minmax(0,1fr)_34rem]">
-          <div className="min-w-0 space-y-6">
-            <SectionCard title="Dosja e aplikimit" subtitle="Të dhënat kryesore të Aplikimit për Registrim" padded>
-              <div className="grid gap-2 text-sm md:grid-cols-2">
-                <p><strong>Personi përgjegjës i ashensorit:</strong> {application.ownerOrg.name}</p>
-                {isRegistration && (
-                  <>
-                    <p><strong>Instalues:</strong> {application.installerOrg?.name ?? "-"}</p>
-                    <p><strong>Certifikues:</strong> {certifierDisplayName ?? "-"}</p>
-                    <p><strong>Adresa:</strong> {data?.buildingAddress ?? "-"}</p>
-                    <p><strong>Bashkia:</strong> {data?.municipality?.nameSq ?? "-"}</p>
-                    <p><strong>Lloji:</strong> {data?.elevatorType ?? "-"}</p>
-                    <p><strong>Prodhuesi:</strong> {data?.manufacturer ?? "-"}</p>
-                    <p><strong>Serial:</strong> {data?.serialNumber ?? "-"}</p>
-                    <p><strong>Cert. nr.:</strong> {data?.installationCertificateNumber ?? "-"}</p>
-                    <p>
-                      <strong>Cert. data:</strong>{" "}
-                      {data?.installationCertificateDate
-                        ? new Date(data.installationCertificateDate).toLocaleDateString("sq-AL")
-                        : "-"}
-                    </p>
-                  </>
-                )}
-                {application.type === ApplicationType.DEREGISTRATION && (
-                  <>
-                    <p><strong>Ashensori:</strong> {application.targetElevator?.registryNumber ?? "-"}</p>
-                    <p><strong>Arsye:</strong> {data?.deregistrationReasonType ?? "-"}</p>
-                    <p className="md:col-span-2"><strong>Shpjegim:</strong> {data?.deregistrationReason ?? "-"}</p>
-                  </>
-                )}
-                {(application.type === ApplicationType.DATA_CORRECTION ||
-                  application.type === ApplicationType.DATA_UPDATE) && (
-                  <>
-                    <p><strong>Ashensori:</strong> {application.targetElevator?.registryNumber ?? "-"}</p>
-                    {application.type === ApplicationType.DATA_UPDATE && (
-                      <p><strong>Lloji përditësimi:</strong> {data?.updateType ?? "-"}</p>
-                    )}
-                  </>
-                )}
-                {application.type === ApplicationType.MODERNIZATION && (
-                  <>
-                    <p><strong>Ashensori:</strong> {application.targetElevator?.registryNumber ?? "-"}</p>
-                    <p><strong>Instalues:</strong> {application.installerOrg?.name ?? "-"}</p>
-                    <p><strong>Certifikues:</strong> {certifierDisplayName ?? "-"}</p>
-                    <p>
-                      <strong>Lloji modernizimit:</strong>{" "}
-                      {data?.modernizationType
-                        ? MODERNIZATION_TYPE_LABELS[data.modernizationType]
-                        : "-"}
-                    </p>
-                    <p><strong>Serial (i ri):</strong> {data?.serialNumber ?? "-"}</p>
-                    <p><strong>Prodhuesi:</strong> {data?.manufacturer ?? "-"}</p>
-                    <p><strong>Cert. nr.:</strong> {data?.installationCertificateNumber ?? "-"}</p>
-                    <p className="md:col-span-2">
-                      <strong>Përshkrimi:</strong> {data?.modernizationNotes ?? "-"}
-                    </p>
-                  </>
-                )}
+        <div
+          className={cn(
+            focusedDossier
+              ? "mx-auto w-full max-w-5xl space-y-6"
+              : "grid gap-6 lg:grid-cols-[minmax(0,1fr)_26rem] lg:gap-8 xl:grid-cols-[minmax(0,1fr)_28rem]",
+          )}
+        >
+          <div
+            className={cn(
+              "min-w-0 space-y-6",
+            )}
+          >
+            {isFieldInspectorRole(session.user.roleCode) && inspectorDossierContext ? (
+              <InspectorDossierTasksPanel
+                applicationId={id}
+                requiresFieldVerification={inspectorDossierContext.requiresFieldVerification}
+                documentReview={inspectorDossierContext.documentReview}
+                fieldInspection={inspectorDossierContext.fieldInspection}
+              />
+            ) : null}
+
+            {isFieldInspectorRole(session.user.roleCode) &&
+              application.status === ApplicationStatus.PENDING_FIELD_REVIEW &&
+              myFieldReviewAssignmentId && (
+                <FieldInspectorReviewBriefing
+                  requiresFieldVerification={application.requiresFieldVerification}
+                />
+              )}
+
+            {isRegistration && registrationDossierSections.length > 0 && registrationDocSlots ? (
+              <div className="reg-wizard-panel">
+                <div className="reg-wizard-body">
+                  <RegistrationDossierView
+                    sections={registrationDossierSections}
+                    ownerDocsSlot={registrationDocSlots.ownerDocsSlot}
+                    installerDocsSlot={registrationDocSlots.installerDocsSlot}
+                    certifierDocsSlot={registrationDocSlots.certifierDocsSlot}
+                  />
+                </div>
               </div>
-            </SectionCard>
+            ) : (
+              <>
+                <WorkflowSection
+                  title="Dosja e aplikimit"
+                  description="Të dhënat kryesore të parashtruara"
+                >
+                  <div className="workflow-data-grid">
+                    <div className="workflow-data-cell">
+                      <p className="workflow-data-label">Personi përgjegjës i ashensorit</p>
+                      <p className="workflow-data-value">{application.ownerOrg.name}</p>
+                    </div>
+                    {application.type === ApplicationType.DEREGISTRATION && (
+                      <>
+                        <div className="workflow-data-cell">
+                          <p className="workflow-data-label">Ashensori</p>
+                          <p className="workflow-data-value">{application.targetElevator?.registryNumber ?? "-"}</p>
+                        </div>
+                        <div className="workflow-data-cell">
+                          <p className="workflow-data-label">Arsye</p>
+                          <p className="workflow-data-value">{data?.deregistrationReasonType ?? "-"}</p>
+                        </div>
+                        <div className="workflow-data-cell md:col-span-2">
+                          <p className="workflow-data-label">Shpjegim</p>
+                          <p className="workflow-data-value">{data?.deregistrationReason ?? "-"}</p>
+                        </div>
+                      </>
+                    )}
+                    {(application.type === ApplicationType.DATA_CORRECTION ||
+                      application.type === ApplicationType.DATA_UPDATE) && (
+                      <>
+                        <div className="workflow-data-cell">
+                          <p className="workflow-data-label">Ashensori</p>
+                          <p className="workflow-data-value">{application.targetElevator?.registryNumber ?? "-"}</p>
+                        </div>
+                        {application.type === ApplicationType.DATA_UPDATE && (
+                          <div className="workflow-data-cell">
+                            <p className="workflow-data-label">Lloji përditësimi</p>
+                            <p className="workflow-data-value">{data?.updateType ?? "-"}</p>
+                          </div>
+                        )}
+                      </>
+                    )}
+                    {application.type === ApplicationType.MODERNIZATION && (
+                      <>
+                        <div className="workflow-data-cell">
+                          <p className="workflow-data-label">Ashensori</p>
+                          <p className="workflow-data-value">{application.targetElevator?.registryNumber ?? "-"}</p>
+                        </div>
+                        <div className="workflow-data-cell">
+                          <p className="workflow-data-label">Instalues</p>
+                          <p className="workflow-data-value">{application.installerOrg?.name ?? "-"}</p>
+                        </div>
+                        <div className="workflow-data-cell">
+                          <p className="workflow-data-label">Certifikues</p>
+                          <p className="workflow-data-value">{certifierDisplayName ?? "-"}</p>
+                        </div>
+                        <div className="workflow-data-cell">
+                          <p className="workflow-data-label">Lloji modernizimit</p>
+                          <p className="workflow-data-value">
+                            {data?.modernizationType
+                              ? MODERNIZATION_TYPE_LABELS[data.modernizationType]
+                              : "-"}
+                          </p>
+                        </div>
+                        <div className="workflow-data-cell md:col-span-2">
+                          <p className="workflow-data-label">Përshkrimi</p>
+                          <p className="workflow-data-value">{data?.modernizationNotes ?? "-"}</p>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                </WorkflowSection>
+
+                <ApplicationDataSummary
+                  data={data}
+                  orgs={{
+                    owner: application.ownerOrg.name,
+                    installer: application.installerOrg?.name,
+                    certifier: certifierDisplayName,
+                  }}
+                  title="Të dhënat e regjistruara"
+                />
+
+                <ApplicationDocuments
+                  applicationId={id}
+                  documents={documents}
+                  canUpload={false}
+                  checklist={documentChecklist}
+                  sectionTitle="Dokumentet"
+                  sectionDescription="Dosja e ngarkuar në aplikim"
+                  showAllSupplementary
+                />
+              </>
+            )}
 
             {application.type === ApplicationType.DATA_CORRECTION && correctionChanges.length > 0 && (
-              <SectionCard title="Ndryshimet e kërkuara" subtitle="Korrigjime të dhënash" padded>
+              <WorkflowSection title="Ndryshimet e kërkuara" description="Korrigjime të dhënash">
                 <FieldChangesTable changes={correctionChanges} />
-              </SectionCard>
+              </WorkflowSection>
             )}
 
             {application.type === ApplicationType.DATA_UPDATE && updateChanges.length > 0 && (
-              <SectionCard title="Ndryshimet e kërkuara" subtitle="Përditësime të dhënash" padded>
+              <WorkflowSection title="Ndryshimet e kërkuara" description="Përditësime të dhënash">
                 <FieldChangesTable changes={updateChanges} />
-              </SectionCard>
+              </WorkflowSection>
             )}
-
-            {isRegistration && registrationDossierSections.length > 0 ? (
-              <DossierSectionsView
-                sections={registrationDossierSections}
-                title="Të dhënat e plota të aplikimit"
-                description="Çdo fushë e plotësuar nga personi përgjegjës i ashensorit, instaluesi dhe certifikuesi"
-              />
-            ) : (
-              <ApplicationDataSummary
-                data={data}
-                orgs={{
-                  owner: application.ownerOrg.name,
-                  installer: application.installerOrg?.name,
-                  certifier: certifierDisplayName,
-                }}
-                title="Të dhënat e regjistruara"
-              />
-            )}
-
-            <ApplicationDocuments
-              applicationId={id}
-              documents={documents}
-              canUpload={false}
-              checklist={documentChecklist}
-            />
 
             {isRegistration && (
               <AssetGenerationStatusCard
@@ -287,7 +435,10 @@ export default async function ReviewDetailPage({
               />
             )}
 
-            <ApplicationFieldVerificationCard status={fieldVerificationStatus} />
+            <ApplicationFieldVerificationCard
+              status={fieldVerificationStatus}
+              tasksHref={getFieldInspectionTasksHref(session.user.roleCode, id)}
+            />
 
             <IshmtWorkflowTrail
               history={workflowTrail.history}
@@ -296,9 +447,14 @@ export default async function ReviewDetailPage({
               lockedBy={workflowTrail.lockedBy}
               plannedInspectorIds={workflowTrail.plannedInspectorIds}
             />
+
+            {focusedDossier && elevatorAsideExtras ? (
+              <div className="space-y-6">{elevatorAsideExtras}</div>
+            ) : null}
           </div>
 
-          <aside className="flex min-w-0 flex-col gap-4 lg:sticky lg:top-6 lg:max-h-[calc(100dvh-2rem)] lg:self-start lg:overflow-hidden lg:border-l lg:border-border/50 lg:pl-6">
+          {!focusedDossier ? (
+          <aside className="flex w-full min-w-0 max-w-full flex-col gap-6 lg:sticky lg:top-6 lg:max-h-[calc(100dvh-2rem)] lg:w-full lg:max-w-[26rem] lg:self-start lg:overflow-hidden xl:max-w-[28rem]">
             <div className="min-h-0 flex-1 overflow-hidden">
               <IshmtReviewActions
               applicationId={id}
@@ -308,11 +464,13 @@ export default async function ReviewDetailPage({
               plannedInspectorIds={plannedInspectorIds}
               inspectorAssignmentLockedBy={application.inspectorAssignmentLockedBy}
               initialRequiresFieldVerification={application.requiresFieldVerification}
+              fieldVerificationRequestedBy={application.fieldVerificationRequestedBy}
               fieldVerificationCanApprove={fieldVerificationStatus.canApprove}
               fieldReviewAssignments={fieldReviewAssignments.map((a) => ({
                 id: a.id,
                 inspectorId: a.inspectorId,
                 status: a.status,
+                reportText: a.reportText,
                 inspector: a.inspector,
               }))}
               availableInspectors={availableInspectors}
@@ -324,20 +482,9 @@ export default async function ReviewDetailPage({
               }
             />
             </div>
-            {application.targetElevator?.requiresAttention && (
-              <PhysicalVerificationButton elevatorId={application.targetElevator.id} />
-            )}
-            {application.targetElevator && (
-              <SectionCard title="Dosja e ashensorit" padded className="shrink-0">
-                <Link
-                  href={`/portal/elevators/${application.targetElevator.id}`}
-                  className="text-sm text-primary hover:underline"
-                >
-                  Shiko dosjen e ashensorit →
-                </Link>
-              </SectionCard>
-            )}
+            {elevatorAsideExtras}
           </aside>
+          ) : null}
         </div>
       </StandardPageLayout>
     </AppShell>

@@ -12,7 +12,7 @@ export function AdminDashboard({ data }: { data: Data }) {
 
   return (
     <StandardPageLayout
-      eyebrow="ISHMT · Administrator i sistemit"
+      eyebrow="IQMT · Administrator i sistemit"
       title="Paneli i sistemit"
       description="Përdoruesit, audit dhe konfigurimi i sistemit"
     >

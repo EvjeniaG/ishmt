@@ -1,8 +1,9 @@
 import { OrgStatus } from "@prisma/client";
 import { AppShell } from "@/components/layout/app-shell";
 import { DirectorateCompaniesTable } from "@/components/directorate/directorate-companies-table";
-import { DirectoratePageHeader } from "@/components/directorate/directorate-page-header";
+import { DirectoratePageShell } from "@/components/directorate/directorate-page-header";
 import { SectionCard } from "@/components/shared/institutional";
+import { DIRECTORATE_COMPANY_TABS } from "@/lib/directorate/directorate-nav";
 import { requireDirectorateOrAdminReadonly } from "@/lib/directorate/access";
 import { OrganizationService } from "@/lib/services/organization-service";
 
@@ -14,18 +15,23 @@ export default async function DirectorateSuspendedCompaniesPage() {
 
   return (
     <AppShell title="Kompani të pezulluara">
-      <div className="space-y-6">
-        <DirectoratePageHeader
-          title="Kompani të pezulluara"
-          description="Kompanitë instaluese dhe certifikuese me status të pezulluar."
-        />
-        <SectionCard title="Lista e kompanive të pezulluara">
-          <DirectorateCompaniesTable
-            companies={companies}
-            emptyMessage="Nuk ka kompani të pezulluara."
-          />
+      <DirectoratePageShell
+        title="Kompani të pezulluara"
+        description="Subjektet që nuk shfaqen më në zgjedhje për aplikime të reja derisa të riaktivizohen."
+        tabs={DIRECTORATE_COMPANY_TABS}
+      >
+        <SectionCard
+          title="Lista e pezullimeve"
+          meta={
+            <span className="text-sm tabular-nums text-muted-foreground">
+              {companies.length} {companies.length === 1 ? "kompani" : "kompanitë"}
+            </span>
+          }
+          padded
+        >
+          <DirectorateCompaniesTable companies={companies} emptyMessage="Nuk ka kompani të pezulluara." />
         </SectionCard>
-      </div>
+      </DirectoratePageShell>
     </AppShell>
   );
 }

@@ -1,13 +1,25 @@
 import { AuditAction, OrgStatus, OrgType, Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { AuditService } from "@/lib/audit/audit-service";
+import { ownerRequiresNipt } from "@/lib/registration/owner-entity-role";
 import type { AuthContext } from "@/lib/permissions/guards";
 import { PERMISSIONS } from "@/lib/permissions/codes";
 import { hasPermission } from "@/lib/permissions/guards";
 import { ROLE_CODES } from "@/lib/constants/roles";
+import {
+  activeCertifierOrgWhere,
+  activeInstallerOrgWhere,
+} from "@/lib/organizations/licensed-org-filters";
+import {
+  capabilitiesFromOrg,
+  isLicensedServiceProvider,
+  resolvePrimaryOrgType,
+  resolvePrimaryRoleCode,
+  type OrgCapabilities,
+} from "@/lib/organizations/org-capabilities";
 
 export type CreateLicensedCompanyInput = {
-  type: typeof OrgType.INSTALLER | typeof OrgType.CERTIFIER;
+  capabilities: OrgCapabilities;
   name: string;
   nipt?: string;
   municipalityId?: string;
@@ -19,19 +31,128 @@ export type CreateLicensedCompanyInput = {
   adminLastName?: string;
 };
 
+function directorateRegistryWhere(): Prisma.OrganizationWhereInput {
+  const now = new Date();
+  return {
+    OR: [
+      { capInstall: true },
+      { capOm: true },
+      {
+        licenses: {
+          some: {
+            licenseType: { in: ["INSTALLATION", "CERTIFICATION"] },
+            status: OrgStatus.ACTIVE,
+            expiryDate: { gte: now },
+          },
+        },
+      },
+    ],
+  };
+}
+
+function isMaintenanceOnlyPortalOrg(org: {
+  type: OrgType;
+  capInstall?: boolean | null;
+  capOm?: boolean | null;
+  capMaintenance?: boolean | null;
+  licenses: { licenseType: string; status: OrgStatus; expiryDate: Date }[];
+}) {
+  const caps = capabilitiesFromOrg(org);
+  if (caps.capInstall || caps.capOm) return false;
+  const now = new Date();
+  const hasDirectorateLicense = org.licenses.some(
+    (license) =>
+      (license.licenseType === "INSTALLATION" || license.licenseType === "CERTIFICATION") &&
+      license.status === OrgStatus.ACTIVE &&
+      license.expiryDate >= now,
+  );
+  return caps.capMaintenance && !hasDirectorateLicense;
+}
+
 export class OrganizationService {
-  static assertCanManageLicensedCompany(ctx: AuthContext, type: OrgType) {
+  static assertCanManageCapabilities(ctx: AuthContext, capabilities: OrgCapabilities) {
     if (ctx.roleCode !== ROLE_CODES.DIRECTORATE) {
       throw new Error("Vetëm Drejtoria mund të menaxhojë kompanitë e licencuara.");
     }
 
-    if (type === OrgType.INSTALLER && !hasPermission(ctx, PERMISSIONS.ORG_MANAGE_INSTALLER)) {
-      throw new Error("Nuk keni leje për të menaxhuar kompanitë e instalimit.");
+    if (capabilities.capInstall && !hasPermission(ctx, PERMISSIONS.ORG_MANAGE_INSTALLER)) {
+      throw new Error("Nuk keni leje për të regjistruar kompani instalimi.");
     }
 
-    if (type === OrgType.CERTIFIER && !hasPermission(ctx, PERMISSIONS.ORG_MANAGE_CERTIFIER)) {
-      throw new Error("Nuk keni leje për të menaxhuar kompanitë OMI.");
+    if (capabilities.capOm && !hasPermission(ctx, PERMISSIONS.ORG_MANAGE_CERTIFIER)) {
+      throw new Error("Nuk keni leje për të regjistruar kompani OM.");
     }
+  }
+
+  static assertCanManageLicensedCompany(ctx: AuthContext, type: OrgType) {
+    const capabilities = capabilitiesFromOrg({ type });
+    this.assertCanManageCapabilities(ctx, capabilities);
+  }
+
+  static assertCanManageLicenseType(ctx: AuthContext, licenseType: string) {
+    if (ctx.roleCode !== ROLE_CODES.DIRECTORATE) {
+      throw new Error("Vetëm Drejtoria mund të menaxhojë licencat.");
+    }
+
+    if (licenseType === "INSTALLATION") {
+      if (!hasPermission(ctx, PERMISSIONS.ORG_MANAGE_INSTALLER)) {
+        throw new Error("Nuk keni leje për licenca instalimi.");
+      }
+      return;
+    }
+
+    if (licenseType === "CERTIFICATION") {
+      if (!hasPermission(ctx, PERMISSIONS.ORG_MANAGE_CERTIFIER)) {
+        throw new Error("Nuk keni leje për licenca OM.");
+      }
+      return;
+    }
+
+    throw new Error("Lloji i licencës nuk mbështetet.");
+  }
+
+  static async findPortalServiceOrgByNipt(nipt: string) {
+    const normalizedNipt = nipt.trim().toUpperCase();
+    if (!normalizedNipt) return null;
+
+    return db.organization.findFirst({
+      where: {
+        nipt: normalizedNipt,
+        deletedAt: null,
+        type: { not: OrgType.OWNER },
+      },
+      include: { licenses: true },
+    });
+  }
+
+  static async checkNiptForDirectorateCreate(niptRaw: string) {
+    const nipt = niptRaw.trim().toUpperCase();
+    if (nipt.length < 8) {
+      return { status: "TOO_SHORT" as const };
+    }
+
+    const existing = await db.organization.findFirst({
+      where: { nipt, deletedAt: null },
+      include: { licenses: true },
+    });
+
+    if (!existing) {
+      return { status: "AVAILABLE" as const };
+    }
+
+    if (isMaintenanceOnlyPortalOrg(existing)) {
+      return {
+        status: "PORTAL_MAINTENANCE" as const,
+        organizationId: existing.id,
+        orgName: existing.name,
+      };
+    }
+
+    return {
+      status: "ALREADY_REGISTERED" as const,
+      organizationId: existing.id,
+      orgName: existing.name,
+    };
   }
 
   static async listLicensedCompanies(filters?: {
@@ -42,17 +163,27 @@ export class OrganizationService {
   }) {
     const where: Prisma.OrganizationWhereInput = {
       deletedAt: null,
-      type: filters?.type ?? { in: [OrgType.INSTALLER, OrgType.CERTIFIER] },
+      AND: [directorateRegistryWhere()],
     };
+
+    if (filters?.search) {
+      where.AND = [
+        directorateRegistryWhere(),
+        {
+          OR: [
+            { name: { contains: filters.search, mode: "insensitive" } },
+            { nipt: { contains: filters.search, mode: "insensitive" } },
+          ],
+        },
+      ];
+    } else if (filters?.type === OrgType.INSTALLER) {
+      where.AND = [directorateRegistryWhere(), { OR: [{ type: OrgType.INSTALLER }, { capInstall: true }] }];
+    } else if (filters?.type === OrgType.CERTIFIER) {
+      where.AND = [directorateRegistryWhere(), { OR: [{ type: OrgType.CERTIFIER }, { capOm: true }] }];
+    }
 
     if (filters?.status) where.status = filters.status;
     if (filters?.municipalityId) where.municipalityId = filters.municipalityId;
-    if (filters?.search) {
-      where.OR = [
-        { name: { contains: filters.search, mode: "insensitive" } },
-        { nipt: { contains: filters.search, mode: "insensitive" } },
-      ];
-    }
 
     return db.organization.findMany({
       where,
@@ -80,19 +211,39 @@ export class OrganizationService {
   }
 
   static async createLicensedCompany(ctx: AuthContext, input: CreateLicensedCompanyInput) {
-    this.assertCanManageLicensedCompany(ctx, input.type);
+    if (!input.capabilities.capInstall && !input.capabilities.capOm) {
+      throw new Error(
+        "Regjistrimi nga Drejtoría vlen vetëm për instalim ose OM. Kompani mirëmbajtjeje regjistrohen në portal.",
+      );
+    }
+
+    this.assertCanManageCapabilities(ctx, input.capabilities);
 
     if (input.nipt) {
-      const dup = await db.organization.findFirst({
-        where: { nipt: input.nipt, deletedAt: null },
+      const normalizedNipt = input.nipt.trim().toUpperCase();
+      const existing = await db.organization.findFirst({
+        where: { nipt: normalizedNipt, deletedAt: null },
+        include: { licenses: true },
       });
-      if (dup) throw new Error("Ky NIPT ekziston tashmë.");
+      if (existing) {
+        if (isMaintenanceOnlyPortalOrg(existing)) {
+          throw new Error(
+            "Ky NIPT është kompani mirëmbajtjeje në portal. Shtoni licenca instalimi ose OM nga faqja e licencave.",
+          );
+        }
+        throw new Error("Ky NIPT ekziston tashmë në regjistrin e Drejtorisë.");
+      }
     }
+
+    const primaryType = resolvePrimaryOrgType(input.capabilities);
 
     return db.$transaction(async (tx) => {
       const org = await tx.organization.create({
         data: {
-          type: input.type,
+          type: primaryType,
+          capInstall: input.capabilities.capInstall,
+          capMaintenance: input.capabilities.capMaintenance,
+          capOm: input.capabilities.capOm,
           name: input.name,
           nipt: input.nipt,
           municipalityId: input.municipalityId,
@@ -115,12 +266,36 @@ export class OrganizationService {
         tx,
       );
 
-      return org;
-    }).then(async (org) => {
+      const { issueDirectorateLicense } = await import("@/lib/licenses/directorate-license-issuance");
+      const issuedLicenses: { licenseType: string; licenseNumber: string }[] = [];
+
+      if (input.capabilities.capInstall) {
+        const license = await issueDirectorateLicense(ctx, tx, {
+          organizationId: org.id,
+          licenseType: "INSTALLATION",
+        });
+        issuedLicenses.push({
+          licenseType: license.licenseType,
+          licenseNumber: license.licenseNumber,
+        });
+      }
+
+      if (input.capabilities.capOm) {
+        const license = await issueDirectorateLicense(ctx, tx, {
+          organizationId: org.id,
+          licenseType: "CERTIFICATION",
+        });
+        issuedLicenses.push({
+          licenseType: license.licenseType,
+          licenseNumber: license.licenseNumber,
+        });
+      }
+
+      return { org, issuedLicenses };
+    }).then(async ({ org, issuedLicenses }) => {
       if (input.adminEmail && input.adminFirstName && input.adminLastName) {
         const { InvitationService } = await import("@/lib/services/invitation-service");
-        const roleCode =
-          input.type === OrgType.INSTALLER ? ROLE_CODES.INSTALLER : ROLE_CODES.CERTIFIER;
+        const roleCode = resolvePrimaryRoleCode(input.capabilities);
 
         await InvitationService.createInvitation({
           organizationId: org.id,
@@ -132,7 +307,7 @@ export class OrganizationService {
         });
       }
 
-      return org;
+      return { ...org, issuedLicenses };
     });
   }
 
@@ -151,11 +326,11 @@ export class OrganizationService {
   ) {
     const org = await this.getById(id);
     if (!org) throw new Error("Organizata nuk u gjet.");
-    if (org.type !== OrgType.INSTALLER && org.type !== OrgType.CERTIFIER) {
-      throw new Error("Vetëm kompanitë e instalimit dhe OMI mund të përditësohen nga Drejtoria.");
+    if (!isLicensedServiceProvider(org)) {
+      throw new Error("Vetëm kompanitë e shërbimit mund të përditësohen nga Drejtoria.");
     }
 
-    this.assertCanManageLicensedCompany(ctx, org.type);
+    this.assertCanManageCapabilities(ctx, capabilitiesFromOrg(org));
 
     const updated = await db.$transaction(async (tx) => {
       const result = await tx.organization.update({
@@ -184,10 +359,10 @@ export class OrganizationService {
   static async suspendCompany(ctx: AuthContext, id: string, reason?: string) {
     const org = await this.getById(id);
     if (!org) throw new Error("Organizata nuk u gjet.");
-    if (org.type !== OrgType.INSTALLER && org.type !== OrgType.CERTIFIER) {
-      throw new Error("Vetëm kompanitë e instalimit dhe OMI mund të pezullohen.");
+    if (!isLicensedServiceProvider(org)) {
+      throw new Error("Vetëm kompanitë e shërbimit mund të pezullohen.");
     }
-    this.assertCanManageLicensedCompany(ctx, org.type);
+    this.assertCanManageCapabilities(ctx, capabilitiesFromOrg(org));
     if (org.status === OrgStatus.SUSPENDED) {
       throw new Error("Kompania është pezulluar tashmë.");
     }
@@ -218,10 +393,10 @@ export class OrganizationService {
   static async revokeCompany(ctx: AuthContext, id: string, reason?: string) {
     const org = await this.getById(id);
     if (!org) throw new Error("Organizata nuk u gjet.");
-    if (org.type !== OrgType.INSTALLER && org.type !== OrgType.CERTIFIER) {
-      throw new Error("Vetëm kompanitë e instalimit dhe OMI mund të revokohen.");
+    if (!isLicensedServiceProvider(org)) {
+      throw new Error("Vetëm kompanitë e shërbimit mund të revokohen.");
     }
-    this.assertCanManageLicensedCompany(ctx, org.type);
+    this.assertCanManageCapabilities(ctx, capabilitiesFromOrg(org));
     if (org.status === OrgStatus.REVOKED) {
       throw new Error("Kompania është revokuar tashmë.");
     }
@@ -257,10 +432,10 @@ export class OrganizationService {
   static async reinstateCompany(ctx: AuthContext, id: string, reason?: string) {
     const org = await this.getById(id);
     if (!org) throw new Error("Organizata nuk u gjet.");
-    if (org.type !== OrgType.INSTALLER && org.type !== OrgType.CERTIFIER) {
-      throw new Error("Vetëm kompanitë e instalimit dhe OMI mund të riaktivizohen.");
+    if (!isLicensedServiceProvider(org)) {
+      throw new Error("Vetëm kompanitë e shërbimit mund të riaktivizohen.");
     }
-    this.assertCanManageLicensedCompany(ctx, org.type);
+    this.assertCanManageCapabilities(ctx, capabilitiesFromOrg(org));
 
     const reinstatable: OrgStatus[] = [
       OrgStatus.SUSPENDED,
@@ -304,10 +479,10 @@ export class OrganizationService {
   static async rejectCompany(ctx: AuthContext, id: string, reason?: string) {
     const org = await this.getById(id);
     if (!org) throw new Error("Organizata nuk u gjet.");
-    if (org.type !== OrgType.INSTALLER && org.type !== OrgType.CERTIFIER) {
-      throw new Error("Vetëm kompanitë e instalimit dhe OMI mund të refuzohen.");
+    if (!isLicensedServiceProvider(org)) {
+      throw new Error("Vetëm kompanitë e shërbimit mund të refuzohen.");
     }
-    this.assertCanManageLicensedCompany(ctx, org.type);
+    this.assertCanManageCapabilities(ctx, capabilitiesFromOrg(org));
 
     return db.$transaction(async (tx) => {
       const updated = await tx.organization.update({
@@ -337,15 +512,6 @@ export class OrganizationService {
     data: {
       name?: string;
       nipt?: string;
-      legalForm?: string;
-      address?: string;
-      phone?: string;
-      email?: string;
-      municipalityId?: string;
-      representativeName?: string;
-      representativeNid?: string;
-      representativePhone?: string;
-      representativeEmail?: string;
       ownerBuildingRole?: string;
     },
   ) {
@@ -360,25 +526,20 @@ export class OrganizationService {
       throw new Error("Nuk keni leje për të përditësuar këtë organizatë.");
     }
 
-    if (org.type === OrgType.OWNER && !data.municipalityId) {
-      throw new Error("Bashkia është e detyrueshme për profilin e personit përgjegjës të ashensorit.");
-    }
+    const role = data.ownerBuildingRole ?? org.ownerBuildingRole ?? undefined;
+    const isAdministrator = role === "ADMINISTRATOR";
+    const fullName = `${ctx.firstName} ${ctx.lastName}`.trim();
+    const resolvedName = isAdministrator ? fullName : data.name?.trim() || org.name;
+    const resolvedNipt = ownerRequiresNipt(role)
+      ? data.nipt?.trim().toUpperCase() || org.nipt
+      : null;
 
     return db.$transaction(async (tx) => {
       const updated = await tx.organization.update({
         where: { id: ctx.activeOrgId },
         data: {
-          name: data.name,
-          nipt: data.nipt,
-          legalForm: data.legalForm,
-          address: data.address,
-          phone: data.phone,
-          email: data.email,
-          municipalityId: data.municipalityId,
-          representativeName: data.representativeName,
-          representativeNid: data.representativeNid,
-          representativePhone: data.representativePhone,
-          representativeEmail: data.representativeEmail || null,
+          name: resolvedName,
+          nipt: resolvedNipt,
           ownerBuildingRole: data.ownerBuildingRole as Prisma.OrganizationUpdateInput["ownerBuildingRole"],
         },
       });
@@ -407,25 +568,72 @@ export class OrganizationService {
     });
   }
 
-  static async listActiveSelectableCompanies(
-    type: typeof OrgType.INSTALLER | typeof OrgType.CERTIFIER,
-  ) {
-    const now = new Date();
+  static async updateCompanyOrganization(ctx: AuthContext, data: { name: string }) {
+    const org = await this.getById(ctx.activeOrgId);
+    if (!org) throw new Error("Organizata nuk u gjet.");
 
-    return db.organization.findMany({
-      where: {
-        type,
-        status: OrgStatus.ACTIVE,
-        deletedAt: null,
-        licenses: {
-          some: {
-            status: OrgStatus.ACTIVE,
-            expiryDate: { gte: now },
-          },
+    const isCompanyOrg =
+      org.type === OrgType.INSTALLER ||
+      org.type === OrgType.CERTIFIER ||
+      org.type === OrgType.MAINTENANCE;
+
+    if (!isCompanyOrg) {
+      throw new Error("Ky profil organizate nuk mbështetet.");
+    }
+
+    if (!hasPermission(ctx, PERMISSIONS.ORG_EDIT_OWN) && ctx.roleCode !== ROLE_CODES.ADMIN) {
+      throw new Error("Nuk keni leje për të përditësuar këtë organizatë.");
+    }
+
+    const trimmedName = data.name.trim();
+    if (trimmedName.length < 2) {
+      throw new Error("Emri i organizatës është i detyrueshëm");
+    }
+
+    return db.$transaction(async (tx) => {
+      const updated = await tx.organization.update({
+        where: { id: ctx.activeOrgId },
+        data: { name: trimmedName },
+      });
+
+      await AuditService.log(
+        {
+          actorId: ctx.userId,
+          action: AuditAction.UPDATE,
+          entityType: "organization",
+          entityId: org.id,
+          beforeState: { name: org.name },
+          afterState: { name: updated.name },
+        },
+        tx,
+      );
+
+      return updated;
+    });
+  }
+
+  static async listActiveSelectableCompanies(type: typeof OrgType.INSTALLER | typeof OrgType.CERTIFIER) {
+    const typeFilter =
+      type === OrgType.INSTALLER ? activeInstallerOrgWhere() : activeCertifierOrgWhere();
+
+    const orgs = await db.organization.findMany({
+      where: typeFilter,
+      select: {
+        id: true,
+        name: true,
+        nipt: true,
+        memberships: {
+          where: { deactivatedAt: null },
+          select: { id: true },
+          take: 1,
         },
       },
-      select: { id: true, name: true, nipt: true },
       orderBy: { name: "asc" },
     });
+
+    return orgs.map(({ memberships, ...org }) => ({
+      ...org,
+      hasPortalAccount: memberships.length > 0,
+    }));
   }
 }

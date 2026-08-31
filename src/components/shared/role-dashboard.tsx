@@ -11,7 +11,7 @@ const DASHBOARD_CONTENT: Record<
     description: "Menaxhoni aplikimet dhe ashensorët tuaj",
     items: [
       "Krijoni aplikime për regjistrim të ri",
-      "Caktoni instaluesin dhe parashtroni te ISHMT",
+      "Caktoni instaluesin dhe parashtroni te IQMT",
       "Ndiqni statusin e aplikimeve",
     ],
   },
@@ -20,17 +20,17 @@ const DASHBOARD_CONTENT: Record<
     description: "Aplikimet e caktuara për plotësimin e të dhënave teknike",
     items: [
       "Plotësoni të dhënat teknike të aplikimeve",
-      "Caktoni kompaninë certifikuese / OMI",
+      "Caktoni kompaninë certifikuese / OM",
       "Ngarkoni dokumentacionin teknik",
     ],
   },
   [ROLE_CODES.CERTIFIER]: {
-    title: "Paneli i certifikuesit / OMI",
-    description: "Aplikimet e caktuara për certifikim dhe inspektim periodik",
+    title: "Paneli i certifikuesit / OM",
+    description: "Aplikimet e caktuara për certifikim dhe kontroll periodik",
     items: [
       "Ngarkoni certifikatën e instalimit",
       "Verifikoni dokumentacionin teknik",
-      "Regjistroni inspektimet periodike (OMI)",
+      "Regjistroni kontrollet periodike (OM)",
     ],
   },
   [ROLE_CODES.MAINTENANCE]: {
@@ -101,7 +101,7 @@ const DASHBOARD_CONTENT: Record<
     description: "Regjistri i kompanive të licencuara",
     items: [
       "Menaxhoni kompanitë e instalimit",
-      "Menaxhoni kompanitë OMI / certifikuese",
+      "Menaxhoni kompanitë OM / certifikuese",
       "Ndiqni skadimin e licencave",
     ],
   },

@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { DocumentService } from "@/lib/services/document-service";
-import { requirePermission } from "@/lib/permissions/guards";
-import { PERMISSIONS } from "@/lib/permissions/codes";
+import { requireDocumentAccessAuth } from "@/lib/permissions/guards";
 import { buildContentDisposition } from "@/lib/documents/content-disposition";
 
 export async function GET(
@@ -9,7 +8,7 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
-    const ctx = await requirePermission(PERMISSIONS.DOCUMENTS_DOWNLOAD);
+    const ctx = await requireDocumentAccessAuth();
     const { id } = await params;
 
     const { doc, body, contentType } = await DocumentService.downloadWithAccessLog(ctx, id);

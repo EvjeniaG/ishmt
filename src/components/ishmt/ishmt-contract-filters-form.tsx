@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter } from "@/lib/navigation/use-app-router";
 import type { FormEvent } from "react";
 import { SectionCard } from "@/components/shared/institutional";
 import {

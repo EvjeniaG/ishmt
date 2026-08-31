@@ -1,8 +1,19 @@
-export type RegisterDemoLevel = "OWNER" | "INSTALLER" | "CERTIFIER" | "MAINTENANCE";
+import type { RegisterOwnerEntityType } from "@/lib/registration/owner-entity-role";
+import { ownerSubjectNameRequired } from "@/lib/registration/owner-entity-role";
+import { REGISTER_OWNER_PRESETS } from "@/lib/demo/demo-seed-profiles";
+import { nextRegisterDemoInstallClaim } from "@/lib/demo/demo-install-claim-pool";
+import { nextRegisterDemoOmClaim } from "@/lib/demo/demo-om-claim-pool";
+
+export type RegisterDemoLevel = "OWNER" | "COMPANY" | "INSTALLER" | "CERTIFIER" | "MAINTENANCE";
 
 export const REGISTER_DEMO_PASSWORD = "Ishmt2026";
 
 export { isRegisterDemoEnabled } from "@/lib/demo/demo-data-mode";
+export {
+  DEMO_OM_CLAIM_POOL,
+  REGISTER_DEMO_OM_CLAIM,
+  resetRegisterDemoOmClaimCursor,
+} from "@/lib/demo/demo-om-claim-pool";
 
 let demoCounter = 0;
 
@@ -16,10 +27,13 @@ function demoDigits(length = 7): string {
   return String(seed).padStart(length, "0").slice(-length);
 }
 
+const OWNER_DEMO_BY_ROLE = REGISTER_OWNER_PRESETS;
+
 /** Të dhëna fiktive unike për testimin e regjistrimit dhe pipeline-it. */
 export function buildRegisterDemoData(input: {
   level: RegisterDemoLevel;
-  municipalityId: string;
+  ownerBuildingRole?: RegisterOwnerEntityType;
+  capabilities?: Array<"capInstall" | "capMaintenance" | "capOm">;
 }): Record<string, string> {
   const suffix = demoSuffix();
   const digits = demoDigits();
@@ -28,46 +42,55 @@ export function buildRegisterDemoData(input: {
     password: REGISTER_DEMO_PASSWORD,
     confirmPassword: REGISTER_DEMO_PASSWORD,
     phone: `+35569${demoDigits(7)}`,
-    municipalityId: input.municipalityId,
   };
 
   switch (input.level) {
-    case "OWNER":
+    case "OWNER": {
+      const role = input.ownerBuildingRole ?? "ADMINISTRATOR";
+      const preset = OWNER_DEMO_BY_ROLE[role];
       return {
         ...shared,
+        ownerBuildingRole: role,
         personalNumber: `I9${digits}D`,
-        idCardNumber: `ID${suffix}`,
-        firstName: "Arben",
-        fatherName: "Përparim",
-        lastName: "Demo",
-        motherName: "Elena",
+        firstName: preset.firstName,
+        fatherName: preset.fatherName,
+        lastName: preset.lastName,
         birthDate: "1985-06-15",
-        organizationName: `Pronar Demo ${suffix}`,
+        ...(preset.nipt ? { nipt: `L${digits}A` } : { nipt: "" }),
+        ...(ownerSubjectNameRequired(role)
+          ? { organizationName: `${preset.orgName} ${suffix}` }
+          : {}),
       };
+    }
+    case "COMPANY":
     case "INSTALLER":
+    case "CERTIFIER":
+    case "MAINTENANCE": {
+      const caps = input.capabilities ?? [];
+      const wantsInstall = caps.includes("capInstall") || input.level === "INSTALLER";
+      const wantsOm = caps.includes("capOm") || input.level === "CERTIFIER";
+      const installClaim = wantsInstall ? nextRegisterDemoInstallClaim() : null;
+      const omClaim = wantsOm ? nextRegisterDemoOmClaim() : null;
+      const primaryClaim = installClaim ?? omClaim;
+
+      if (!primaryClaim) {
+        return {
+          ...shared,
+          firstName: "Bledar",
+          lastName: "Shehu",
+        };
+      }
+
       return {
         ...shared,
-        nipt: `L1${digits}A`,
-        organizationName: `Instalime Demo ${suffix}`,
+        nipt: primaryClaim.nipt,
+        organizationName: primaryClaim.orgName,
+        ...(installClaim ? { installLicenseNumber: installClaim.licenseNumber } : {}),
+        ...(omClaim ? { omLicenseNumber: omClaim.licenseNumber } : {}),
         firstName: "Bledar",
         lastName: "Shehu",
       };
-    case "CERTIFIER":
-      return {
-        ...shared,
-        nipt: `M2${digits}B`,
-        organizationName: `OMI Demo ${suffix}`,
-        firstName: "Dritan",
-        lastName: "Hoxha",
-      };
-    case "MAINTENANCE":
-      return {
-        ...shared,
-        nipt: `N3${digits}C`,
-        organizationName: `Servis Demo ${suffix}`,
-        firstName: "Ermal",
-        lastName: "Kola",
-      };
+    }
     default:
       return shared;
   }
@@ -76,6 +99,6 @@ export function buildRegisterDemoData(input: {
 export const REGISTER_DEMO_LEVEL_LABELS: Record<RegisterDemoLevel, string> = {
   OWNER: "Person përgjegjës i ashensorit",
   INSTALLER: "Kompani instaluese",
-  CERTIFIER: "Trup certifikues / OMI",
+  CERTIFIER: "Trup c",
   MAINTENANCE: "Kompani mirëmbajtjeje",
 };

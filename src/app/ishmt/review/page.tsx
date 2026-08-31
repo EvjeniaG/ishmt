@@ -57,11 +57,11 @@ export default async function ReviewQueuePage({
   return (
     <AppShell>
       <StandardPageLayout
-        eyebrow="ISHMT · Shqyrtim administrativ"
+        eyebrow="IQMT · Shqyrtim administrativ"
         title="Aplikime në shqyrtim"
         description={
           isApprover
-            ? "Dosjet e Aplikimeve për Registrim — vendimi final nga kryeinspektori."
+            ? "Dosjet e Aplikimeve për Registrim - vendimi final nga kryeinspektori."
             : isReviewer
               ? "Delegim, caktim inspektorësh, raporte dhe ndjekje e dosjes."
               : "Pamje e përgjithshme e aplikimeve në proces."
@@ -155,7 +155,7 @@ export default async function ReviewQueuePage({
                               );
                               return `${p.completed} nga ${p.total} raporte`;
                             })()
-                          : "—"}
+                          : "-"}
                       </td>
                       <td>
                         <ApplicationStatusBadge

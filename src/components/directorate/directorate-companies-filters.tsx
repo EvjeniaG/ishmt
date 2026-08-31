@@ -1,13 +1,14 @@
 "use client";
 
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
+import { useRouter } from "@/lib/navigation/use-app-router";
 import { OrgStatus, OrgType } from "@prisma/client";
 import { Button } from "@/components/ui/button";
 import { ORG_STATUS_LABELS } from "@/lib/constants/org-status";
 
 const TYPE_OPTIONS = [
-  { value: OrgType.INSTALLER, label: "Instalues" },
-  { value: OrgType.CERTIFIER, label: "OMI / Certifikues" },
+  { value: OrgType.INSTALLER, label: "Instalim" },
+  { value: OrgType.CERTIFIER, label: "OM" },
 ];
 
 const STATUS_OPTIONS = (

@@ -1,19 +1,18 @@
-import Link from "next/link";
 import type { ReactNode } from "react";
 import { Download, FileText } from "lucide-react";
+import { AppLink } from "@/components/shared/app-link";
 import { WorkflowStatusChip } from "@/components/applications/application-status-badge";
 import type { StatusTone } from "@/lib/registration/status-presentation";
 import { cn } from "@/lib/utils";
 
-import { formatDateSq } from "@/lib/format-date";
+import { formatDateSq, formatDateTimeSq } from "@/lib/format-date";
 
 export function fmtDateSq(iso: string | null | undefined) {
   return formatDateSq(iso);
 }
 
 export function fmtDateTimeSq(iso: string | null | undefined) {
-  if (!iso) return "-";
-  return new Date(iso).toLocaleString("sq-AL", { dateStyle: "short", timeStyle: "short" });
+  return formatDateTimeSq(iso);
 }
 
 export function yearFromIso(iso: string | null | undefined): number | null {
@@ -155,6 +154,100 @@ export function RegistryEmpty({
   );
 }
 
+export function registryFilterCountLabel(filtered: number, total: number) {
+  if (filtered === total) {
+    return total === 1 ? "1 kontratë" : `${total} kontrata`;
+  }
+  return `${filtered} nga ${total} kontrata`;
+}
+
+function contractFootnoteTone(statusLabel: string): "terminated" | "rejected" | "neutral" {
+  if (statusLabel === "Përfunduar" || statusLabel === "E përfunduar") return "terminated";
+  if (statusLabel === "Refuzuar") return "rejected";
+  return "neutral";
+}
+
+export function contractToneFromLabel(input: { isActive: boolean; statusLabel: string }) {
+  if (input.isActive && input.statusLabel === "Aktive") return "success" as const;
+  if (input.statusLabel === "Në pritje") return "warning" as const;
+  if (input.statusLabel === "Refuzuar") return "danger" as const;
+  return "neutral" as const;
+}
+
+export function ContractStatusCell({
+  statusLabel,
+  tone,
+  respondedAt,
+  rejectionReason,
+  termination,
+}: {
+  statusLabel: string;
+  tone: "success" | "warning" | "danger" | "info" | "neutral";
+  respondedAt: string | null;
+  rejectionReason: string | null;
+  termination?: {
+    partyLabel: string;
+    actorName: string | null;
+    terminatedAt: string;
+  } | null;
+}) {
+  const footnoteTone = contractFootnoteTone(statusLabel);
+  const respondedPrefix =
+    footnoteTone === "terminated"
+      ? "Ndërprerë"
+      : footnoteTone === "rejected"
+        ? "Refuzuar"
+        : "Përgjigjur";
+
+  return (
+    <div className="space-y-1">
+      <StatusPill tone={tone}>{statusLabel}</StatusPill>
+      {respondedAt && (
+        <p className="text-[11px] text-muted-foreground">
+          {respondedPrefix} · {fmtDateTimeSq(respondedAt)}
+        </p>
+      )}
+      {rejectionReason && (
+        <p className="max-w-[15rem] text-[11px] leading-snug text-muted-foreground" title={rejectionReason}>
+          {footnoteTone === "terminated" ? "Arsyeja: " : footnoteTone === "rejected" ? "Refuzimi: " : ""}
+          {rejectionReason}
+        </p>
+      )}
+      {termination && (footnoteTone === "terminated" || footnoteTone === "rejected") ? (
+        <p className="max-w-[15rem] text-[11px] leading-snug text-muted-foreground">
+          {footnoteTone === "rejected" ? "Refuzoi: " : "Ndërpreu: "}
+          {termination.partyLabel.replace(" (refuzim)", "")}
+          {termination.actorName ? ` · ${termination.actorName}` : ""}
+          {" · "}
+          {fmtDateSq(termination.terminatedAt)}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+export function ContractDocumentCell({
+  documentId,
+  documentName,
+  pendingHint = "Pa ngarkuar",
+}: {
+  documentId: string | null;
+  documentName?: string | null;
+  pendingHint?: string;
+}) {
+  if (documentId) {
+    return (
+      <DocumentDownload
+        documentId={documentId}
+        label={documentName ?? "Kontrata PDF"}
+        variant="link"
+      />
+    );
+  }
+
+  return <span className="text-xs text-muted-foreground">{pendingHint}</span>;
+}
+
 export function DocumentDownload({
   documentId,
   label = "Shkarko",
@@ -173,37 +266,37 @@ export function DocumentDownload({
 
   if (variant === "link") {
     return (
-      <Link
+      <AppLink
         href={`/api/documents/${documentId}/download`}
         className="inline-flex items-center gap-1 text-xs font-medium text-gov-primary hover:underline"
       >
         <Download className="h-3 w-3 shrink-0" aria-hidden />
         {label}
-      </Link>
+      </AppLink>
     );
   }
 
   if (variant === "icon") {
     return (
-      <Link
+      <AppLink
         href={`/api/documents/${documentId}/download`}
         className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-border/70 bg-background text-gov-primary transition-colors hover:border-gov-primary/30 hover:bg-gov-primary/5"
         title={label}
         aria-label={label}
       >
         <Download className="h-4 w-4" />
-      </Link>
+      </AppLink>
     );
   }
 
   return (
-    <Link
+    <AppLink
       href={`/api/documents/${documentId}/download`}
       className="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-gov-primary/25 bg-gov-primary/5 px-3 py-2 text-sm font-medium text-gov-primary transition-colors hover:bg-gov-primary/10 sm:w-auto"
     >
       <Download className="h-4 w-4 shrink-0" aria-hidden />
       {label}
-    </Link>
+    </AppLink>
   );
 }
 

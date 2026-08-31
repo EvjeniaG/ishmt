@@ -21,7 +21,7 @@ export default async function ChiefMapPage({
 
   return (
     <AppShell title="Harta sipas bashkive">
-      <IshmtGeoMapPageContent eyebrow="ISHMT · Analiza gjeografike" filters={filters} />
+      <IshmtGeoMapPageContent eyebrow="IQMT · Analiza gjeografike" filters={filters} />
     </AppShell>
   );
 }

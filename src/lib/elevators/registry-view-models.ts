@@ -1,4 +1,5 @@
 import type {
+  BuildingType,
   Inspection,
   MaintenanceComplianceStatus,
   MaintenanceContract,
@@ -13,6 +14,7 @@ import {
   isLegacyImportFindings,
 } from "@/lib/elevators/format-inspection-findings";
 import { displayOmBody, formatOmBodyNumber } from "@/lib/elevators/format-om-body";
+import type { ContractTerminationMeta } from "@/lib/services/maintenance-contract-service";
 
 const MONTHLY_REPORT = "RAPORT_MUJOR";
 
@@ -84,16 +86,19 @@ function inspectionConductedByOrg(
   contracts: Array<{ serviceType: string; isActive: boolean; status: string; startDate: Date; endDate: Date | null; maintenanceOrg?: { name: string } | null }>,
   certifierOrg: { name: string } | null,
 ): string {
-  if (type === "EXTRAORDINARY") return "ISHMT";
-
   if (
     type === "PERIODIC" ||
     type === "INITIAL" ||
     type === "RE_INSPECTION" ||
+    type === "EXTRAORDINARY" ||
     isOmBodyReference(approvedBodyNumber, certifierOrg?.name)
   ) {
     const omBody = displayOmBody(approvedBodyNumber, certifierOrg?.name);
-    if (type === "PERIODIC" || isOmBodyReference(approvedBodyNumber, certifierOrg?.name)) {
+    if (
+      type === "PERIODIC" ||
+      type === "EXTRAORDINARY" ||
+      isOmBodyReference(approvedBodyNumber, certifierOrg?.name)
+    ) {
       return omBody;
     }
   }
@@ -145,6 +150,11 @@ export type MaintenanceRegistryView = {
     createdAt: string;
     documentId: string | null;
     documentName: string | null;
+    termination: {
+      partyLabel: string;
+      actorName: string | null;
+      terminatedAt: string;
+    } | null;
   }>;
   records: Array<{
     id: string;
@@ -168,6 +178,7 @@ export type MaintenanceRegistryView = {
 };
 
 export type InspectionRegistryView = {
+  certifierOrg: { name: string; nipt: string | null } | null;
   contracts: Array<{
     id: string;
     contractNumber: string;
@@ -177,6 +188,8 @@ export type InspectionRegistryView = {
     endDate: string | null;
     companyName: string;
     companyNipt: string | null;
+    rejectionReason: string | null;
+    respondedAt: string | null;
     documentId: string | null;
     documentName: string | null;
     createdAt: string;
@@ -218,6 +231,7 @@ export function buildMaintenanceRegistryView(input: {
     document?: { id: string; originalFilename: string } | null;
   })[];
   maintenanceCompliance: MaintenanceComplianceStatus | null;
+  terminationMeta?: Map<string, ContractTerminationMeta>;
 }): MaintenanceRegistryView {
   const maintContracts = input.maintenanceContracts.filter((c) => c.serviceType === "MAINTENANCE");
   const sortedRecords = [...input.maintenanceRecords].sort(
@@ -252,6 +266,15 @@ export function buildMaintenanceRegistryView(input: {
       createdAt: c.createdAt.toISOString(),
       documentId: c.documentId,
       documentName: c.document?.originalFilename ?? null,
+      termination: (() => {
+        const meta = input.terminationMeta?.get(c.id);
+        if (!meta) return null;
+        return {
+          partyLabel: meta.partyLabel,
+          actorName: meta.actorName,
+          terminatedAt: meta.terminatedAt.toISOString(),
+        };
+      })(),
     })),
     records: sortedRecords.map((r) => ({
         id: r.id,
@@ -281,8 +304,10 @@ export function buildInspectionRegistryView(input: {
     maintenanceOrg?: Organization | null;
     document?: { id: string; originalFilename: string } | null;
   })[];
-  certifierOrg?: { name: string } | null;
+  certifierOrg?: { name: string; nipt?: string | null } | null;
   intervalMonths?: number | null;
+  registrationDate?: Date | null;
+  buildingType?: BuildingType | null;
 }): InspectionRegistryView {
   const sorted = [...input.inspections].sort(
     (a, b) =>
@@ -297,11 +322,19 @@ export function buildInspectionRegistryView(input: {
     computed.setMonth(computed.getMonth() + input.intervalMonths);
     nextDue = computed.toISOString();
   }
+  if (!nextDue && input.registrationDate && input.intervalMonths) {
+    const computed = new Date(input.registrationDate);
+    computed.setMonth(computed.getMonth() + input.intervalMonths);
+    nextDue = computed.toISOString();
+  }
   const inspectionContracts = input.maintenanceContracts
     .filter((c) => c.serviceType === "PERIODIC_INSPECTION")
     .sort((a, b) => new Date(b.startDate).getTime() - new Date(a.startDate).getTime());
 
   return {
+    certifierOrg: input.certifierOrg
+      ? { name: input.certifierOrg.name, nipt: input.certifierOrg.nipt ?? null }
+      : null,
     contracts: inspectionContracts.map((c) => ({
       id: c.id,
       contractNumber: c.contractNumber ?? "-",
@@ -311,6 +344,8 @@ export function buildInspectionRegistryView(input: {
       endDate: c.endDate?.toISOString() ?? null,
       companyName: c.maintenanceOrg?.name ?? "-",
       companyNipt: c.maintenanceOrg?.nipt ?? null,
+      rejectionReason: c.rejectionReason,
+      respondedAt: c.respondedAt?.toISOString() ?? null,
       documentId: c.documentId,
       documentName: c.document?.originalFilename ?? null,
       createdAt: c.createdAt.toISOString(),
@@ -339,13 +374,15 @@ export function buildInspectionRegistryView(input: {
         scheduledDate: i.scheduledDate.toISOString(),
         nextInspectionDate: i.nextInspectionDate?.toISOString() ?? null,
         inspectorName:
-          i.type === "EXTRAORDINARY" && i.inspector
-            ? `${i.inspector.firstName} ${i.inspector.lastName}`
-            : isPeriodic || legacyImport || legacyKiInsp || isLegacyInitial
-              ? null
-              : i.inspector
-                ? `${i.inspector.firstName} ${i.inspector.lastName}`
-                : null,
+          isPeriodic ||
+          i.type === "EXTRAORDINARY" ||
+          legacyImport ||
+          legacyKiInsp ||
+          isLegacyInitial
+            ? null
+            : i.inspector
+              ? `${i.inspector.firstName} ${i.inspector.lastName}`
+              : null,
         conductedByOrg: inspectionConductedByOrg(
           i.type,
           i.conductedDate,

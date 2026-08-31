@@ -1,6 +1,6 @@
 import { generateSecret, generateURI, verifySync } from "otplib";
 
-const ISSUER = "ISHMT Regjistri Ashensorësh";
+const ISSUER = "IQMT Regjistri Ashensorësh";
 
 export function generateTotpSecret(): string {
   return generateSecret();

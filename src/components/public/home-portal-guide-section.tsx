@@ -56,7 +56,7 @@ function GuideAccordion({
 
 export function HomePortalGuideSection() {
   return (
-    <section id="udhezim" className="scroll-mt-4 border-t border-border/60 bg-gov-surface/30">
+    <section className="border-t border-border/60 bg-gov-surface/30">
       <div className="mx-auto max-w-6xl px-4 py-12 sm:px-6 lg:px-8 lg:py-16">
         <div className="portal-page-header mb-8">
           <p className="portal-eyebrow">Dokumentacion · UX</p>
@@ -97,7 +97,7 @@ export function HomePortalGuideSection() {
               ))}
             </ol>
             <div className="mt-5 rounded-xl border border-gov-primary/15 bg-gov-primary/[0.04] p-4">
-              <p className="text-sm font-semibold text-gov-primary">Shqyrtimi ISHMT (pas parashtrimit)</p>
+              <p className="text-sm font-semibold text-gov-primary">Shqyrtimi IQMT (pas parashtrimit)</p>
               <ol className="mt-2 list-decimal space-y-1 pl-5 text-sm text-muted-foreground">
                 {ISHMT_REVIEW_FLOW.map((line) => (
                   <li key={line}>{line}</li>
@@ -175,7 +175,7 @@ export function HomePortalGuideSection() {
           <GuideAccordion
             icon={Building2}
             title="Dosja e ashensorit - skedat"
-            subtitle="Çfarë gjen personi përgjegjës dhe stafi ISHMT pas regjistrimit"
+            subtitle="Çfarë gjen personi përgjegjës dhe stafi IQMT pas regjistrimit"
           >
             <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
               {ELEVATOR_DOSSIER_GUIDE.map((item) => (
@@ -191,7 +191,7 @@ export function HomePortalGuideSection() {
               ))}
             </div>
             <p className="mt-4 text-sm text-muted-foreground">
-              Personi përgjegjës sheh edhe kartën e afateve; stafi ISHMT nuk sheh detyrimet e
+              Personi përgjegjës sheh edhe kartën e afateve; stafi IQMT nuk sheh detyrimet e
               pronarit, por ka qasje të plotë në dosje për shqyrtim.
             </p>
           </GuideAccordion>
@@ -213,7 +213,7 @@ export function HomePortalGuideSection() {
               ))}
             </div>
             <div className="mt-5 flex flex-wrap gap-3 text-sm">
-              <Link href="#qytetar" className="text-gov-primary hover:underline">
+              <Link href="/#qytetar" className="text-gov-primary hover:underline">
                 → Hyrje publike për qytetarët
               </Link>
               <Link href="/auth/login" className="text-gov-primary hover:underline">

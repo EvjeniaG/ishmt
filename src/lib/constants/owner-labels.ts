@@ -10,7 +10,6 @@ export const SYSTEM_NAME = "Sistemi Digjital i Regjistrit të Ashensorëve";
 
 export const OWNER_BUILDING_ROLE_LABELS: Record<OwnerBuildingRole, string> = {
   ADMINISTRATOR: "Administrator Pallati",
-  OWNERS_ASSEMBLY_REP: "Asamble e bashkëpronarëve",
   PHYSICAL_PERSON: "Person Fizik",
   LEGAL_PERSON: "Person Juridik",
   CONSTRUCTOR: "Ndërtues",

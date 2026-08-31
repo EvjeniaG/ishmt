@@ -28,7 +28,7 @@ export default async function UserManagementPage({
   return (
     <AppShell title="Menaxhimi i përdoruesve">
       <StandardPageLayout
-        eyebrow="ISHMT · Administrim"
+        eyebrow="IQMT · Administrim"
         title="Menaxhimi i përdoruesve"
         description="Aktivizim, bllokim dhe rivendosje fjalëkalimi"
       >

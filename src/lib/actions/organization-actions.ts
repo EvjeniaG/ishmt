@@ -1,6 +1,6 @@
 "use server";
 
-import { OrgStatus, OrgType } from "@prisma/client";
+import { OrgStatus } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { OrganizationService } from "@/lib/services/organization-service";
 import { LicenseService } from "@/lib/services/license-service";
@@ -8,17 +8,68 @@ import { MembershipService } from "@/lib/services/membership-service";
 import { requirePermission, requireRole } from "@/lib/permissions/guards";
 import { PERMISSIONS } from "@/lib/permissions/codes";
 import { ROLE_CODES } from "@/lib/constants/roles";
+import { companyOrgProfileSchema } from "@/lib/validations/account-profile";
+import { capabilitiesFromFormData } from "@/lib/organizations/org-capabilities";
+import {
+  buildDirectorateCompanyDemoPrefill,
+  type DirectorateCompanyDemoMode,
+} from "@/lib/demo/directorate-company-demo-prefill";
+
+export async function fetchDirectorateCompanyDemoPrefillAction(mode: DirectorateCompanyDemoMode) {
+  try {
+    await requireRole(ROLE_CODES.DIRECTORATE);
+    const data = await buildDirectorateCompanyDemoPrefill(mode);
+    return { success: true as const, data };
+  } catch (error) {
+    return {
+      success: false as const,
+      error: error instanceof Error ? error.message : "Plotësimi demo dështoi",
+    };
+  }
+}
+
+export async function checkDirectorateCreateCompanyNiptAction(nipt: string) {
+  try {
+    await requireRole(ROLE_CODES.DIRECTORATE);
+    const result = await OrganizationService.checkNiptForDirectorateCreate(nipt);
+    return { success: true as const, data: result };
+  } catch (error) {
+    return {
+      success: false as const,
+      error: error instanceof Error ? error.message : "Verifikimi i NIPT-it dështoi",
+    };
+  }
+}
+
+export async function lookupDirectorateLicenseOrgAction(nipt: string) {
+  try {
+    await requireRole(ROLE_CODES.DIRECTORATE);
+    const org = await OrganizationService.findPortalServiceOrgByNipt(nipt);
+    if (!org) {
+      return {
+        success: false as const,
+        error: "Nuk u gjet kompani shërbimi me këtë NIPT në portal.",
+      };
+    }
+    return {
+      success: true as const,
+      data: { organizationId: org.id, name: org.name },
+    };
+  } catch (error) {
+    return {
+      success: false as const,
+      error: error instanceof Error ? error.message : "Kërkimi dështoi",
+    };
+  }
+}
 
 export async function createLicensedCompanyAction(formData: FormData) {
   try {
     const ctx = await requireRole(ROLE_CODES.DIRECTORATE);
-    const typeRaw = String(formData.get("type"));
-    if (typeRaw !== "INSTALLER" && typeRaw !== "CERTIFIER") {
-      return { success: false as const, error: "Lloji i pavlefshëm i kompanisë" };
-    }
+    const capabilities = capabilitiesFromFormData(formData);
 
-    await OrganizationService.createLicensedCompany(ctx, {
-      type: OrgType[typeRaw],
+    const org = await OrganizationService.createLicensedCompany(ctx, {
+      capabilities,
       name: String(formData.get("name")),
       nipt: String(formData.get("nipt") || "") || undefined,
       municipalityId: String(formData.get("municipalityId") || "") || undefined,
@@ -31,7 +82,13 @@ export async function createLicensedCompanyAction(formData: FormData) {
     });
 
     revalidatePath("/directorate/companies");
-    return { success: true as const };
+    return {
+      success: true as const,
+      data: {
+        organizationId: org.id,
+        licenses: org.issuedLicenses,
+      },
+    };
   } catch (error) {
     return {
       success: false as const,
@@ -71,12 +128,10 @@ export async function createLicenseAction(organizationId: string, formData: Form
 
     await LicenseService.create(ctx, {
       organizationId,
-      licenseNumber: String(formData.get("licenseNumber")),
       licenseType: String(formData.get("licenseType")),
       issuedDate: new Date(String(formData.get("issuedDate"))),
       expiryDate: new Date(String(formData.get("expiryDate"))),
       scope: String(formData.get("scope") || "") || undefined,
-      issuedBy: "Drejtoria e Politikave të Tregut të Brendshëm",
     });
 
     revalidatePath(`/directorate/companies/${organizationId}`);
@@ -85,6 +140,44 @@ export async function createLicenseAction(organizationId: string, formData: Form
     return {
       success: false as const,
       error: error instanceof Error ? error.message : "Licenca nuk u krijua",
+    };
+  }
+}
+
+export async function suspendLicenseAction(licenseId: string, reason: string) {
+  try {
+    const ctx = await requireRole(ROLE_CODES.DIRECTORATE);
+    const license = await LicenseService.suspendLicense(ctx, licenseId, reason);
+
+    revalidatePath(`/directorate/companies/${license.organizationId}`);
+    revalidatePath(`/directorate/companies/${license.organizationId}/licenses`);
+    revalidatePath("/directorate/companies");
+    revalidatePath("/directorate/activity");
+    revalidatePath("/directorate/dashboard");
+    return { success: true as const };
+  } catch (error) {
+    return {
+      success: false as const,
+      error: error instanceof Error ? error.message : "Pezullimi i licencës dështoi",
+    };
+  }
+}
+
+export async function reinstateLicenseAction(licenseId: string, reason: string) {
+  try {
+    const ctx = await requireRole(ROLE_CODES.DIRECTORATE);
+    const license = await LicenseService.reinstateLicense(ctx, licenseId, reason);
+
+    revalidatePath(`/directorate/companies/${license.organizationId}`);
+    revalidatePath(`/directorate/companies/${license.organizationId}/licenses`);
+    revalidatePath("/directorate/companies");
+    revalidatePath("/directorate/activity");
+    revalidatePath("/directorate/dashboard");
+    return { success: true as const };
+  } catch (error) {
+    return {
+      success: false as const,
+      error: error instanceof Error ? error.message : "Riaktivizimi i licencës dështoi",
     };
   }
 }
@@ -176,15 +269,36 @@ export async function updateOwnOrganizationAction(formData: FormData) {
   try {
     const ctx = await requirePermission(PERMISSIONS.ORG_EDIT_OWN);
 
-    await OrganizationService.updateOwnOrganization(ctx, {
-      name: String(formData.get("name") || "") || undefined,
-      address: String(formData.get("address") || "") || undefined,
-      phone: String(formData.get("phone") || "") || undefined,
-      email: String(formData.get("email") || "") || undefined,
-      municipalityId: String(formData.get("municipalityId") || "") || undefined,
+    await OrganizationService.updateCompanyOrganization(ctx, {
+      name: String(formData.get("name") || ""),
     });
 
+    revalidatePath("/portal/profile");
     revalidatePath("/portal/settings/organization");
+    return { success: true as const };
+  } catch (error) {
+    return {
+      success: false as const,
+      error: error instanceof Error ? error.message : "Përditësimi dështoi",
+    };
+  }
+}
+
+export async function updateCompanyOrganizationProfileAction(formData: FormData) {
+  const parsed = companyOrgProfileSchema.safeParse({
+    name: formData.get("name"),
+  });
+
+  if (!parsed.success) {
+    return { success: false as const, error: parsed.error.errors[0]?.message ?? "Të dhëna të pavlefshme" };
+  }
+
+  try {
+    const ctx = await requirePermission(PERMISSIONS.ORG_EDIT_OWN);
+    await OrganizationService.updateCompanyOrganization(ctx, parsed.data);
+    revalidatePath("/portal/profile");
+    revalidatePath("/portal/settings/organization");
+    revalidatePath("/portal/dashboard");
     return { success: true as const };
   } catch (error) {
     return {

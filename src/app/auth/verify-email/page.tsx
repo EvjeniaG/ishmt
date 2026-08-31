@@ -2,7 +2,7 @@ import Link from "next/link";
 import { AccountSecurityService } from "@/lib/services/account-security-service";
 
 export const metadata = {
-  title: "Verifikimi i email-it - ISHMT",
+  title: "Verifikimi i email-it - IQMT",
 };
 
 export default async function VerifyEmailPage({

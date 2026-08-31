@@ -22,7 +22,7 @@ const TAB_LABELS: Record<ElevatorDossierTabId, string> = {
   qr: "Kodi QR",
   documents: "Dokumente",
   maintenance: "Mirëmbajtje",
-  inspections: "Inspektime",
+  inspections: "Inspektime periodike",
   history: "Historiku",
   applications: "Aplikime",
 };

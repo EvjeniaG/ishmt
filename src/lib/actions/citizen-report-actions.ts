@@ -6,8 +6,16 @@ import { CitizenReportStatus, CitizenReportType } from "@prisma/client";
 import { CitizenReportService } from "@/lib/services/citizen-report-service";
 import { requirePermission } from "@/lib/permissions/guards";
 import { PERMISSIONS } from "@/lib/permissions/codes";
-import { citizenReportSchema } from "@/lib/validations/citizen-report";
+import { citizenReportSchema, formatCitizenReporterName, parseCitizenReportGps } from "@/lib/validations/citizen-report";
+import { reverseGeocodeCoordinates } from "@/lib/geo/reverse-geocode";
 import { enforcePublicActionRateLimit } from "@/lib/security/rate-limit";
+
+export async function reverseGeocodePlaceAction(latitude: number, longitude: number) {
+  if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
+    return null;
+  }
+  return reverseGeocodeCoordinates(latitude, longitude);
+}
 
 /** Public, unauthenticated submission. */
 export async function submitCitizenReportAction(formData: FormData) {
@@ -20,8 +28,12 @@ export async function submitCitizenReportAction(formData: FormData) {
     type: formData.get("type"),
     description: formData.get("description"),
     qrCode: formData.get("qrCode") ?? "",
+    locationMode: formData.get("locationMode") ?? "text",
     locationAddress: formData.get("locationAddress") ?? "",
-    reporterName: formData.get("reporterName") ?? "",
+    gpsLatitude: formData.get("gpsLatitude") ?? "",
+    gpsLongitude: formData.get("gpsLongitude") ?? "",
+    reporterFirstName: formData.get("reporterFirstName") ?? "",
+    reporterLastName: formData.get("reporterLastName") ?? "",
     reporterEmail: formData.get("reporterEmail") ?? "",
     reporterPhone: formData.get("reporterPhone") ?? "",
   });
@@ -32,14 +44,32 @@ export async function submitCitizenReportAction(formData: FormData) {
 
   try {
     const hdrs = await headers();
+    const gps =
+      parsed.data.locationMode === "gps" ? parseCitizenReportGps(parsed.data) : null;
+
+    let locationAddress =
+      parsed.data.locationMode === "text" ? parsed.data.locationAddress?.trim() || null : null;
+
+    if (parsed.data.locationMode === "gps") {
+      locationAddress = parsed.data.locationAddress?.trim() || null;
+      if (!locationAddress && gps) {
+        locationAddress = await reverseGeocodeCoordinates(gps.latitude, gps.longitude);
+      }
+    }
+
     const report = await CitizenReportService.create({
       type: parsed.data.type as CitizenReportType,
       description: parsed.data.description,
       qrCode: parsed.data.qrCode || null,
-      locationAddress: parsed.data.locationAddress || null,
-      reporterName: parsed.data.reporterName || null,
+      locationAddress,
+      gpsLatitude: gps?.latitude ?? null,
+      gpsLongitude: gps?.longitude ?? null,
+      reporterName: formatCitizenReporterName(
+        parsed.data.reporterFirstName,
+        parsed.data.reporterLastName,
+      ),
       reporterEmail: parsed.data.reporterEmail || null,
-      reporterPhone: parsed.data.reporterPhone || null,
+      reporterPhone: parsed.data.reporterPhone,
       ipAddress: hdrs.get("x-forwarded-for") ?? hdrs.get("x-real-ip"),
       userAgent: hdrs.get("user-agent"),
     });

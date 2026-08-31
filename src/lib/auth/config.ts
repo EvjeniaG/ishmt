@@ -6,10 +6,17 @@ import type { PermissionCode } from "@/lib/permissions/codes";
 import { db } from "@/lib/db";
 import { verifyPassword } from "@/lib/auth/password";
 import { buildSessionContext } from "@/lib/auth/session-context";
+import type { OrgCapabilities } from "@/lib/organizations/org-capabilities";
 import { AccountSecurityService } from "@/lib/services/account-security-service";
 import { AuditService } from "@/lib/audit/audit-service";
+import { ROLE_CODES, type RoleCode } from "@/lib/constants/roles";
+import { PORTAL_COMPANY_ROLES } from "@/lib/permissions/nav-paths";
+
 import { rateLimit, getClientIp, RATE_LIMITS } from "@/lib/security/rate-limit";
 
+const COMPANY_LOGIN_ROLES = new Set<RoleCode>(PORTAL_COMPANY_ROLES.filter(
+  (role) => role !== ROLE_CODES.OWNER,
+));
 const LOCKOUT_MAX = 5;
 const LOCKOUT_MINUTES = 30;
 
@@ -127,14 +134,18 @@ export const authOptions: NextAuthOptions = {
           return null;
         }
 
-        let selected = level
-          ? memberships.find((m) => m.role.code === level)
-          : memberships.find((m) => m.isPrimary) ?? memberships[0];
+        let selected =
+          memberships.find((m) => m.isPrimary) ?? memberships[0];
 
-        if (level && !selected) {
-          throw new Error("LEVEL_MISMATCH");
+        if (level === "COMPANY") {
+          selected =
+            memberships.find((m) => COMPANY_LOGIN_ROLES.has(m.role.code as RoleCode)) ??
+            selected;
+        } else if (level) {
+          selected = memberships.find((m) => m.role.code === level) ?? selected;
         }
-        selected = selected ?? memberships.find((m) => m.isPrimary) ?? memberships[0];
+
+        selected = selected ?? memberships[0];
 
         if (matched.twoFactorEnabled) {
           const totpCode = credentials.totpCode?.trim();
@@ -152,7 +163,7 @@ export const authOptions: NextAuthOptions = {
           data: { failedLoginCount: 0, lockedUntil: null, lastLoginAt: new Date() },
         });
 
-        const context = await buildSessionContext(matched.id, selected.organizationId);
+        const context = await buildSessionContext(matched.id, { membershipId: selected.id });
 
         if (!context) {
           return null;
@@ -164,11 +175,13 @@ export const authOptions: NextAuthOptions = {
           name: `${matched.firstName} ${matched.lastName}`,
           firstName: matched.firstName,
           lastName: matched.lastName,
+          activeMembershipId: context.activeMembershipId,
           activeOrgId: context.activeOrgId,
           activeOrgType: context.activeOrgType,
           activeOrgName: context.activeOrgName,
           roleCode: context.roleCode,
           permissions: context.permissions,
+          orgCapabilities: context.orgCapabilities,
         };
       },
     }),
@@ -179,23 +192,56 @@ export const authOptions: NextAuthOptions = {
         token.userId = user.id;
         token.firstName = (user as { firstName?: string }).firstName ?? "";
         token.lastName = (user as { lastName?: string }).lastName ?? "";
+        token.activeMembershipId = (user as { activeMembershipId?: string }).activeMembershipId ?? "";
         token.activeOrgId = (user as { activeOrgId?: string }).activeOrgId ?? "";
         token.activeOrgType = (user as { activeOrgType?: string }).activeOrgType as never;
         token.activeOrgName = (user as { activeOrgName?: string }).activeOrgName ?? "";
         token.roleCode = (user as { roleCode?: string }).roleCode as never;
         token.permissions = (user as { permissions?: PermissionCode[] }).permissions ?? [];
+        token.orgCapabilities =
+          (user as { orgCapabilities?: OrgCapabilities | null }).orgCapabilities ?? null;
       }
 
-      if (trigger === "update" && session?.activeOrgId && token.userId) {
-        const context = await buildSessionContext(token.userId, session.activeOrgId as string);
+      if (
+        trigger === "update" &&
+        token.userId &&
+        (session?.activeMembershipId || session?.activeOrgId)
+      ) {
+        const context = await buildSessionContext(token.userId, {
+          membershipId: session?.activeMembershipId as string | undefined,
+          organizationId: session?.activeOrgId as string | undefined,
+        });
 
         if (context) {
+          token.activeMembershipId = context.activeMembershipId;
           token.activeOrgId = context.activeOrgId;
           token.activeOrgType = context.activeOrgType;
           token.activeOrgName = context.activeOrgName;
           token.roleCode = context.roleCode;
           token.permissions = context.permissions;
+          token.orgCapabilities = context.orgCapabilities;
         }
+      } else if (token.userId && !user) {
+        const context = await buildSessionContext(token.userId, {
+          membershipId: token.activeMembershipId as string | undefined,
+          organizationId: token.activeOrgId as string | undefined,
+        });
+
+        if (!context) {
+          token.userId = "";
+          return token;
+        }
+
+        token.userId = context.userId;
+        token.firstName = context.firstName;
+        token.lastName = context.lastName;
+        token.activeMembershipId = context.activeMembershipId;
+        token.activeOrgId = context.activeOrgId;
+        token.activeOrgType = context.activeOrgType;
+        token.activeOrgName = context.activeOrgName;
+        token.roleCode = context.roleCode;
+        token.permissions = context.permissions;
+        token.orgCapabilities = context.orgCapabilities;
       }
 
       return token;
@@ -208,11 +254,13 @@ export const authOptions: NextAuthOptions = {
           email: token.email ?? "",
           firstName: token.firstName,
           lastName: token.lastName,
+          activeMembershipId: token.activeMembershipId,
           activeOrgId: token.activeOrgId,
           activeOrgType: token.activeOrgType,
           activeOrgName: token.activeOrgName,
           roleCode: token.roleCode,
           permissions: token.permissions,
+          orgCapabilities: token.orgCapabilities,
         };
       }
 

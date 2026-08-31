@@ -253,38 +253,38 @@ export class ElevatorDossierHealthService {
       if (!items.some((item) => item.key === "missing-inspection")) {
         items.push({
           key: "periodic-inspection",
-          label: "Inspektimi periodik",
+          label: "Kontrolli periodik",
           level: "blocker",
-          detail: "Nuk ka inspektim të regjistruar për këtë ashensor.",
+          detail: "Nuk ka kontroll të regjistruar për këtë ashensor.",
         });
       }
     } else if (!periodicInspection?.nextInspectionDate) {
       items.push({
         key: "periodic-inspection",
-        label: "Inspektimi periodik",
+        label: "Kontrolli periodik",
         level: "warning",
-        detail: "Nuk ka datë të radhës për inspektimin periodik.",
+        detail: "Nuk ka datë të radhës për kontrollin periodik.",
       });
     } else if (periodicInspection.nextInspectionDate < now) {
       items.push({
         key: "periodic-inspection",
-        label: "Inspektimi periodik",
+        label: "Kontrolli periodik",
         level: "blocker",
-        detail: "Inspektimi periodik eshte jashte afatit.",
+        detail: "Kontrolli periodik eshte jashte afatit.",
       });
     } else if (daysUntil(periodicInspection.nextInspectionDate, now) <= WARNING_DAYS) {
       items.push({
         key: "periodic-inspection",
-        label: "Inspektimi periodik",
+        label: "Kontrolli periodik",
         level: "warning",
-        detail: "Inspektimi periodik afron brenda 30 diteve.",
+        detail: "Kontrolli periodik afron brenda 30 diteve.",
       });
     } else {
       items.push({
         key: "periodic-inspection",
-        label: "Inspektimi periodik",
+        label: "Kontrolli periodik",
         level: "ok",
-        detail: "Inspektimi periodik eshte brenda afatit.",
+        detail: "Kontrolli periodik eshte brenda afatit.",
       });
     }
 

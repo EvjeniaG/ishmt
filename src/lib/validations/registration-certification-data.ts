@@ -2,7 +2,7 @@ import { z } from "zod";
 
 export const registrationCertificationDataSchema = z
   .object({
-    omiNumber: z.string().min(2, "Numri OMI është i detyrueshëm"),
+    omiNumber: z.string().min(2, "Numri OM është i detyrueshëm"),
     certifierResponsiblePerson: z.string().optional(),
     examinationType: z.enum(["EKZAMINIM_I_PLOTE", "EKZAMINIM_PERIODIK"]),
     examinationDate: z.string().min(1, "Data e ekzaminimit është e detyrueshme"),

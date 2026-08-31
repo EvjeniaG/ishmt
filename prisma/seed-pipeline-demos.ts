@@ -40,7 +40,7 @@ async function main() {
     prisma.authUser.findFirst({ where: { email: "cert@omicert.al" } }),
     prisma.authUser.findFirst({ where: { email: "terren@ishmt.gov.al" } }),
     prisma.authUser.findFirst({ where: { email: "shef@ishmt.gov.al" } }),
-    prisma.authUser.findFirst({ where: { email: "personi përgjegjës i ashensorit@example.al" } }),
+    prisma.authUser.findFirst({ where: { email: "arben.demo@example.al" } }),
   ]);
 
   if (!maintenanceUser || !certifierUser || !fieldInspectorUser || !sectorHeadUser || !ownerUser) {

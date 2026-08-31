@@ -1,6 +1,6 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { useRouter } from "@/lib/navigation/use-app-router";
 import { useState } from "react";
 import Link from "next/link";
 import { registerOwnerAction } from "@/lib/actions/auth-actions";
@@ -8,6 +8,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { TermsAcceptanceLabel } from "@/components/forms/terms-acceptance-label";
+import { savePostRegisterCredentials } from "@/lib/auth/post-register-credentials";
 
 type Municipality = { id: string; nameSq: string; region: { nameSq: string } };
 
@@ -21,7 +23,8 @@ export function RegisterOwnerForm({ municipalities }: { municipalities: Municipa
     setLoading(true);
     setError(null);
 
-    const result = await registerOwnerAction(new FormData(e.currentTarget));
+    const fd = new FormData(e.currentTarget);
+    const result = await registerOwnerAction(fd);
     setLoading(false);
 
     if (!result.success) {
@@ -29,7 +32,17 @@ export function RegisterOwnerForm({ municipalities }: { municipalities: Municipa
       return;
     }
 
-    router.push("/auth/login?registered=owner");
+    const identifier = String(fd.get("personalNumber") || "").trim();
+    const password = String(fd.get("password") || "");
+    if (identifier && password) {
+      savePostRegisterCredentials({ identifier, password, accountType: "owner" });
+    }
+
+    const params = new URLSearchParams({
+      registered: "owner",
+      ...(identifier ? { identifier } : {}),
+    });
+    router.push(`/auth/login?${params.toString()}`);
   }
 
   return (
@@ -127,7 +140,7 @@ export function RegisterOwnerForm({ municipalities }: { municipalities: Municipa
 
           <label className="flex items-start gap-2 text-sm">
             <input type="checkbox" name="acceptTerms" value="true" required className="mt-1" />
-            E lexova dhe bie dakord me termat dhe kushtet
+            <TermsAcceptanceLabel />
           </label>
 
           {error && <p className="text-sm text-destructive">{error}</p>}

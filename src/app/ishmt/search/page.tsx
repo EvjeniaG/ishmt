@@ -18,8 +18,16 @@ import { ROLE_CODES } from "@/lib/constants/roles";
 import { isIshmtStaffRole } from "@/lib/permissions/routes";
 import { labelElevatorStatus } from "@/lib/constants/display-labels";
 
+function canAccessNationalSearch(roleCode: string) {
+  return (
+    isIshmtStaffRole(roleCode as typeof ROLE_CODES.FIELD_INSPECTOR) ||
+    roleCode === ROLE_CODES.DIRECTORATE ||
+    roleCode === ROLE_CODES.INSPECTOR
+  );
+}
+
 const COMPLIANCE_GAP_LABELS: Record<ComplianceGapFilter, string> = {
-  "missing-inspection": "Mungesë inspektimi të regjistruar",
+  "missing-inspection": "Mungesë kontrolli të regjistruar",
   "missing-maintenance-company": "Mungesë kompanie mirëmbajtjeje",
   "missing-maintenance-record": "Mungesë regjistrimi mirëmbajtjeje",
 };
@@ -39,7 +47,7 @@ export default async function NationalSearchPage({
 }) {
   const session = await getAuthSession();
   if (!session?.user) redirect("/auth/login");
-  if (!isIshmtStaffRole(session.user.roleCode)) redirect("/unauthorized");
+  if (!canAccessNationalSearch(session.user.roleCode)) redirect("/unauthorized");
 
   const params = await searchParams;
   const ctx = await requireAuthForPage();
@@ -85,7 +93,7 @@ export default async function NationalSearchPage({
   return (
     <AppShell title={pageTitle}>
       <StandardPageLayout
-        eyebrow="ISHMT · Regjistri kombëtar"
+        eyebrow="IQMT · Regjistri kombëtar"
         title={pageTitle}
         description="Kërko sipas numrit të regjistrit, serialit, adresës, personit përgjegjës të ashensorit ose certifikatës. Hap dosjen e plotë digjitale për çdo ashensor."
         actions={

@@ -35,6 +35,24 @@ export async function rejectMaintenanceContractAction(
     await MaintenanceWorkService.rejectContract(ctx, contractId, reason);
     revalidatePath("/portal/dashboard");
     revalidatePath("/portal/omi/kontratat");
+    revalidatePath("/portal/sherbimi/contracts");
+    revalidatePath("/portal/elevators");
+    return { success: true };
+  } catch (error) {
+    return fail(error);
+  }
+}
+
+export async function terminateMaintenanceContractAction(
+  contractId: string,
+  reason: string,
+): Promise<ActionResult> {
+  try {
+    const ctx = await requireAuth();
+    await MaintenanceWorkService.terminateActiveContract(ctx, contractId, reason);
+    revalidatePath("/portal/dashboard");
+    revalidatePath("/portal/sherbimi/contracts");
+    revalidatePath("/portal/elevators");
     return { success: true };
   } catch (error) {
     return fail(error);

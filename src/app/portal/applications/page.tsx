@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { ApplicationStatus, ApplicationType } from "@prisma/client";
+import { ApplicationStatus, ApplicationType, ReturnTargetRole } from "@prisma/client";
 import { AppShell } from "@/components/layout/app-shell";
 import { StandardPageLayout } from "@/components/layout/standard-page-layout";
 import { ApplicationStatusBadge } from "@/components/applications/application-status-badge";
@@ -12,17 +12,32 @@ import { getAuthSession } from "@/lib/auth";
 import { getMunicipalities } from "@/lib/data/municipalities";
 import { labelApplicationType } from "@/lib/constants/display-labels";
 import { ApplicationService } from "@/lib/services/application-service";
-import { OwnerPortalService } from "@/lib/services/owner-portal-service";
-import { portalEyebrowForRole } from "@/lib/constants/portal-labels";
+import { portalEyebrowForCapabilities, portalEyebrowForRole } from "@/lib/constants/portal-labels";
+import { isReturnedToRole } from "@/lib/workflows/return-targets";
 import { PERMISSIONS } from "@/lib/permissions/codes";
-import { roleHasPermission } from "@/lib/permissions/matrix";
 import { ROLE_CODES } from "@/lib/constants/roles";
+import { hasServiceCapability } from "@/lib/organizations/org-capabilities";
 import { LegalDeadlineBadge } from "@/components/deadlines/deadline-badge";
 import { DeadlineService } from "@/lib/deadlines/deadline-service";
 import { displayCertifierOrganizationName } from "@/lib/elevators/format-om-body";
+import {
+  displayCertifierColumn,
+  displayInstallerColumn,
+  isDelegationRevokedForOrg,
+} from "@/lib/delegation/delegation-revoked";
 
 function applicationLink(id: string) {
   return `/portal/applications/${id}`;
+}
+
+function stakeholderCanCorrectReturn(
+  roleCode: string,
+  app: { returnToRole?: ReturnTargetRole | null; returnToRoles?: unknown },
+): boolean {
+  if (roleCode === ROLE_CODES.OWNER) return isReturnedToRole(app, ReturnTargetRole.OWNER);
+  if (roleCode === ROLE_CODES.CERTIFIER) return isReturnedToRole(app, ReturnTargetRole.CERTIFIER);
+  if (roleCode === ROLE_CODES.INSTALLER) return isReturnedToRole(app, ReturnTargetRole.INSTALLER);
+  return false;
 }
 
 export default async function ApplicationsPage({
@@ -42,7 +57,7 @@ export default async function ApplicationsPage({
   const session = await getAuthSession();
   if (!session?.user) redirect("/auth/login");
 
-  if (!roleHasPermission(session.user.roleCode, PERMISSIONS.APPLICATIONS_VIEW_OWN)) {
+  if (!session.user.permissions.includes(PERMISSIONS.APPLICATIONS_VIEW_OWN)) {
     redirect("/unauthorized");
   }
 
@@ -57,6 +72,7 @@ export default async function ApplicationsPage({
     activeOrgName: session.user.activeOrgName,
     roleCode: session.user.roleCode,
     permissions: session.user.permissions,
+    orgCapabilities: session.user.orgCapabilities ?? null,
   };
 
   const dateFrom = params.dateFrom ? new Date(params.dateFrom) : undefined;
@@ -74,23 +90,24 @@ export default async function ApplicationsPage({
       dateTo,
     }),
     session.user.roleCode === ROLE_CODES.OWNER ? getMunicipalities() : Promise.resolve([]),
-    session.user.roleCode === ROLE_CODES.OWNER
-      ? OwnerPortalService.listReturnedApplications(session.user.activeOrgId)
-      : Promise.resolve([]),
+    ApplicationService.listReturnedForContext(ctx),
   ]);
 
+  const caps = session.user.orgCapabilities;
   const canCreate = session.user.roleCode === ROLE_CODES.OWNER;
   const pageTitle =
-    session.user.roleCode === ROLE_CODES.INSTALLER
-      ? "Aplikime të Deleguara"
-      : session.user.roleCode === ROLE_CODES.CERTIFIER
-        ? "Aplikime për Certifikim"
-        : "Aplikimet e Mia";
+    hasServiceCapability(session.user, "install") && hasServiceCapability(session.user, "om")
+      ? "Aplikime instalimi & certifikimi"
+      : hasServiceCapability(session.user, "install")
+        ? "Aplikime të Deleguara"
+        : hasServiceCapability(session.user, "om")
+          ? "Aplikime për Certifikim"
+          : "Aplikimet e Mia";
 
   return (
     <AppShell>
       <StandardPageLayout
-        eyebrow={portalEyebrowForRole(session.user.roleCode)}
+        eyebrow={portalEyebrowForCapabilities(caps, session.user.roleCode)}
         title={pageTitle}
         description="Menaxhoni të gjitha aplikimet e organizatës suaj"
         actions={
@@ -108,37 +125,51 @@ export default async function ApplicationsPage({
       >
         {canCreate && <ApplicationFilters municipalities={municipalities} />}
 
-        {canCreate && returnedApps.length > 0 && !params.returned && (
+        {returnedApps.filter((app) => stakeholderCanCorrectReturn(session.user.roleCode, app)).length > 0 &&
+          !params.returned && (
           <SectionCard
-            title={`Aplikime të kthyera për korrigjim (${returnedApps.length})`}
+            title={`Korrigjim i kërkuar (${
+              returnedApps.filter((app) => stakeholderCanCorrectReturn(session.user.roleCode, app)).length
+            })`}
             className="border-l-4 border-l-gov-warning"
             padded
           >
-            <div className="space-y-3">
-              {returnedApps.slice(0, 5).map((app) => (
-                <div key={app.id} className="portal-list-item flex-col items-start gap-2 sm:flex-row sm:items-center">
-                  <div className="min-w-0 flex-1 space-y-1">
-                    <Link
-                      href={applicationLink(app.id)}
-                      className="font-medium text-gov-primary hover:underline"
-                    >
-                      {app.applicationNumber}
-                    </Link>
-                    <p className="text-muted-foreground">
-                      <span className="font-medium text-foreground">Arsyeja:</span> {app.returnReason ?? "-"}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      Kthyer nga{" "}
-                      {app.returnedBy ? `${app.returnedBy.firstName} ${app.returnedBy.lastName}` : "-"}
-                      {" · "}
-                      {app.returnedAt ? new Date(app.returnedAt).toLocaleDateString("sq-AL") : "-"}
-                    </p>
+            <div className="space-y-4">
+              {returnedApps
+                .filter((app) => stakeholderCanCorrectReturn(session.user.roleCode, app))
+                .slice(0, 5)
+                .map((app) => (
+                <div key={app.id} className="rounded-xl border border-amber-200/70 bg-amber-50/50 px-4 py-4">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                    <div className="min-w-0 flex-1 space-y-2">
+                      <Link
+                        href={applicationLink(app.id)}
+                        className="font-semibold text-gov-primary hover:underline"
+                      >
+                        {app.applicationNumber}
+                      </Link>
+                      {app.returnReason ? <p className="text-sm text-foreground">{app.returnReason}</p> : null}
+                      {app.requiredCorrection ? (
+                        <p className="text-sm text-foreground">
+                          <span className="font-medium">Çfarë duhet bërë:</span> {app.requiredCorrection}
+                        </p>
+                      ) : null}
+                      <p className="text-sm font-medium text-emerald-800">
+                        Riparashtroni aplikimin kur të jeni gati.
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        Kthyer nga{" "}
+                        {app.returnedBy ? `${app.returnedBy.firstName} ${app.returnedBy.lastName}` : "-"}
+                        {" · "}
+                        {app.returnedAt ? new Date(app.returnedAt).toLocaleDateString("sq-AL") : "-"}
+                      </p>
+                    </div>
+                    <Button asChild size="sm" variant="outline" className="shrink-0">
+                      <Link href={applicationLink(app.id)}>Korrigjo</Link>
+                    </Button>
                   </div>
-                  <Button asChild size="sm" variant="outline">
-                    <Link href={applicationLink(app.id)}>Korrigjo</Link>
-                  </Button>
                 </div>
-              ))}
+                ))}
             </div>
           </SectionCard>
         )}
@@ -160,17 +191,29 @@ export default async function ApplicationsPage({
                   <th>Statusi</th>
                   <th>Ashensori / adresa</th>
                   <th>Instaluesi</th>
-                  <th>Certifikuesi / OMI</th>
+                  <th>Certifikuesi / OM</th>
                   <th>Krijuar</th>
                   <th>Dorëzuar</th>
-                  <th>Afati ISHMT</th>
+                  <th>Afati IQMT</th>
                   <th>Përditësuar</th>
                   <th>Hapi tjetër</th>
                   <th>Veprime</th>
                 </tr>
               </thead>
               <tbody>
-                {applications.map((app) => (
+                {applications.map((app) => {
+                  const listCtx = {
+                    roleCode: session.user.roleCode,
+                    activeOrgId: ctx.activeOrgId,
+                    activeOrgName: ctx.activeOrgName,
+                  };
+                  const delegationRevoked = isDelegationRevokedForOrg(
+                    app.delegations,
+                    session.user.roleCode,
+                    ctx.activeOrgId,
+                    app,
+                  );
+                  return (
                   <tr key={app.id}>
                     <td>{app.applicationNumber}</td>
                     <td>{labelApplicationType(app.type, app.data?.updateType)}</td>
@@ -179,28 +222,37 @@ export default async function ApplicationsPage({
                         status={app.status}
                         type={app.type}
                         roleCode={session.user.roleCode}
+                        delegationRevoked={delegationRevoked}
                       />
                     </td>
                     <td>{app.targetElevator?.registryNumber ?? app.data?.buildingAddress ?? "-"}</td>
-                    <td>{app.installerOrg?.name ?? "-"}</td>
+                    <td>{displayInstallerColumn(app, listCtx)}</td>
                     <td>
-                      {displayCertifierOrganizationName(
-                        app.certifierOrg?.name,
-                        app.data?.omiNumber,
-                      ) ?? "-"}
+                      {displayCertifierColumn(app, listCtx, displayCertifierOrganizationName)}
                     </td>
                     <td>{new Date(app.createdAt).toLocaleDateString("sq-AL")}</td>
                     <td>{app.submittedAt ? new Date(app.submittedAt).toLocaleDateString("sq-AL") : "-"}</td>
                     <td>
-                      {app.submittedAt &&
+                      {!delegationRevoked &&
+                      app.submittedAt &&
                       DeadlineService.isApplicationUnderProcedureReview(app.status) ? (
                         <LegalDeadlineBadge submittedAt={app.submittedAt} compact />
                       ) : (
                         "-"
                       )}
                     </td>
-                    <td>{new Date(app.updatedAt).toLocaleDateString("sq-AL")}</td>
-                    <td>{ApplicationService.getNextRequiredAction(app, session.user.roleCode)}</td>
+                    <td>
+                      {delegationRevoked
+                        ? "-"
+                        : new Date(app.updatedAt).toLocaleDateString("sq-AL")}
+                    </td>
+                    <td>
+                      {ApplicationService.getNextRequiredAction(
+                        app,
+                        session.user.roleCode,
+                        ctx.activeOrgId,
+                      )}
+                    </td>
                     <td className="whitespace-nowrap">
                       <span className="inline-flex gap-3">
                         <Link
@@ -236,7 +288,8 @@ export default async function ApplicationsPage({
                       </span>
                     </td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </PortalTableWrap>
           )}

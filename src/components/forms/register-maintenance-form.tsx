@@ -1,6 +1,6 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { useRouter } from "@/lib/navigation/use-app-router";
 import { useState } from "react";
 import Link from "next/link";
 import { registerMaintenanceAction } from "@/lib/actions/auth-actions";
@@ -37,7 +37,7 @@ export function RegisterMaintenanceForm({ municipalities }: { municipalities: Mu
       <CardHeader>
         <CardTitle>Regjistrim kompanie mirëmbajtjeje</CardTitle>
         <CardDescription>
-          Kompania do të mbetet në pritje derisa ISHMT të verifikojë NIPT-in në QKB
+          Kompania do të mbetet në pritje derisa IQMT të verifikojë NIPT-in në QKB
         </CardDescription>
       </CardHeader>
       <CardContent>

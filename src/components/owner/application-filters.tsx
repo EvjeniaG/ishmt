@@ -1,6 +1,7 @@
 "use client";
 
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
+import { useRouter } from "@/lib/navigation/use-app-router";
 import { ApplicationStatus, ApplicationType } from "@prisma/client";
 import { APPLICATION_TYPE_LABELS } from "@/lib/constants/application-labels";
 import { APPLICATION_STATUS_LABELS } from "@/lib/workflows/application-workflow";

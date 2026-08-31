@@ -13,7 +13,7 @@ export function ChiefDashboard({
 }) {
   return (
     <IshmtDashboardShell
-      eyebrow="ISHMT · Paneli operativ"
+      eyebrow="IQMT · Paneli operativ"
       alarms={alarms}
       metrics={metrics}
       alarmsTitle="Prioritetet operative"

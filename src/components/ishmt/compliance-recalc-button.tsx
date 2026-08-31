@@ -1,6 +1,6 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { useRouter } from "@/lib/navigation/use-app-router";
 import { useState } from "react";
 import { recalculateComplianceAction } from "@/lib/actions/ishmt-admin-actions";
 import { Button } from "@/components/ui/button";

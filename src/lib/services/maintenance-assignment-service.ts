@@ -17,6 +17,7 @@ import type { AuthContext } from "@/lib/permissions/guards";
 import { hasPermission } from "@/lib/permissions/guards";
 import { PERMISSIONS } from "@/lib/permissions/codes";
 import { ROLE_CODES } from "@/lib/constants/roles";
+import { delegationRevocationReasonSchema } from "@/lib/validations/delegation-revocation";
 
 export type MaintenanceCompanyOption = {
   id: string;
@@ -141,6 +142,10 @@ export class MaintenanceAssignmentService {
         contractNumber?: string;
         documentId?: string;
       };
+      /** Kur ndryshon kompaninë, arsye e detyrueshme për ndërprerjen e kontratës ACTIVE. */
+      maintenanceTerminationReason?: string;
+      /** Kur ndryshon OM-n, arsye e detyrueshme për ndërprerjen e kontratës ACTIVE të inspektimit. */
+      inspectionTerminationReason?: string;
     },
   ) {
     if (ctx.roleCode !== ROLE_CODES.OWNER || !hasPermission(ctx, PERMISSIONS.MAINTENANCE_REQUEST_ASSIGNMENT)) {
@@ -201,8 +206,78 @@ export class MaintenanceAssignmentService {
       throw new Error("Zgjidhni të paktën një lloj shërbimi.");
     }
 
+    let terminatedMaintenanceOrgId: string | null = null;
+    let terminatedMaintenanceReason: string | null = null;
+    let terminatedInspectionOrgId: string | null = null;
+    let terminatedInspectionReason: string | null = null;
+
     const result = await db.$transaction(async (tx) => {
       if (input.maintenance) {
+        const activeContract = await tx.maintenanceContract.findFirst({
+          where: {
+            elevatorId: elevator.id,
+            serviceType: "MAINTENANCE",
+            status: MaintenanceContractStatus.ACTIVE,
+            isActive: true,
+          },
+        });
+
+        if (activeContract) {
+          const parsedReason = delegationRevocationReasonSchema.safeParse({
+            reason: input.maintenanceTerminationReason ?? "",
+          });
+          if (!parsedReason.success) {
+            throw new Error(
+              parsedReason.error.errors[0]?.message ??
+                "Shkruani arsyen e ndërprerjes së kontratës aktive të mirëmbajtjes.",
+            );
+          }
+          if (input.maintenance.orgId === activeContract.maintenanceOrgId) {
+            throw new Error("Zgjidhni një kompani tjetër nga ajo aktuale e mirëmbajtjes.");
+          }
+
+          const trimmedReason = parsedReason.data.reason;
+          terminatedMaintenanceReason = trimmedReason;
+          terminatedMaintenanceOrgId = activeContract.maintenanceOrgId;
+
+          await tx.maintenanceContract.update({
+            where: { id: activeContract.id },
+            data: {
+              status: MaintenanceContractStatus.TERMINATED,
+              isActive: false,
+              rejectionReason: trimmedReason,
+              respondedAt: new Date(),
+            },
+          });
+          await tx.elevator.update({
+            where: { id: elevator.id },
+            data: { maintenanceOrgId: null },
+          });
+          await tx.elevatorResponsibleEntity.updateMany({
+            where: {
+              elevatorId: elevator.id,
+              role: OrgType.MAINTENANCE,
+              validTo: null,
+            },
+            data: { validTo: new Date() },
+          });
+          await AuditService.log(
+            {
+              actorId: ctx.userId,
+              action: AuditAction.UPDATE,
+              entityType: "maintenance_contract",
+              entityId: activeContract.id,
+              afterState: {
+                action: "MAINTENANCE_CONTRACT_TERMINATED_BY_OWNER",
+                elevatorId: elevator.id,
+                organizationId: activeContract.maintenanceOrgId,
+                reason: trimmedReason,
+              },
+            },
+            tx,
+          );
+        }
+
         await tx.maintenanceContract.updateMany({
           where: {
             elevatorId: elevator.id,
@@ -213,6 +288,59 @@ export class MaintenanceAssignmentService {
         });
       }
       if (input.inspection) {
+        const activeInspectionContract = await tx.maintenanceContract.findFirst({
+          where: {
+            elevatorId: elevator.id,
+            serviceType: "PERIODIC_INSPECTION",
+            status: MaintenanceContractStatus.ACTIVE,
+            isActive: true,
+          },
+        });
+
+        if (activeInspectionContract) {
+          const parsedReason = delegationRevocationReasonSchema.safeParse({
+            reason: input.inspectionTerminationReason ?? "",
+          });
+          if (!parsedReason.success) {
+            throw new Error(
+              parsedReason.error.errors[0]?.message ??
+                "Shkruani arsyen e ndërprerjes së kontratës aktive të kontrollit periodik.",
+            );
+          }
+          if (input.inspection.orgId === activeInspectionContract.maintenanceOrgId) {
+            throw new Error("Zgjidhni një organizatë OM tjetër nga ajo aktuale e kontrollit periodik.");
+          }
+
+          const trimmedReason = parsedReason.data.reason;
+          terminatedInspectionReason = trimmedReason;
+          terminatedInspectionOrgId = activeInspectionContract.maintenanceOrgId;
+
+          await tx.maintenanceContract.update({
+            where: { id: activeInspectionContract.id },
+            data: {
+              status: MaintenanceContractStatus.TERMINATED,
+              isActive: false,
+              rejectionReason: trimmedReason,
+              respondedAt: new Date(),
+            },
+          });
+          await AuditService.log(
+            {
+              actorId: ctx.userId,
+              action: AuditAction.UPDATE,
+              entityType: "maintenance_contract",
+              entityId: activeInspectionContract.id,
+              afterState: {
+                action: "INSPECTION_CONTRACT_TERMINATED_BY_OWNER",
+                elevatorId: elevator.id,
+                organizationId: activeInspectionContract.maintenanceOrgId,
+                reason: trimmedReason,
+              },
+            },
+            tx,
+          );
+        }
+
         await tx.maintenanceContract.updateMany({
           where: {
             elevatorId: elevator.id,
@@ -314,8 +442,26 @@ export class MaintenanceAssignmentService {
 
     if (inspectionOrg && inspectionOrg.id !== maintenanceOrg?.id) {
       await NotificationService.notifyOrgMembers(inspectionOrg.id, {
-        title: "Ftesë për inspektim periodik",
-        body: `Jeni ftuar për inspektim periodik te ashensori ${elevator.registryNumber}.`,
+        title: "Ftesë për kontroll periodik",
+        body: `Jeni ftuar për kontroll periodik te ashensori ${elevator.registryNumber}.`,
+        entityType: "elevator",
+        entityId: elevator.id,
+      });
+    }
+
+    if (terminatedMaintenanceOrgId && terminatedMaintenanceReason) {
+      await NotificationService.notifyOrgMembers(terminatedMaintenanceOrgId, {
+        title: "Kontrata e mirëmbajtjes u ndërpre",
+        body: `Kontrata për ashensorin ${elevator.registryNumber} u ndërpre nga personi përgjegjës. Arsye: ${terminatedMaintenanceReason}`,
+        entityType: "elevator",
+        entityId: elevator.id,
+      });
+    }
+
+    if (terminatedInspectionOrgId && terminatedInspectionReason) {
+      await NotificationService.notifyOrgMembers(terminatedInspectionOrgId, {
+        title: "Kontrata e kontrollit periodik u ndërpre",
+        body: `Kontrata e kontrollit periodik për ashensorin ${elevator.registryNumber} u ndërpre nga personi përgjegjës. Arsye: ${terminatedInspectionReason}`,
         entityType: "elevator",
         entityId: elevator.id,
       });

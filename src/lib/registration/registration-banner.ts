@@ -30,7 +30,9 @@ export function getRegistrationBannerContent(
       case "installer-accept":
         return { headline: "Pranoni ftesën për të vazhduar", chip: "Ftesë e re", chipTone: "action" };
       case "technical-data":
-        return { headline: "Plotësoni të dhënat teknike", chip: "Hapi 2/3", chipTone: "action" };
+        return { headline: "Plotësoni të dhënat teknike", chip: "Hapi 2/4", chipTone: "action" };
+      case "technical-reconciliation":
+        return { headline: "Korrigjoni sipas kërkesave të certifikuesit", chip: "Rakordim", chipTone: "action" };
       case "installer-complete":
         return { headline: "Puna juaj përfundoi", chip: "Gati", chipTone: "done" };
       default:
@@ -42,8 +44,10 @@ export function getRegistrationBannerContent(
     switch (phase) {
       case "certifier-accept":
         return { headline: "Pranoni ftesën për të vazhduar", chip: "Ftesë e re", chipTone: "action" };
+      case "installer-technical-review":
+        return { headline: "Verifikoni të dhënat e instaluesit", chip: "Rakordim", chipTone: "action" };
       case "certification-data":
-        return { headline: "Plotësoni certifikimin", chip: "Hapi 2/3", chipTone: "action" };
+        return { headline: "Plotësoni certifikimin", chip: "Hapi 3/4", chipTone: "action" };
       case "certifier-complete":
         return { headline: "Puna juaj përfundoi", chip: "Gati", chipTone: "done" };
       default:

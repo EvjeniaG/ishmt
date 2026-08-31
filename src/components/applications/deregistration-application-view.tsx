@@ -1,6 +1,5 @@
 import {
   ApplicationElevatorSummary,
-  ApplicationReturnBanner,
   ApplicationWorkflowLayout,
   ApplicationWorkflowSection,
   type WorkflowStep,
@@ -44,8 +43,6 @@ export function DeregistrationApplicationView({
 
   return (
     <ApplicationWorkflowLayout steps={steps}>
-      <ApplicationReturnBanner returnReason={returnReason} requiredCorrection={requiredCorrection} />
-
       <ApplicationWorkflowSection title="Ashensori" description="Ashensori që do të çregjistrohet">
         <ApplicationElevatorSummary
           registryNumber={elevatorRegistry}

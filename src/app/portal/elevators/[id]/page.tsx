@@ -1,23 +1,22 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { AppShell } from "@/components/layout/app-shell";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { MinorContactForm } from "@/components/lifecycle/minor-contact-form";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { ElevatorLifecycleApplicationsPanel } from "@/components/elevators/elevator-lifecycle-applications-panel";
 import { MaintenanceAssignmentForm } from "@/components/owner/maintenance-assignment-form";
 import { PhysicalVerificationButton } from "@/components/elevators/physical-verification-button";
 import { ComplianceIndicator } from "@prisma/client";
 import { ComplianceService } from "@/lib/services/compliance-service";
 import { resolveElevatorComplianceView } from "@/lib/elevators/resolve-elevator-compliance";
 import { DocumentService } from "@/lib/services/document-service";
-import { ElevatorDossierHealthService, type DossierHealthLevel } from "@/lib/services/elevator-dossier-health-service";
 import { MaintenanceAssignmentService } from "@/lib/services/maintenance-assignment-service";
 import { CertifierInspectionService } from "@/lib/services/certifier-inspection-service";
-import { getAuthSession } from "@/lib/auth";
+import { buildTechnicianDisplayName } from "@/lib/forms/system-form-prefill";
 import { PERMISSIONS } from "@/lib/permissions/codes";
 import { roleHasPermission } from "@/lib/permissions/matrix";
 import { ROLE_CODES } from "@/lib/constants/roles";
 import { isIshmtStaffRole } from "@/lib/permissions/routes";
-import { labelApplicationType } from "@/lib/constants/display-labels";
+import { getAuthSession } from "@/lib/auth";
 import { ElevatorDeadlinesCard } from "@/components/deadlines/elevator-deadlines-card";
 import { DeadlineService } from "@/lib/deadlines/deadline-service";
 import { getInspectionIntervalMonths } from "@/lib/deadlines/inspection-interval";
@@ -29,19 +28,27 @@ import {
   buildInspectionRegistryView,
   buildMaintenanceRegistryView,
 } from "@/lib/elevators/registry-view-models";
+import { MaintenanceContractService } from "@/lib/services/maintenance-contract-service";
 import { MaintenanceRegistryPanel } from "@/components/elevators/maintenance-registry-panel";
 import { InspectionRegistryPanel } from "@/components/elevators/inspection-registry-panel";
 import { ElevatorDossierTabs, type ElevatorDossierTabId } from "@/components/elevators/elevator-dossier-tabs";
-import { buildElevatorTabDossier } from "@/lib/elevators/build-tab-dossier";
-import { loadDigitalFileForViewer } from "@/lib/elevators/digital-file-access";
 import {
-  defaultDossierTab,
-  dossierTabsForViewer,
-  resolveDossierViewerKind,
-} from "@/lib/elevators/dossier-viewer";
+  buildElevatorApplicationsList,
+  buildElevatorTabDossier,
+} from "@/lib/elevators/build-tab-dossier";
+import { ElevatorApplicationsPanel } from "@/components/elevators/elevator-applications-panel";
+import { loadDigitalFileForViewer } from "@/lib/elevators/digital-file-access";
+import { defaultDossierTab, dossierTabsForViewer } from "@/lib/elevators/dossier-viewer";
 import { CertifierDossierActions } from "@/components/elevators/certifier-dossier-actions";
 import { MaintenanceDossierActions } from "@/components/elevators/maintenance-dossier-actions";
+import { OwnerPendingServiceContracts } from "@/components/elevators/owner-pending-service-contracts";
+import { ElevatorDocumentsPanel } from "@/components/elevators/elevator-documents-panel";
+import { ElevatorDossierTimeline } from "@/components/elevators/elevator-dossier-timeline";
+import { PeriodicControlAssignmentForm } from "@/components/owner/periodic-control-assignment-form";
+import { buildPeriodicControlSchedule } from "@/lib/elevators/periodic-control-schedule";
 import { certifierCanManageMaintenanceOnElevator } from "@/lib/certifier/certifier-maintenance-access";
+import { filterRegistrationDossierDocuments } from "@/lib/documents/registration-dossier-documents";
+import { ElevatorTimelineService } from "@/lib/services/elevator-timeline-service";
 
 function hasOpenServiceContract(
   contracts: Array<{ serviceType: string; status: string }>,
@@ -52,24 +59,6 @@ function hasOpenServiceContract(
   );
 }
 
-function serviceAssignmentTitle(needsMaintenance: boolean, needsInspection: boolean) {
-  if (needsMaintenance && needsInspection) {
-    return "Cakto kompaninë e mirëmbajtjes dhe inspektimit";
-  }
-  if (needsMaintenance) return "Cakto kompaninë e mirëmbajtjes";
-  return "Cakto kompaninë e inspektimit";
-}
-
-function healthTone(level: DossierHealthLevel) {
-  switch (level) {
-    case "ok":
-      return "border-green-200 bg-green-50 text-green-800";
-    case "warning":
-      return "border-yellow-200 bg-yellow-50 text-yellow-800";
-    case "blocker":
-      return "border-red-200 bg-red-50 text-red-800";
-  }
-}
 
 export default async function ElevatorDigitalFilePage({
   params,
@@ -83,7 +72,17 @@ export default async function ElevatorDigitalFilePage({
   const session = await getAuthSession();
   if (!session?.user) redirect("/auth/login");
 
-  const viewerKind = resolveDossierViewerKind(session.user.roleCode);
+  const digitalFile = await loadDigitalFileForViewer(id, {
+    roleCode: session.user.roleCode,
+    activeOrgId: session.user.activeOrgId,
+    userId: session.user.id,
+    permissions: session.user.permissions ?? [],
+    orgCapabilities: session.user.orgCapabilities,
+  });
+  if (digitalFile.status === "unauthorized") redirect("/unauthorized");
+  if (digitalFile.status === "not_found") notFound();
+
+  const viewerKind = digitalFile.viewerKind;
   const allowedTabs = dossierTabsForViewer(viewerKind);
   const tabDefault = defaultDossierTab(viewerKind);
   const requestedTab = (tab ?? tabDefault) as ElevatorDossierTabId;
@@ -91,14 +90,6 @@ export default async function ElevatorDigitalFilePage({
     redirect(`/portal/elevators/${id}?tab=${tabDefault}`);
   }
   const activeTab = requestedTab;
-
-  const digitalFile = await loadDigitalFileForViewer(id, {
-    roleCode: session.user.roleCode,
-    activeOrgId: session.user.activeOrgId,
-    userId: session.user.id,
-  });
-  if (digitalFile.status === "unauthorized") redirect("/unauthorized");
-  if (digitalFile.status === "not_found") notFound();
   const elevator = digitalFile.elevator;
 
   const complianceView = resolveElevatorComplianceView({
@@ -112,20 +103,6 @@ export default async function ElevatorDigitalFilePage({
   });
   const display = ComplianceService.getPublicDisplay(complianceView.indicator);
   const needsAttention = complianceView.indicator !== ComplianceIndicator.GREEN;
-  const dossierHealth = ElevatorDossierHealthService.resolve({
-    elevatorId: id,
-    status: elevator.status,
-    certificates: elevator.certificates,
-    qrCodes: elevator.qrCodes,
-    maintenanceContracts: elevator.maintenanceContracts,
-    inspections: elevator.inspections,
-    maintenanceOrgId: elevator.maintenanceOrgId,
-    lastMaintenanceDate:
-      elevator.maintenanceCompliance?.lastMaintenanceDate ??
-      elevator.maintenanceRecords[0]?.performedDate ??
-      null,
-    complianceIndicator: elevator.complianceIndicator,
-  });
   const regCert = elevator.certificates.find((c) => c.type === "REGISTRATION" && c.status === "ACTIVE");
   const qr = elevator.qrCodes[0];
   const documents =
@@ -134,33 +111,68 @@ export default async function ElevatorDigitalFilePage({
           new Map(
             (
               await Promise.all([
-                DocumentService.listForEntity("elevator", id),
+                DocumentService.listLinkedForEntity("elevator", id),
                 elevator.originatingApplication
-                  ? DocumentService.listForEntity("application", elevator.originatingApplication.id)
+                  ? DocumentService.listLinkedForEntity("application", elevator.originatingApplication.id)
                   : Promise.resolve([]),
               ])
             )
               .flat()
               .map((doc) => [doc.id, doc] as const),
           ).values(),
-        ).map((doc) => DocumentService.serializeDocument(doc))
+        ).sort(
+          (left, right) =>
+            new Date(String(right.uploadedAt)).getTime() - new Date(String(left.uploadedAt)).getTime(),
+        )
       : [];
+  const registrationDocuments = filterRegistrationDossierDocuments(documents);
 
   const canManageMaintenance =
     session.user.roleCode === ROLE_CODES.OWNER &&
     roleHasPermission(session.user.roleCode, PERMISSIONS.MAINTENANCE_REQUEST_ASSIGNMENT);
+  const isOwnerViewer = session.user.roleCode === ROLE_CODES.OWNER;
   const needsMaintenanceAssignment = !hasOpenServiceContract(elevator.maintenanceContracts, "MAINTENANCE");
   const needsInspectionAssignment = !hasOpenServiceContract(
     elevator.maintenanceContracts,
     "PERIODIC_INSPECTION",
   );
-  const showServiceAssignmentOnInspectionsTab =
-    needsMaintenanceAssignment || needsInspectionAssignment;
+  const ownerPendingMaintenanceContracts = isOwnerViewer
+    ? elevator.maintenanceContracts.filter(
+        (contract) => contract.status === "PENDING" && contract.serviceType === "MAINTENANCE",
+      )
+    : [];
+  const hasActiveMaintenanceContract = elevator.maintenanceContracts.some(
+    (contract) => contract.serviceType === "MAINTENANCE" && contract.status === "ACTIVE",
+  );
+  const canChangeMaintenanceCompany =
+    canManageMaintenance &&
+    !needsMaintenanceAssignment &&
+    ownerPendingMaintenanceContracts.length === 0 &&
+    hasActiveMaintenanceContract;
+  const showMaintenanceAssignmentOnTab =
+    tab === "maintenance" && (needsMaintenanceAssignment || canChangeMaintenanceCompany);
+  const ownerPendingInspectionContracts = isOwnerViewer
+    ? elevator.maintenanceContracts.filter(
+        (contract) => contract.status === "PENDING" && contract.serviceType === "PERIODIC_INSPECTION",
+      )
+    : [];
+  const hasActiveInspectionContract = elevator.maintenanceContracts.some(
+    (contract) => contract.serviceType === "PERIODIC_INSPECTION" && contract.status === "ACTIVE",
+  );
+  const canChangeInspectionCompany =
+    canManageMaintenance &&
+    !needsInspectionAssignment &&
+    ownerPendingInspectionContracts.length === 0 &&
+    hasActiveInspectionContract;
+  const showInspectionAssignmentOnInspectionsTab =
+    tab === "inspections" && (needsInspectionAssignment || canChangeInspectionCompany);
   const [maintenanceCompanies, maintenanceCertifiers] =
-    (tab === "maintenance" || (tab === "inspections" && showServiceAssignmentOnInspectionsTab)) &&
-    canManageMaintenance
+    (showMaintenanceAssignmentOnTab && canManageMaintenance) ||
+    (showInspectionAssignmentOnInspectionsTab && canManageMaintenance)
       ? await Promise.all([
-          MaintenanceAssignmentService.listMaintenanceCompaniesWithQkbStatus(),
+          showMaintenanceAssignmentOnTab
+            ? MaintenanceAssignmentService.listMaintenanceCompaniesWithQkbStatus()
+            : Promise.resolve([]),
           CertifierInspectionService.listEligibleCertifierCompanies(),
         ])
       : [[], []];
@@ -173,10 +185,14 @@ export default async function ElevatorDigitalFilePage({
 
   const periodicInspection =
     elevator.inspections.find((i) => i.type === "PERIODIC") ?? elevator.inspections[0];
-  const activeMaintContract = elevator.maintenanceContracts.find((c) => c.isActive);
+  const activeMaintContract = elevator.maintenanceContracts.find(
+    (c) => c.isActive && c.serviceType === "MAINTENANCE",
+  );
+  const activeInspectionContract = elevator.maintenanceContracts.find(
+    (c) => c.isActive && c.serviceType === "PERIODIC_INSPECTION",
+  );
 
   const isStaffViewer = isIshmtStaffRole(session.user.roleCode);
-  const isOwnerViewer = session.user.roleCode === ROLE_CODES.OWNER;
   const isIshmtViewer = viewerKind === "ishmt_staff";
   const isCertifierViewer = viewerKind === "certifier";
   const isMaintenanceViewer = viewerKind === "maintenance";
@@ -188,6 +204,14 @@ export default async function ElevatorDigitalFilePage({
         buildingType: appData?.buildingType ?? null,
         registrationDate: elevator.registrationDate,
         maintenanceOrgId: elevator.maintenanceOrgId,
+        maintenanceContracts: elevator.maintenanceContracts.map((contract) => ({
+          serviceType: contract.serviceType,
+          status: contract.status,
+          endDate: contract.endDate,
+        })),
+        qrCode: qr?.code
+          ? { code: qr.code, placementPhotoDocumentId: qr.placementPhotoDocumentId }
+          : null,
         lastPeriodicInspection: periodicInspection
           ? {
               conductedDate: periodicInspection.conductedDate,
@@ -222,6 +246,17 @@ export default async function ElevatorDigitalFilePage({
     redirect(`/portal/elevators/${id}?tab=${defaultDossierTab(viewerKind)}`);
   }
 
+  const certifierActiveInspectionContract =
+    isCertifierViewer && orgId
+      ? elevator.maintenanceContracts.find(
+          (c) =>
+            c.serviceType === "PERIODIC_INSPECTION" &&
+            c.isActive &&
+            c.status === "ACTIVE" &&
+            c.maintenanceOrgId === orgId,
+        )
+      : null;
+
   const certifierPendingContract =
     isCertifierViewer && orgId
       ? (elevator.maintenanceContracts.find(
@@ -242,7 +277,7 @@ export default async function ElevatorDigitalFilePage({
         ) ?? null)
       : null;
 
-  const hasActiveMaintenanceContract =
+  const viewerHasActiveMaintenanceContract =
     Boolean(orgId) &&
     elevator.maintenanceContracts.some(
       (c) =>
@@ -263,20 +298,45 @@ export default async function ElevatorDigitalFilePage({
     nextInspection: nextInspection ?? null,
     inspectionIntervalLabel,
     qrPublicUrl,
+    compactSummary: isOwnerViewer,
   });
+
+  const elevatorApplications = buildElevatorApplicationsList(elevator);
+
+  const maintenanceContractIds = elevator.maintenanceContracts
+    .filter((c) => c.serviceType === "MAINTENANCE")
+    .map((c) => c.id);
+  const maintenanceTerminationMeta =
+    await MaintenanceContractService.loadTerminationMeta(maintenanceContractIds);
 
   const maintenanceRegistry = buildMaintenanceRegistryView({
     maintenanceOrg: elevator.maintenanceOrg,
     maintenanceContracts: elevator.maintenanceContracts,
     maintenanceRecords: elevator.maintenanceRecords,
     maintenanceCompliance: elevator.maintenanceCompliance,
+    terminationMeta: maintenanceTerminationMeta,
   });
+
+  const dossierTimeline =
+    activeTab === "history" && (isOwnerViewer || isStaffViewer)
+      ? await ElevatorTimelineService.buildTimeline(id)
+      : [];
 
   const inspectionRegistry = buildInspectionRegistryView({
     inspections: elevator.inspections,
     maintenanceContracts: elevator.maintenanceContracts,
     certifierOrg: elevator.certifierOrg,
     intervalMonths: getInspectionIntervalMonths(appData?.buildingType ?? null),
+    registrationDate: elevator.registrationDate,
+    buildingType: appData?.buildingType ?? null,
+  });
+
+  const periodicControlSchedule = buildPeriodicControlSchedule({
+    buildingType: appData?.buildingType ?? null,
+    usagePurpose: appData?.usagePurpose ?? null,
+    registrationDate: elevator.registrationDate ?? elevator.createdAt,
+    lastPeriodicInspectionDate: periodicInspection?.conductedDate ?? null,
+    lastNextInspectionDate: periodicInspection?.nextInspectionDate ?? null,
   });
 
   return (
@@ -287,6 +347,7 @@ export default async function ElevatorDigitalFilePage({
           <div className="min-w-0">
             <h1 className="text-xl font-bold tracking-tight sm:text-2xl">{elevator.registryNumber}</h1>
             <p className="mt-1 text-sm text-muted-foreground sm:text-base">
+              {elevator.buildingName ? `${elevator.buildingName} · ` : ""}
               {elevator.buildingAddress} · {elevator.municipality.nameSq}
             </p>
           </div>
@@ -302,101 +363,15 @@ export default async function ElevatorDigitalFilePage({
           <>
             <ElevatorTabPanel groups={tabDossier.summary} />
             {isOwnerViewer && <ElevatorDeadlinesCard items={elevatorDeadlines} />}
-            {isOwnerViewer && (
-            <Card>
-              <CardHeader>
-                <CardTitle>Gjendja e dosjes</CardTitle>
-                <p className="text-sm text-muted-foreground">
-                  {dossierHealth.label}
-                </p>
-              </CardHeader>
-              <CardContent className="grid gap-3 md:grid-cols-2">
-                {dossierHealth.items.map((item) => (
-                  <div key={item.key} className={`rounded-md border p-3 text-sm ${healthTone(item.level)}`}>
-                    <p className="font-medium">{item.label}</p>
-                    <p className="mt-1 text-xs">{item.detail}</p>
-                  </div>
-                ))}
-              </CardContent>
-            </Card>
-            )}
             {elevator.status === "ACTIVE" && session.user.roleCode === ROLE_CODES.OWNER && (
-              <Card>
-                <CardHeader>
-                  <CardTitle>Aplikime për këtë ashensor</CardTitle>
-                </CardHeader>
-                <CardContent className="grid gap-3 text-sm sm:grid-cols-2">
-                  <Link
-                    href={`/portal/applications/new/ownership-transfer?elevatorId=${id}`}
-                    className="rounded-md border p-3 hover:border-gov-primary hover:bg-gov-primary/5"
-                  >
-                    <p className="font-medium text-gov-primary">Transferim pronësie</p>
-                    <p className="mt-1 text-muted-foreground">Kaloni kartelën te subjekt tjetër (NIPT) - marrësi pranon, pastaj ISHMT</p>
-                  </Link>
-                  <Link
-                    href={`/portal/applications/new/update?elevatorId=${id}`}
-                    className="rounded-md border p-3 hover:border-gov-primary hover:bg-gov-primary/5"
-                  >
-                    <p className="font-medium text-gov-primary">Përditësim të dhënave</p>
-                    <p className="mt-1 text-muted-foreground">Adresë, mirëmbajtje - pronësia mbetet e njëjta</p>
-                  </Link>
-                  <Link
-                    href={`/portal/applications/new/correction?elevatorId=${id}`}
-                    className="rounded-md border p-3 hover:border-gov-primary hover:bg-gov-primary/5"
-                  >
-                    <p className="font-medium text-gov-primary">Korrigjim të dhënave</p>
-                    <p className="mt-1 text-muted-foreground">Gabime regjistrimi (serial, prodhues, etj.)</p>
-                  </Link>
-                  <Link
-                    href={`/portal/elevators/${id}/maintenance/change`}
-                    className="rounded-md border p-3 hover:border-gov-primary hover:bg-gov-primary/5"
-                  >
-                    <p className="font-medium text-gov-primary">Ndrysho kompaninë e mirëmbajtjes dhe inspektimit</p>
-                  </Link>
-                </CardContent>
-              </Card>
-            )}
-            {elevator.status === "ACTIVE" && isOwnerViewer && (
-              <Card>
-                <CardHeader><CardTitle>Ndryshim dytësor - kontakt</CardTitle></CardHeader>
-                <CardContent>
-                  <MinorContactForm
-                    elevatorId={id}
-                    defaults={{
-                      phone: elevator.ownerOrg.phone,
-                      email: elevator.ownerOrg.email,
-                      address: elevator.ownerOrg.address,
-                    }}
-                  />
-                </CardContent>
-              </Card>
+              <ElevatorLifecycleApplicationsPanel elevatorId={id} />
             )}
           </>
         )}
 
         {activeTab === "technical" && <ElevatorTabPanel groups={tabDossier.technical} />}
 
-        {activeTab === "certificate" && (
-          <div className="space-y-6">
-            <ElevatorTabPanel groups={tabDossier.certificate} />
-            {elevator.certificates.some((c) => c.documentId) && (
-              <Card>
-                <CardHeader><CardTitle>Shkarkime</CardTitle></CardHeader>
-                <CardContent className="space-y-2 text-sm">
-                  {elevator.certificates
-                    .filter((cert) => cert.documentId)
-                    .map((cert) => (
-                      <p key={cert.id}>
-                        <Link href={`/api/documents/${cert.documentId}/download`} className="text-primary hover:underline">
-                          Shkarko {cert.certificateNumber}
-                        </Link>
-                      </p>
-                    ))}
-                </CardContent>
-              </Card>
-            )}
-          </div>
-        )}
+        {activeTab === "certificate" && <ElevatorTabPanel groups={tabDossier.certificate} />}
 
         {activeTab === "qr" && (
           <div className="space-y-6">
@@ -480,6 +455,9 @@ export default async function ElevatorDigitalFilePage({
 
         {activeTab === "maintenance" && (
           <div className="space-y-6">
+            {isOwnerViewer && ownerPendingMaintenanceContracts.length > 0 && (
+              <OwnerPendingServiceContracts elevatorId={id} contracts={ownerPendingMaintenanceContracts} />
+            )}
             {(isMaintenanceViewer || certifierManagesMaintenance) && (
               <MaintenanceDossierActions
                 elevatorId={id}
@@ -488,7 +466,10 @@ export default async function ElevatorDigitalFilePage({
                 showServiceLinks={isMaintenanceViewer}
                 showInterventionForm={isMaintenanceViewer || certifierManagesMaintenance}
                 showMonthlyReportForm={isMaintenanceViewer || certifierManagesMaintenance}
-                hasActiveMaintenanceContract={hasActiveMaintenanceContract}
+                hasActiveMaintenanceContract={viewerHasActiveMaintenanceContract}
+                defaultTechnicianName={
+                  isMaintenanceViewer ? buildTechnicianDisplayName(session.user) : undefined
+                }
               />
             )}
             <MaintenanceRegistryPanel
@@ -501,39 +482,59 @@ export default async function ElevatorDigitalFilePage({
                     : "owner"
               }
             />
-            {isOwnerViewer &&
-              (canManageMaintenance ? (
+            {isOwnerViewer && showMaintenanceAssignmentOnTab && (
               <Card>
                 <CardHeader>
                   <CardTitle>
-                    {elevator.maintenanceOrg
-                      ? "Ndrysho kompaninë e mirëmbajtjes dhe inspektimit"
-                      : "Cakto kompaninë e mirëmbajtjes dhe inspektimit"}
+                    {needsMaintenanceAssignment
+                      ? "Cakto kompaninë e mirëmbajtjes"
+                      : "Ndrysho kompaninë e mirëmbajtjes"}
                   </CardTitle>
+                  {canChangeMaintenanceCompany && activeMaintContract ? (
+                    <CardDescription>
+                      Për të caktuar kompani tjetër, duhet të ndërpritni kontratën aktive me arsye të
+                      detyrueshme. Kompania e re pranon ftesën dhe ngarkon kontratën.
+                    </CardDescription>
+                  ) : (
+                    <CardDescription>
+                      Zgjidhni kompaninë dhe dërgoni ftesën. Dokumenti i kontratës ngarkohet nga kompania pas
+                      pranimit.
+                    </CardDescription>
+                  )}
                 </CardHeader>
                 <CardContent>
                   <MaintenanceAssignmentForm
                     elevatorId={id}
                     companies={maintenanceCompanies}
                     certifiers={maintenanceCertifiers}
+                    scope={{ needsMaintenance: true, needsInspection: false }}
+                    changeFromActiveContract={
+                      canChangeMaintenanceCompany && activeMaintContract
+                        ? {
+                            contractNumber: activeMaintContract.contractNumber,
+                            companyName: elevator.maintenanceOrg?.name ?? "-",
+                            companyNipt: elevator.maintenanceOrg?.nipt ?? null,
+                          }
+                        : undefined
+                    }
                   />
                 </CardContent>
               </Card>
-            ) : (
-              <Link href={`/portal/elevators/${id}/maintenance/change`} className="text-primary hover:underline">
-                Cakto / ndrysho kompaninë e mirëmbajtjes dhe inspektimit
-              </Link>
-            ))}
+            )}
           </div>
         )}
 
         {activeTab === "inspections" && (
           <div className="space-y-6">
+            {isOwnerViewer && ownerPendingInspectionContracts.length > 0 && (
+              <OwnerPendingServiceContracts elevatorId={id} contracts={ownerPendingInspectionContracts} />
+            )}
             {isCertifierViewer && (
               <CertifierDossierActions
                 elevatorId={id}
                 registryNumber={elevator.registryNumber}
                 pendingContract={certifierPendingContract}
+                canLogPeriodicInspection={Boolean(certifierActiveInspectionContract)}
               />
             )}
             <InspectionRegistryPanel
@@ -543,100 +544,67 @@ export default async function ElevatorDigitalFilePage({
               }
               elevatorId={id}
             />
-            {isOwnerViewer &&
-              showServiceAssignmentOnInspectionsTab &&
-              (canManageMaintenance ? (
-                <Card>
-                  <CardHeader>
-                    <CardTitle>
-                      {serviceAssignmentTitle(needsMaintenanceAssignment, needsInspectionAssignment)}
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <MaintenanceAssignmentForm
-                      elevatorId={id}
-                      companies={maintenanceCompanies}
-                      certifiers={maintenanceCertifiers}
-                      scope={{
-                        needsMaintenance: needsMaintenanceAssignment,
-                        needsInspection: needsInspectionAssignment,
-                      }}
-                    />
-                  </CardContent>
-                </Card>
-              ) : (
-                <Link href={`/portal/elevators/${id}/maintenance/change`} className="text-primary hover:underline">
-                  Cakto / ndrysho kompaninë e mirëmbajtjes dhe inspektimit
-                </Link>
-              ))}
+            {isOwnerViewer && showInspectionAssignmentOnInspectionsTab && canManageMaintenance && (
+              <Card>
+                <CardHeader>
+                  <CardTitle>
+                    {canChangeInspectionCompany
+                      ? "Ndrysho organizatën e kontrollit periodik (OM)"
+                      : "Cakto organizatën e kontrollit periodik (OM)"}
+                  </CardTitle>
+                  {canChangeInspectionCompany && activeInspectionContract ? (
+                    <CardDescription>
+                      Për të caktuar OM tjetër, duhet të ndërpritni kontratën aktive me arsye të detyrueshme.
+                      Organizata e re pranon ftesën dhe ngarkon kontratën.
+                    </CardDescription>
+                  ) : null}
+                </CardHeader>
+                <CardContent>
+                  <PeriodicControlAssignmentForm
+                    elevatorId={id}
+                    certifiers={maintenanceCertifiers}
+                    schedule={periodicControlSchedule}
+                    changeFromActiveContract={
+                      canChangeInspectionCompany && activeInspectionContract
+                        ? {
+                            contractNumber: activeInspectionContract.contractNumber,
+                            companyName: activeInspectionContract.maintenanceOrg?.name ?? "-",
+                            companyNipt: activeInspectionContract.maintenanceOrg?.nipt ?? null,
+                          }
+                        : undefined
+                    }
+                  />
+                </CardContent>
+              </Card>
+            )}
           </div>
         )}
 
-        {activeTab === "history" && (isOwnerViewer || isStaffViewer) && <ElevatorTabPanel groups={tabDossier.history} />}
+        {activeTab === "history" && (isOwnerViewer || isStaffViewer) && (
+          <Card>
+            <CardHeader className="space-y-1">
+              <CardTitle>Historiku</CardTitle>
+              <p className="text-sm font-normal text-muted-foreground">
+                Hapat e procesit sipas workflow-it, nga fillimi deri te veprimet e fundit.
+              </p>
+            </CardHeader>
+            <CardContent>
+              <ElevatorDossierTimeline events={dossierTimeline} />
+            </CardContent>
+          </Card>
+        )}
 
         {activeTab === "applications" && (isOwnerViewer || isStaffViewer) && (
-          <div className="space-y-6">
-            <ElevatorTabPanel groups={tabDossier.applications} />
-            <Card>
-              <CardHeader><CardTitle>Hap aplikimet</CardTitle></CardHeader>
-              <CardContent className="space-y-2 text-sm">
-                {elevator.originatingApplication && (
-                  <p>
-                    <Link href={`/portal/applications/${elevator.originatingApplication.id}`} className="text-primary hover:underline">
-                      {elevator.originatingApplication.applicationNumber}
-                    </Link>{" "}
-                    - Regjistrim fillestar
-                  </p>
-                )}
-                {elevator.targetApplications.map((app) => (
-                  <p key={app.id}>
-                    <Link href={`/portal/applications/${app.id}`} className="text-primary hover:underline">
-                      {app.applicationNumber}
-                    </Link>{" "}
-                    - {labelApplicationType(app.type, app.data?.updateType)}
-                  </p>
-                ))}
-              </CardContent>
-            </Card>
-          </div>
+          <ElevatorApplicationsPanel applications={elevatorApplications} />
         )}
 
         {activeTab === "documents" && (
           <Card>
-            <CardHeader><CardTitle>Dokumente</CardTitle></CardHeader>
+            <CardHeader>
+              <CardTitle>Dokumente</CardTitle>
+            </CardHeader>
             <CardContent>
-              {documents.length === 0 ? (
-                <p className="text-sm text-muted-foreground">Nuk ka dokumente të lidhura me këtë ashensor.</p>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b text-left">
-                        <th className="py-2">Dokumenti</th>
-                        <th>Lloji</th>
-                        <th>Ngarkuar nga</th>
-                        <th>Data</th>
-                        <th></th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {documents.map((doc) => (
-                        <tr key={doc.id} className="border-b">
-                          <td className="py-2">{doc.originalFilename}</td>
-                          <td>{doc.classification}</td>
-                          <td>{doc.uploadedBy ?? "-"}</td>
-                          <td>{new Date(doc.uploadedAt).toLocaleDateString("sq-AL")}</td>
-                          <td>
-                            <Link href={`/api/documents/${doc.id}/download`} className="text-gov-primary hover:underline">
-                              Shkarko
-                            </Link>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
+              <ElevatorDocumentsPanel documents={registrationDocuments} />
             </CardContent>
           </Card>
         )}

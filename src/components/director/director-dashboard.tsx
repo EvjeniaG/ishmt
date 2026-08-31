@@ -13,7 +13,7 @@ export function DirectorDashboard({
 }) {
   return (
     <IshmtDashboardShell
-      eyebrow="ISHMT · Drejtor i Drejtorisë"
+      eyebrow="IQMT · Drejtor i Drejtorisë"
       alarms={alarms}
       metrics={metrics}
       alarmsTitle="Prioritetet operative"

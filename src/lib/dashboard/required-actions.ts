@@ -1,3 +1,5 @@
+import { formatDateSq } from "@/lib/format-date";
+
 export type RequiredActionSeverity = "info" | "warning" | "danger";
 
 export type RequiredActionItem = {
@@ -52,8 +54,5 @@ export function filterRequiredActionsBySeverity<T extends { severity: RequiredAc
 }
 
 export function formatRequiredActionDueDate(dueDate?: Date | string | null): string {
-  if (!dueDate) return "-";
-  const date = dueDate instanceof Date ? dueDate : new Date(dueDate);
-  if (Number.isNaN(date.getTime())) return "-";
-  return date.toLocaleDateString("sq-AL");
+  return formatDateSq(dueDate ?? null);
 }

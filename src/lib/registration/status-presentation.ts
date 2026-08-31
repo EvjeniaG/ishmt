@@ -110,7 +110,7 @@ const CLOSED: StatusPresentation = {
 
 const BLOCKED: StatusPresentation = {
   badgeLabel: "Kërkon vëmendje",
-  hint: "Rezultati i konformitetit nuk lejon aplikimin për rregjistrim. Kontaktoni certifikuesin ose ISHMT-në.",
+  hint: "Rezultati i konformitetit nuk lejon aplikimin për rregjistrim. Kontaktoni certifikuesin ose IQMT-në.",
   tone: "danger",
   accentClass: "border-l-gov-danger bg-gov-danger/5",
   titleClass: "text-gov-danger",
@@ -126,8 +126,8 @@ function getIshmtStatusPresentation(status: ApplicationStatus, roleCode: RoleCod
         ...ACTION,
         hint:
           roleCode === ROLE_CODES.CHIEF_INSPECTOR
-            ? "Aplikim i ri për rregjistrim — delegoni te drejtori dhe caktoni numrin e inspektorëve."
-            : "Aplikimi u dërgua për rregjistrim dhe pret shqyrtimin nga ISHMT.",
+            ? "Aplikim i ri për rregjistrim - delegoni te drejtori dhe caktoni numrin e inspektorëve."
+            : "Aplikimi u dërgua për rregjistrim dhe pret shqyrtimin nga IQMT.",
         badgeLabel: "E re në radhë",
       };
     case ApplicationStatus.PENDING_DIRECTOR:
@@ -159,7 +159,7 @@ function getIshmtStatusPresentation(status: ApplicationStatus, roleCode: RoleCod
     case ApplicationStatus.UNDER_REVIEW:
       return {
         ...PROGRESS,
-        hint: "Status legacy — aplikimi migrohet në zinxhirin e ri.",
+        hint: "Status legacy - aplikimi migrohet në zinxhirin e ri.",
         badgeLabel: "Në shqyrtim (legacy)",
       };
     case ApplicationStatus.PENDING_CHIEF_INSPECTOR:
@@ -218,7 +218,7 @@ export function getOwnerStatusPresentation(status: ApplicationStatus, roleCode?:
       };
     }
     if (status === ApplicationStatus.RETURNED) {
-      return { ...ACTION, hint: "ISHMT kërkon korrigjim në të dhënat teknike. Plotësoni sërish seksionin tuaj." };
+      return { ...ACTION, hint: "IQMT kërkon korrigjim në të dhënat teknike. Plotësoni sërish seksionin tuaj." };
     }
     return {
       ...PROGRESS,
@@ -228,7 +228,7 @@ export function getOwnerStatusPresentation(status: ApplicationStatus, roleCode?:
 
   if (roleCode === ROLE_CODES.CERTIFIER) {
     if (status === ApplicationStatus.CERTIFIER_INVITED || status === ApplicationStatus.PENDING_CERTIFIER) {
-      return { ...ACTION, hint: "Keni një ftesë OMI për të pranuar para se të plotësoni certifikimin." };
+      return { ...ACTION, hint: "Keni një ftesë OM për të pranuar para se të plotësoni certifikimin." };
     }
     if (status === ApplicationStatus.CERTIFIER_ACCEPTED || status === ApplicationStatus.CERTIFICATION_IN_PROGRESS) {
       return { ...ACTION, hint: "Plotësoni të dhënat e certifikimit dhe konformitetit." };
@@ -240,7 +240,7 @@ export function getOwnerStatusPresentation(status: ApplicationStatus, roleCode?:
       if (status === ApplicationStatus.CERTIFICATION_COMPLETED_WITH_ISSUES) {
         return {
           ...BLOCKED,
-          hint: "Certifikimi u regjistrua me çështje. Personi përgjegjës i ashensorit duhet të kontaktojë ISHMT-në ose certifikuesin.",
+          hint: "Certifikimi u regjistrua me çështje. Personi përgjegjës i ashensorit duhet të kontaktojë IQMT-në ose certifikuesin.",
         };
       }
       return {
@@ -249,7 +249,7 @@ export function getOwnerStatusPresentation(status: ApplicationStatus, roleCode?:
       };
     }
     if (status === ApplicationStatus.RETURNED) {
-      return { ...ACTION, hint: "ISHMT kërkon korrigjim në certifikimin. Plotësoni sërish seksionin tuaj." };
+      return { ...ACTION, hint: "IQMT kërkon korrigjim në certifikimin. Plotësoni sërish seksionin tuaj." };
     }
     return {
       ...PROGRESS,
@@ -279,13 +279,13 @@ export function getOwnerStatusPresentation(status: ApplicationStatus, roleCode?:
     case ApplicationStatus.INSTALLER_COMPLETED:
       return {
         ...ACTION,
-        hint: "Të dhënat teknike u plotësuan. Zgjidhni kompaninë OMI / certifikuese.",
+        hint: "Të dhënat teknike u plotësuan. Zgjidhni kompaninë OM / certifikuese.",
       };
     case ApplicationStatus.PENDING_CERTIFIER:
     case ApplicationStatus.CERTIFIER_INVITED:
       return {
         ...WAITING,
-        hint: "Ftesa u dërgua te certifikuesi. Pritni që OMI të pranojë ftesën.",
+        hint: "Ftesa u dërgua te certifikuesi. Pritni që OM të pranojë ftesën.",
       };
     case ApplicationStatus.CERTIFIER_ACCEPTED:
     case ApplicationStatus.CERTIFICATION_IN_PROGRESS:
@@ -297,7 +297,7 @@ export function getOwnerStatusPresentation(status: ApplicationStatus, roleCode?:
     case ApplicationStatus.PENDING_OWNER_SUBMISSION:
       return {
         ...ACTION,
-        hint: "Certifikimi u plotësua. Rishikoni dossier-in dhe parashtrojeni aplikimin tek ISHMT.",
+        hint: "Certifikimi u plotësua. Rishikoni dossier-in dhe parashtrojeni aplikimin tek IQMT.",
       };
     case ApplicationStatus.CERTIFICATION_COMPLETED_WITH_ISSUES:
       return BLOCKED;
@@ -305,12 +305,47 @@ export function getOwnerStatusPresentation(status: ApplicationStatus, roleCode?:
     case ApplicationStatus.UNDER_REVIEW:
       return {
         ...PROGRESS,
-        hint: "Aplikimi është parashtruar tek ISHMT dhe është në shqyrtim nga inspektori.",
+        hint: "Dosja juaj është te Kryeinspektori IQMT për marrje dhe delegim.",
+        badgeLabel: "Te Kryeinspektori",
+      };
+    case ApplicationStatus.PENDING_DIRECTOR:
+      return {
+        ...PROGRESS,
+        hint: "Dosja shqyrtohet nga Drejtori i Drejtorisë së IQMT.",
+        badgeLabel: "Te Drejtori",
+      };
+    case ApplicationStatus.PENDING_SECTOR_HEAD:
+      return {
+        ...PROGRESS,
+        hint: "Dosja pret caktimin e inspektorëve nga Përgjegjësi i sektorit.",
+        badgeLabel: "Te Përgjegjësi",
+      };
+    case ApplicationStatus.PENDING_FIELD_REVIEW:
+    case ApplicationStatus.RETURNED_TO_INSPECTORS:
+      return {
+        ...PROGRESS,
+        hint: "Inspektorët shqyrtojnë dokumentacionin e dosjes (dhe terrenin nëse kërkohet).",
+        badgeLabel: "Shqyrtim nga inspektorët",
+      };
+    case ApplicationStatus.PENDING_SECTOR_HEAD_REPORT:
+    case ApplicationStatus.RETURNED_TO_SECTOR_HEAD:
+      return {
+        ...PROGRESS,
+        hint: "Përgjegjësi i sektorit përgatit raportin pas shqyrtimit të inspektorëve.",
+        badgeLabel: "Raport i përgjegjësit",
+      };
+    case ApplicationStatus.PENDING_DIRECTOR_REPORT:
+    case ApplicationStatus.RETURNED_TO_DIRECTOR:
+      return {
+        ...PROGRESS,
+        hint: "Drejtori i Drejtorisë përgatit raportin para dërgimit te Kryeinspektori.",
+        badgeLabel: "Raport i drejtorit",
       };
     case ApplicationStatus.PENDING_CHIEF_INSPECTOR:
       return {
         ...WAITING,
-        hint: "Inspektori përfundoi shqyrtimin. Dosja është në pritje të miratimit final nga administratori ISHMT.",
+        hint: "Shqyrtimi përfundoi. Dosja pret vendimin final të Kryeinspektorit.",
+        badgeLabel: "Vendim final",
       };
     case ApplicationStatus.APPROVED:
     case ApplicationStatus.ELEVATOR_CREATED:

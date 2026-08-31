@@ -6,9 +6,10 @@ import { requireAuthForPage } from "@/lib/auth/page-guards";
 import { isIshmtStaffRole } from "@/lib/permissions/routes";
 import { IshmtContractMonitorService } from "@/lib/services/ishmt-contract-monitor-service";
 import { OwnerComplianceNotificationService } from "@/lib/services/owner-compliance-notification-service";
+import { serializeComplianceNotifyStats } from "@/lib/ishmt/compliance-notify-feedback";
 
 export type ContractNotifyActionResult =
-  | { success: true; created: number; organizations: number }
+  | ({ success: true } & ReturnType<typeof serializeComplianceNotifyStats>)
   | { success: false; error: string };
 
 const NOTIFY_BATCH_MAX = 1000;
@@ -41,7 +42,7 @@ export async function notifyOwnerForContractIssueAction(input: {
     });
 
     revalidatePath("/ishmt/compliance-digest");
-    return { success: true, created: result.created, organizations: 1 };
+    return { success: true, ...serializeComplianceNotifyStats(result) };
   } catch (error) {
     return {
       success: false,
@@ -71,11 +72,7 @@ export async function notifyFilteredContractOwnersAction(
 
     const result = await OwnerComplianceNotificationService.notifyStakeholdersForContractIssues(rows);
     revalidatePath("/ishmt/compliance-digest");
-    return {
-      success: true,
-      created: result.created,
-      organizations: result.organizations,
-    };
+    return { success: true, ...serializeComplianceNotifyStats(result) };
   } catch (error) {
     return {
       success: false,

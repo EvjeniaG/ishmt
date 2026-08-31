@@ -41,11 +41,11 @@ export default async function OwnerInspectionsPage() {
     <AppShell>
       <StandardPageLayout
         eyebrow="Portali · Personi përgjegjës i ashensorit"
-        title="Inspektimet"
-        description="Historiku i inspektimeve periodike të regjistruara nga organizata OMI/certifikuese."
+        title="Kontrollet periodike"
+        description="Historiku i kontrolleve periodike të regjistruara nga organizata OM/certifikuese."
       >
         {inspections.length === 0 ? (
-          <PortalEmptyState>Nuk ka inspektime të regjistruara.</PortalEmptyState>
+          <PortalEmptyState>Nuk ka kontrolle të regjistruara.</PortalEmptyState>
         ) : (
           <div className="grid gap-4">
             {inspections.map((insp) => {
@@ -90,7 +90,7 @@ export default async function OwnerInspectionsPage() {
                       </p>
                     </div>
                     <div>
-                      <p className="text-xs text-muted-foreground">Inspektimi i radhës</p>
+                      <p className="text-xs text-muted-foreground">Kontrolli i radhës</p>
                       <p className="font-medium">
                         {insp.nextInspectionDate
                           ? new Date(insp.nextInspectionDate).toLocaleDateString("sq-AL")

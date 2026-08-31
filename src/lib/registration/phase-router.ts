@@ -6,8 +6,17 @@ import {
   ReturnTargetRole,
 } from "@prisma/client";
 import { ROLE_CODES, type RoleCode } from "@/lib/constants/roles";
+import { isIshmtOwnerTrackingStatus } from "@/lib/ishmt/owner-ishmt-tracker";
 import { canReviewApplications } from "@/lib/permissions/ishmt-roles";
 import { isReturnedToRole } from "@/lib/workflows/return-targets";
+import {
+  canActAsRole,
+  resolveWorkflowRoleForApplication,
+} from "@/lib/organizations/org-capabilities";
+import {
+  getInstallerTechnicalReview,
+  isInstallerTechnicalReviewApproved,
+} from "@/lib/registration/installer-technical-review";
 
 export type RegistrationPhase =
   | "basic-data"
@@ -15,10 +24,12 @@ export type RegistrationPhase =
   | "wait-installer"
   | "installer-accept"
   | "technical-data"
+  | "technical-reconciliation"
   | "installer-complete"
   | "select-certifier"
   | "wait-certifier"
   | "certifier-accept"
+  | "installer-technical-review"
   | "certification-data"
   | "certifier-complete"
   | "final-review"
@@ -68,6 +79,7 @@ type AppContext = {
   returnToRoles?: unknown;
   installerOrgId?: string | null;
   certifierOrgId?: string | null;
+  registrationExtendedData?: unknown;
   delegations?: {
     accessType: DelegationType;
     organizationId: string;
@@ -137,6 +149,14 @@ export const CERTIFIER_ACTIVE_WORK_STATUSES: ApplicationStatus[] = [
 
 function resolveInstallerPhase(app: AppContext): RegistrationPhase {
   const instDel = installerDelegation(app);
+  const review = getInstallerTechnicalReview({ registrationExtendedData: app.registrationExtendedData });
+
+  if (
+    review.status === "CORRECTIONS_REQUESTED" &&
+    POST_INSTALLER_WORK_STATUSES.includes(app.status)
+  ) {
+    return "technical-reconciliation";
+  }
 
   if (instDel?.status === DelegationStatus.PENDING || instDel?.status === DelegationStatus.INVITED) {
     return "installer-accept";
@@ -163,6 +183,11 @@ function resolveInstallerPhase(app: AppContext): RegistrationPhase {
 
 function resolveCertifierPhase(app: AppContext): RegistrationPhase {
   const certDel = certifierDelegation(app);
+  const review = getInstallerTechnicalReview({ registrationExtendedData: app.registrationExtendedData });
+  const technicalApproved = isInstallerTechnicalReviewApproved(
+    { registrationExtendedData: app.registrationExtendedData },
+    app.status,
+  );
 
   if (certDel?.status === DelegationStatus.PENDING || certDel?.status === DelegationStatus.INVITED) {
     return "certifier-accept";
@@ -172,11 +197,18 @@ function resolveCertifierPhase(app: AppContext): RegistrationPhase {
     return "certification-data";
   }
 
+  if (
+    app.status === ApplicationStatus.CERTIFIER_ACCEPTED &&
+    !technicalApproved
+  ) {
+    return "installer-technical-review";
+  }
+
   const certifierWorkStatuses: ApplicationStatus[] = [
     ApplicationStatus.CERTIFIER_ACCEPTED,
     ApplicationStatus.CERTIFICATION_IN_PROGRESS,
   ];
-  if (certifierWorkStatuses.includes(app.status)) {
+  if (certifierWorkStatuses.includes(app.status) && technicalApproved) {
     return "certification-data";
   }
 
@@ -189,7 +221,7 @@ function resolveCertifierPhase(app: AppContext): RegistrationPhase {
 
 function resolveOwnerPhase(app: AppContext): RegistrationPhase {
   if (app.status === ApplicationStatus.RETURNED) {
-    if (isReturnedToRole(app, ReturnTargetRole.OWNER)) return "final-review";
+    if (isReturnedToRole(app, ReturnTargetRole.OWNER)) return "basic-data";
     if (isReturnedToRole(app, ReturnTargetRole.INSTALLER)) return "wait-installer";
     if (isReturnedToRole(app, ReturnTargetRole.CERTIFIER)) return "wait-certifier";
     return "basic-data";
@@ -220,6 +252,13 @@ function resolveOwnerPhase(app: AppContext): RegistrationPhase {
     app.status === ApplicationStatus.CERTIFIER_ACCEPTED ||
     app.status === ApplicationStatus.CERTIFICATION_IN_PROGRESS
   ) {
+    const review = getInstallerTechnicalReview({ registrationExtendedData: app.registrationExtendedData });
+    if (
+      app.status === ApplicationStatus.CERTIFIER_ACCEPTED &&
+      review.status === "CORRECTIONS_REQUESTED"
+    ) {
+      return "wait-installer";
+    }
     return "wait-certifier";
   }
 
@@ -249,12 +288,7 @@ export function resolveRegistrationPhase(app: AppContext, roleCode: RoleCode): R
     return "completed";
   }
 
-  const reviewStatuses: ApplicationStatus[] = [
-    ApplicationStatus.SUBMITTED,
-    ApplicationStatus.UNDER_REVIEW,
-    ApplicationStatus.PENDING_CHIEF_INSPECTOR,
-  ];
-  if (reviewStatuses.includes(app.status)) {
+  if (isIshmtOwnerTrackingStatus(app.status)) {
     if (canReviewApplications(roleCode) || roleCode === ROLE_CODES.ADMIN) return "review";
     if (roleCode === ROLE_CODES.INSTALLER) return resolveInstallerPhase(app);
     if (roleCode === ROLE_CODES.CERTIFIER) return resolveCertifierPhase(app);
@@ -288,6 +322,10 @@ export function registrationPhasePath(appId: string, _phase?: RegistrationPhase)
 }
 
 const POST_SUBMIT_OWNER_PHASES: RegistrationPhase[] = ["submitted", "review", "completed", "rejected"];
+
+export function isOwnerPostSubmitPhase(phase: RegistrationPhase): boolean {
+  return POST_SUBMIT_OWNER_PHASES.includes(phase);
+}
 
 export function getOwnerStepNumberFromPhase(phase: RegistrationPhase): number {
   switch (phase) {
@@ -378,7 +416,7 @@ export function getOwnerPhaseDescription(phase: RegistrationPhase): string {
     case "wait-certifier":
       return "Certifikuesi po plotëson certifikimin.";
     case "final-review":
-      return "Kontrolloni përmbledhjen dhe parashtroni te ISHMT.";
+      return "Kontrolloni përmbledhjen dhe parashtroni te IQMT.";
     case "submitted":
     case "review":
       return "Aplikimi po shqyrtohet. Nuk duhet të bëni asgjë tani.";
@@ -392,24 +430,58 @@ export function getOwnerPhaseDescription(phase: RegistrationPhase): string {
 }
 
 export function getInstallerDelegateStepStates(phase: RegistrationPhase) {
-  const order: RegistrationPhase[] = ["installer-accept", "technical-data", "installer-complete"];
+  if (phase === "completed") {
+    return [
+      { label: "Pranimi i ftesës", done: true, active: false },
+      { label: "Të dhënat teknike", done: true, active: false },
+      { label: "Rakordimi", done: true, active: false },
+      { label: "Përfunduar", done: true, active: false },
+    ];
+  }
+
+  const order: RegistrationPhase[] = [
+    "installer-accept",
+    "technical-data",
+    "technical-reconciliation",
+    "installer-complete",
+  ];
   const idx = order.indexOf(phase);
   const current = idx === -1 ? order.length : idx;
   return [
     { label: "Pranimi i ftesës", done: current > 0, active: current === 0 },
-    { label: "Të dhënat teknike", done: current > 1, active: current === 1 },
-    { label: "Përfunduar", done: current > 2, active: current === 2 },
+    {
+      label: "Të dhënat teknike",
+      done: current > 1 && phase !== "technical-reconciliation",
+      active: phase === "technical-data",
+    },
+    { label: "Rakordimi", done: false, active: phase === "technical-reconciliation" },
+    { label: "Përfunduar", done: current > 2 && phase !== "technical-reconciliation", active: phase === "installer-complete" },
   ];
 }
 
 export function getCertifierDelegateStepStates(phase: RegistrationPhase) {
-  const order: RegistrationPhase[] = ["certifier-accept", "certification-data", "certifier-complete"];
+  if (phase === "completed") {
+    return [
+      { label: "Pranimi i ftesës", done: true, active: false },
+      { label: "Rakordimi", done: true, active: false },
+      { label: "Certifikimi", done: true, active: false },
+      { label: "Përfunduar", done: true, active: false },
+    ];
+  }
+
+  const order: RegistrationPhase[] = [
+    "certifier-accept",
+    "installer-technical-review",
+    "certification-data",
+    "certifier-complete",
+  ];
   const idx = order.indexOf(phase);
   const current = idx === -1 ? order.length : idx;
   return [
     { label: "Pranimi i ftesës", done: current > 0, active: current === 0 },
-    { label: "Certifikimi", done: current > 1, active: current === 1 },
-    { label: "Përfunduar", done: current > 2, active: current === 2 },
+    { label: "Rakordimi", done: current > 1, active: current === 1 },
+    { label: "Certifikimi", done: current > 2, active: current === 2 },
+    { label: "Përfunduar", done: current > 3, active: current === 3 },
   ];
 }
 
@@ -420,7 +492,7 @@ export function getRegistrationWizardStep(
   if (status === ApplicationStatus.RETURNED) {
     if (returnToRole === ReturnTargetRole.INSTALLER) return 3;
     if (returnToRole === ReturnTargetRole.CERTIFIER) return 5;
-    if (returnToRole === ReturnTargetRole.OWNER) return 6;
+    if (returnToRole === ReturnTargetRole.OWNER) return 1;
     return 1;
   }
 
@@ -434,7 +506,7 @@ export function getRegistrationWizardStep(
     ApplicationStatus.CLOSED,
     ApplicationStatus.REJECTED,
   ];
-  if (allComplete.includes(status)) return 7;
+  if (allComplete.includes(status) || isIshmtOwnerTrackingStatus(status)) return 7;
 
   const stepByStatus: Partial<Record<ApplicationStatus, number>> = {
     [ApplicationStatus.DRAFT]: 1,
@@ -491,8 +563,10 @@ export function isOwnerRegistrationPhase(phase: RegistrationPhase): boolean {
   return ![
     "installer-accept",
     "technical-data",
+    "technical-reconciliation",
     "installer-complete",
     "certifier-accept",
+    "installer-technical-review",
     "certification-data",
     "certifier-complete",
     "submitted",
@@ -500,4 +574,61 @@ export function isOwnerRegistrationPhase(phase: RegistrationPhase): boolean {
     "completed",
     "rejected",
   ].includes(phase);
+}
+
+const DELEGATE_ACTION_PHASES: RegistrationPhase[] = [
+  "installer-accept",
+  "technical-data",
+  "technical-reconciliation",
+  "installer-complete",
+  "certifier-accept",
+  "installer-technical-review",
+  "certification-data",
+  "certifier-complete",
+];
+
+type RegistrationPhaseInput = Parameters<typeof resolveRegistrationPhase>[0];
+
+/** Ndërton kontekstin e fazës së regjistrimit nga aplikimi (përfshirë review-in teknik). */
+export function buildRegistrationPhaseInput(app: {
+  id: string;
+  type: ApplicationType;
+  status: ApplicationStatus;
+  returnToRole?: ReturnTargetRole | null;
+  returnToRoles?: unknown;
+  installerOrgId?: string | null;
+  certifierOrgId?: string | null;
+  delegations?: AppContext["delegations"];
+  registrationExtendedData?: unknown;
+  data?: { registrationExtendedData?: unknown } | null;
+}): RegistrationPhaseInput {
+  return {
+    id: app.id,
+    type: app.type,
+    status: app.status,
+    returnToRole: app.returnToRole,
+    returnToRoles: app.returnToRoles,
+    installerOrgId: app.installerOrgId,
+    certifierOrgId: app.certifierOrgId,
+    delegations: app.delegations,
+    registrationExtendedData:
+      app.registrationExtendedData ?? app.data?.registrationExtendedData,
+  };
+}
+
+/** Zgjedh fazën dhe rolin efektiv kur kompania ka më shumë se një funksion. */
+export function resolveRegistrationContextForCapabilities(
+  ctx: import("@/lib/permissions/guards").AuthContext,
+  app: RegistrationPhaseInput,
+): { phase: RegistrationPhase; workflowRole: RoleCode } {
+  for (const role of [ROLE_CODES.INSTALLER, ROLE_CODES.CERTIFIER] as RoleCode[]) {
+    if (!canActAsRole(ctx, role)) continue;
+    const phase = resolveRegistrationPhase(app, role);
+    if (DELEGATE_ACTION_PHASES.includes(phase)) {
+      return { phase, workflowRole: role };
+    }
+  }
+
+  const workflowRole = resolveWorkflowRoleForApplication(ctx, app);
+  return { phase: resolveRegistrationPhase(app, workflowRole), workflowRole };
 }

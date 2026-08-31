@@ -21,13 +21,13 @@ import {
 
 export const CONTRACT_ISSUE_LABELS: Record<string, string> = {
   "no-maintenance-contract": "Pa kontratë mirëmbajtjeje",
-  "no-inspection-contract": "Pa kontratë inspektimi (OMI)",
+  "no-inspection-contract": "Pa kontratë kontrolli periodik (OM)",
   "maintenance-contract-expired": "Kontrata mirëmbajtjes skaduar",
-  "inspection-contract-expired": "Kontrata inspektimit skaduar",
+  "inspection-contract-expired": "Kontrata e kontrollit periodik skaduar",
   "maintenance-contract-expiring": "Mirëmbajtje skadon së shpejti",
-  "inspection-contract-expiring": "Inspektim skadon së shpejti",
+  "inspection-contract-expiring": "Kontroll periodik skadon së shpejti",
   "pending-maintenance-contract": "Mirëmbajtje në pritje pranimi",
-  "pending-inspection-contract": "Inspektim në pritje pranimi",
+  "pending-inspection-contract": "Kontroll periodik në pritje pranimi",
 };
 
 const SEVERITY_BADGE = {
@@ -94,7 +94,7 @@ function buildStatGroups(
         },
         {
           key: "no-inspection-contract",
-          label: "Pa kontratë OMI",
+          label: "Pa kontratë OM",
           hint: "Mungon kontrata periodike me trupin certifikues",
           value: stats.noInspectionContract,
           href: link({ issue: "no-inspection-contract" }),
@@ -122,8 +122,8 @@ function buildStatGroups(
         },
         {
           key: "inspection-contract-expired",
-          label: "Inspektim i skaduar",
-          hint: "Kontrata OMI me datë mbarimi të kaluar",
+          label: "Kontroll i skaduar",
+          hint: "Kontrata OM me datë mbarimi të kaluar",
           value: stats.inspectionContractExpired,
           href: link({ issue: "inspection-contract-expired" }),
           filter: { issue: "inspection-contract-expired" },
@@ -144,8 +144,8 @@ function buildStatGroups(
         },
         {
           key: "inspection-expiring-7",
-          label: "Inspektim ≤7 ditë",
-          hint: "Afati i kontratës OMI po afrohet",
+          label: "Kontroll ≤7 ditë",
+          hint: "Afati i kontratës OM po afrohet",
           value: stats.inspectionContractExpiring7,
           href: link({ issue: "inspection-contract-expiring", expiringWithin: 7 }),
           filter: { issue: "inspection-contract-expiring", expiringWithin: 7 },
@@ -165,7 +165,7 @@ function buildStatGroups(
         },
         {
           key: "inspection-expiring-30",
-          label: "Inspektim ≤30 ditë",
+          label: "Kontroll ≤30 ditë",
           hint: "Monitorim i afatit kontraktual",
           value: stats.inspectionContractExpiring30,
           href: link({ issue: "inspection-contract-expiring", expiringWithin: 30 }),
@@ -191,8 +191,8 @@ function buildStatGroups(
         },
         {
           key: "pending-inspection-contract",
-          label: "Inspektim në pritje",
-          hint: "Kontrata OMI në pritje pranimi",
+          label: "Kontroll në pritje",
+          hint: "Kontrata OM në pritje pranimi",
           value: stats.pendingInspectionContract,
           href: link({ issue: "pending-inspection-contract" }),
           filter: { issue: "pending-inspection-contract" },
@@ -302,7 +302,7 @@ export function IshmtContractOverview({
       label: "Skadim ≤7 ditë",
       value: expiringSoon,
       accent: expiringSoon > 0 ? "warning" : "primary",
-      subtitle: "Mirëmbajtje dhe inspektim OMI",
+      subtitle: "Mirëmbajtje dhe kontroll periodik OM",
       active: filterBase.issueCategory === "expiring" && filterBase.expiringWithin === 7,
     },
     {
@@ -367,7 +367,7 @@ export function IshmtContractStatsPanel({
 }
 
 function fmtDueDate(date: Date | null): string {
-  if (!date) return "—";
+  if (!date) return "-";
   return new Date(date).toLocaleDateString("sq-AL", {
     day: "2-digit",
     month: "short",
@@ -410,7 +410,7 @@ export function IshmtContractIssuesTable({
             {matchedElevator.municipality?.nameSq
               ? ` (${matchedElevator.municipality.nameSq})`
               : ""}
-            , por nuk ka alarm kontratash për filtrin aktual — kontratat e mirëmbajtjes dhe OMI
+            , por nuk ka alarm kontratash për filtrin aktual - kontratat e mirëmbajtjes  dhe OM
             duken në rregull. Kjo faqe liston vetëm raste me problem (pa kontratë, skadim, pritje
             pranimi).
           </PortalEmptyState>
@@ -464,7 +464,7 @@ export function IshmtContractIssuesTable({
                   Mirëmbajtja
                 </th>
                 <th className="sticky top-0 z-10 bg-gov-surface shadow-[inset_0_-1px_0_0_hsl(var(--border))]">
-                  OMI
+                  OM
                 </th>
                 <th className="sticky top-0 z-10 bg-gov-surface shadow-[inset_0_-1px_0_0_hsl(var(--border))]">
                   Skadimi

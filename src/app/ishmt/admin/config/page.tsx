@@ -18,7 +18,7 @@ export default async function SystemConfigPage() {
   return (
     <AppShell title="Konfigurimi i sistemit">
       <StandardPageLayout
-        eyebrow="ISHMT · Administrim"
+        eyebrow="IQMT · Administrim"
         title="Konfigurimi i sistemit"
         description="Formate numrash, rregulla përputhshmërie, sesion dhe siguri"
       >

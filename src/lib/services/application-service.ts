@@ -3,6 +3,7 @@ import {
   ApplicationType,
   ApplicationFieldReviewAssignmentStatus,
   FieldInspectorReportStatus,
+  FieldInspectionAssignmentStatus,
   AuditAction,
   DelegationStatus,
   DelegationType,
@@ -11,12 +12,19 @@ import {
   Prisma,
   ReturnTargetRole,
 } from "@prisma/client";
+import { activeCertifierOrgWhere } from "@/lib/organizations/licensed-org-filters";
 import { db } from "@/lib/db";
 import { AuditService } from "@/lib/audit/audit-service";
+import {
+  loadOwnerRegistrationPrefill,
+} from "@/lib/registration/owner-registration-prefill";
 import type { AuthContext } from "@/lib/permissions/guards";
 import { hasPermission } from "@/lib/permissions/guards";
 import { PERMISSIONS } from "@/lib/permissions/codes";
-import { ROLE_CODES } from "@/lib/constants/roles";
+import { ROLE_CODES, type RoleCode } from "@/lib/constants/roles";
+import { isDirectorateActivityApplication } from "@/lib/directorate/activity-application-access";
+import { hasServiceCapability, canActAsRole } from "@/lib/organizations/org-capabilities";
+import { assertInstallerDistinctFromCertifier } from "@/lib/registration/registration-party-rules";
 import {
   canApproveApplications,
   canChiefHandleApplications,
@@ -38,10 +46,21 @@ import {
   pickPrimaryReturnToRole,
   removeCompletedReturnRole,
   resolveStatusAfterReturnCorrection,
+  RETURN_TARGET_LABELS,
+  applicationReturnedToRoleWhere,
 } from "@/lib/workflows/return-targets";
 import { REGISTRATION_PHASE_ACTION_LABELS } from "@/lib/registration/action-labels";
 import { resolveRegistrationPhase } from "@/lib/registration/phase-router";
-import type { RoleCode } from "@/lib/constants/roles";
+import {
+  getInstallerTechnicalReview,
+  isInstallerTechnicalReviewApproved,
+  mergeInstallerTechnicalReview,
+  initialInstallerTechnicalReviewExtended,
+} from "@/lib/registration/installer-technical-review";
+import {
+  DELEGATION_REVOKED_ACTION_LABEL,
+  isDelegationRevokedForOrg,
+} from "@/lib/delegation/delegation-revoked";
 import { NotificationService } from "@/lib/services/notification-service";
 import {
   ISHMT_NOTIFICATION_COPY,
@@ -56,17 +75,26 @@ import {
   setActiveAssigneeParticipation,
   upsertParticipation,
   type ReviewQueueBucket,
+  currentPhaseLabel,
 } from "@/lib/services/application-participation";
 import {
   applyFieldVerificationRequest,
   assertFieldVerificationCompleteForApproval,
-  ensureApplicationFieldVerificationAssignments,
+  isChiefLockedFieldVerification,
   notifyFieldVerificationAssignment,
+  resolveChiefFieldVerificationAssignerId,
+  syncApplicationFieldVerificationAssignments,
+  syncFieldVerificationAssignmentIfReady,
 } from "@/lib/services/application-field-verification";
 import { ElevatorService } from "@/lib/services/elevator-service";
 import { ElevatorLifecycleService } from "@/lib/services/elevator-lifecycle-service";
+import { OrganizationCapabilityService } from "@/lib/services/organization-capability-service";
 import { PostApprovalAssetService } from "@/lib/services/post-approval-asset-service";
-import { getMissingRequiredApplicationDocuments, getMissingRequiredApplicationDocumentsForPhases, CERTIFIER_COMPLETION_DOC_PHASES } from "@/lib/documents/application-document-checklist";
+import {
+  CERTIFIER_COMPLETION_DOC_PHASES,
+  getMissingRequiredApplicationDocuments,
+  getMissingRequiredApplicationDocumentsForPhases,
+} from "@/lib/documents/application-document-checklist";
 import {
   annexBuildingTypeCode,
   annexUsagePurposeCode,
@@ -95,7 +123,7 @@ const APPLICATION_TYPE_CODES: Record<ApplicationType, string> = {
   MODERNIZATION: "MOD",
 };
 
-const applicationInclude = {
+export const applicationInclude = {
   data: { include: { municipality: true, administrativeUnit: true } },
   ownerOrg: true,
   installerOrg: true,
@@ -106,6 +134,7 @@ const applicationInclude = {
   delegations: { include: { organization: true } },
   workflowHistory: { orderBy: { createdAt: "desc" as const }, take: 20 },
   targetElevator: { include: { technicalData: true } },
+  originElevator: { select: { id: true, registryNumber: true, status: true, buildingAddress: true } },
 } satisfies Prisma.ApplicationInclude;
 
 export class ApplicationService {
@@ -137,24 +166,47 @@ export class ApplicationService {
       return false;
     }
 
-    switch (ctx.roleCode) {
-      case ROLE_CODES.OWNER:
-        if (app.ownerOrgId === ctx.activeOrgId) return true;
-        return (
-          app.delegations?.some(
-            (d) =>
-              d.organizationId === ctx.activeOrgId &&
-              d.accessType === DelegationType.OWNERSHIP_RECIPIENT &&
-              d.status !== DelegationStatus.REVOKED,
-          ) ?? false
-        );
-      case ROLE_CODES.INSTALLER:
-        return app.installerOrgId === ctx.activeOrgId;
-      case ROLE_CODES.CERTIFIER:
-        return app.certifierOrgId === ctx.activeOrgId;
-      default:
-        return false;
+    if (canActAsRole(ctx, ROLE_CODES.OWNER)) {
+      if (app.ownerOrgId === ctx.activeOrgId) return true;
+      if (
+        app.delegations?.some(
+          (d) =>
+            d.organizationId === ctx.activeOrgId &&
+            d.accessType === DelegationType.OWNERSHIP_RECIPIENT &&
+            d.status !== DelegationStatus.REVOKED,
+        )
+      ) {
+        return true;
+      }
     }
+
+    if (canActAsRole(ctx, ROLE_CODES.INSTALLER)) {
+      if (app.installerOrgId === ctx.activeOrgId) return true;
+      if (
+        app.delegations?.some(
+          (d) =>
+            d.organizationId === ctx.activeOrgId &&
+            d.accessType === DelegationType.INSTALLER,
+        )
+      ) {
+        return true;
+      }
+    }
+
+    if (canActAsRole(ctx, ROLE_CODES.CERTIFIER)) {
+      if (app.certifierOrgId === ctx.activeOrgId) return true;
+      if (
+        app.delegations?.some(
+          (d) =>
+            d.organizationId === ctx.activeOrgId &&
+            d.accessType === DelegationType.CERTIFIER,
+        )
+      ) {
+        return true;
+      }
+    }
+
+    return false;
   }
 
   static async canViewApplication(
@@ -175,6 +227,14 @@ export class ApplicationService {
     },
   ) {
     if (this.canAccess(ctx, app)) return true;
+
+    if (
+      ctx.roleCode === ROLE_CODES.DIRECTORATE &&
+      isDirectorateActivityApplication(app)
+    ) {
+      return true;
+    }
+
     if (!hasPermission(ctx, PERMISSIONS.APPLICATIONS_VIEW_ALL)) return false;
     if (!isIshmtInternalRole(ctx.roleCode as RoleCode)) return true;
     return hasIshmtApplicationParticipation(ctx.userId, ctx.roleCode as RoleCode, app);
@@ -204,6 +264,7 @@ export class ApplicationService {
       returnToRoles?: unknown;
       installerOrgId?: string | null;
       certifierOrgId?: string | null;
+      registrationExtendedData?: unknown;
       delegations?: {
         accessType: DelegationType;
         organizationId: string;
@@ -214,6 +275,14 @@ export class ApplicationService {
     roleCode?: RoleCode,
     activeOrgId?: string,
   ) {
+    if (
+      activeOrgId &&
+      roleCode &&
+      isDelegationRevokedForOrg(app.delegations, roleCode, activeOrgId, app)
+    ) {
+      return DELEGATION_REVOKED_ACTION_LABEL;
+    }
+
     if (app.type === ApplicationType.NEW_REGISTRATION && roleCode && app.id) {
       const phase = resolveRegistrationPhase(
         {
@@ -225,6 +294,7 @@ export class ApplicationService {
           installerOrgId: app.installerOrgId,
           certifierOrgId: app.certifierOrgId,
           delegations: app.delegations,
+          registrationExtendedData: app.registrationExtendedData,
         },
         roleCode,
       );
@@ -250,7 +320,7 @@ export class ApplicationService {
         return "Në pritje të pranimit nga marrësi";
       }
       if (ownershipDelegation.status === DelegationStatus.ACCEPTED) {
-        return "Parashtroni te ISHMT";
+        return "Parashtroni te IQMT";
       }
       if (ownershipDelegation.status === DelegationStatus.REJECTED) {
         return "Marrësi refuzoi - zgjidhni marrës tjetër";
@@ -276,7 +346,7 @@ export class ApplicationService {
       app.type === ApplicationType.DEREGISTRATION &&
       (app.status === ApplicationStatus.DRAFT || app.status === ApplicationStatus.RETURNED)
     ) {
-      return "Parashtroni te ISHMT";
+      return "Parashtroni te IQMT";
     }
 
     if (app.status === ApplicationStatus.DRAFT) return "Plotësoni të dhënat bazë";
@@ -289,12 +359,16 @@ export class ApplicationService {
     if (app.status === ApplicationStatus.CERTIFIER_INVITED) return "Në pritje të pranimit nga certifikuesi";
     if (app.status === ApplicationStatus.PENDING_CERTIFIER) return "Në pritje të certifikuesit";
     if (app.status === ApplicationStatus.CERTIFIER_ACCEPTED) return "Certifikuesi plotëson dokumentacionin";
-    if (app.status === ApplicationStatus.CERTIFICATION_COMPLETED) return "Rishikoni dhe parashtroni te ISHMT";
+    if (app.status === ApplicationStatus.CERTIFICATION_COMPLETED) return "Rishikoni dhe parashtroni te IQMT";
     if (app.status === ApplicationStatus.PENDING_OWNER_SUBMISSION) return "Dërgo Aplikimin për Registrim";
     if (app.returnToRole === ReturnTargetRole.OWNER) return "Korrigjoni dhe riparashtroni";
+    if (roleCode === ROLE_CODES.OWNER || roleCode === ROLE_CODES.INSTALLER || roleCode === ROLE_CODES.CERTIFIER) {
+      const ishmtLabel = currentPhaseLabel(app.status);
+      if (ishmtLabel !== app.status) return ishmtLabel;
+    }
     if (app.status === ApplicationStatus.SUBMITTED) return "Në pritje të shqyrtimit nga inspektori";
-    if (app.status === ApplicationStatus.UNDER_REVIEW) return "Në shqyrtim nga inspektori ISHMT";
-    if (app.status === ApplicationStatus.PENDING_CHIEF_INSPECTOR) return "Në pritje të miratimit nga kryeinspektori ISHMT";
+    if (app.status === ApplicationStatus.UNDER_REVIEW) return "Në shqyrtim nga inspektori IQMT";
+    if (app.status === ApplicationStatus.PENDING_CHIEF_INSPECTOR) return "Në pritje të miratimit nga kryeinspektori IQMT";
     if (app.status === ApplicationStatus.APPROVED) return "E miratuar";
     if (app.status === ApplicationStatus.REJECTED) return "E refuzuar";
     return APPLICATION_STATUS_LABELS[app.status] ?? app.status;
@@ -338,8 +412,27 @@ export class ApplicationService {
         },
       });
 
+      const ownerPrefill =
+        type === ApplicationType.NEW_REGISTRATION
+          ? await loadOwnerRegistrationPrefill(ctx.userId, ctx.activeOrgId)
+          : null;
+
+      const workflowExtended = ownerPrefill?.registrationExtendedData ?? {};
+
       await tx.applicationData.create({
-        data: { applicationId: application.id },
+        data: {
+          applicationId: application.id,
+          applicationDate: ownerPrefill?.applicationDate
+            ? new Date(ownerPrefill.applicationDate)
+            : undefined,
+          buildingAddress: ownerPrefill?.buildingAddress ?? undefined,
+          municipalityId: ownerPrefill?.municipalityId ?? undefined,
+          responsibleEntityName: ownerPrefill?.responsibleEntityName ?? undefined,
+          responsibleEntityIdentifier: ownerPrefill?.responsibleEntityIdentifier ?? undefined,
+          responsibleEntityEmail: ownerPrefill?.responsibleEntityEmail ?? undefined,
+          responsibleEntityPhone: ownerPrefill?.responsibleEntityPhone ?? undefined,
+          registrationExtendedData: workflowExtended,
+        },
       });
 
       await this.recordTransition(tx, {
@@ -436,7 +529,12 @@ export class ApplicationService {
       if (ctx.roleCode === ROLE_CODES.ADMIN) {
         // Administratori sheh të gjitha aplikimet.
       } else if (filters?.queueBucket) {
+        const explicitStatus = where.status;
         Object.assign(where, buildParticipationQueueWhere(ctx.userId, filters.queueBucket));
+
+        if (explicitStatus !== undefined) {
+          where.status = explicitStatus;
+        }
 
         if (isFieldInspectorRole(ctx.roleCode) && filters.queueBucket === "needs_action") {
           where.participations = {
@@ -454,7 +552,7 @@ export class ApplicationService {
         where.participations = { some: { userId: ctx.userId } };
       }
     } else if (hasPermission(ctx, PERMISSIONS.APPLICATIONS_VIEW_ALL)) {
-      // Staf me view_all jashtë ISHMT (nëse ekziston).
+      // Staf me view_all jashtë IQMT (nëse ekziston).
     } else if (ctx.roleCode === ROLE_CODES.OWNER) {
       where.OR = [
         { ownerOrgId: ctx.activeOrgId },
@@ -471,12 +569,50 @@ export class ApplicationService {
       if (where.status === undefined && filters?.status !== ApplicationStatus.CANCELLED) {
         where.status = { not: ApplicationStatus.CANCELLED };
       }
-    } else if (ctx.roleCode === ROLE_CODES.INSTALLER) {
-      where.installerOrgId = ctx.activeOrgId;
-      where.status = { notIn: [ApplicationStatus.DRAFT, ApplicationStatus.CANCELLED] };
-    } else if (ctx.roleCode === ROLE_CODES.CERTIFIER) {
-      where.certifierOrgId = ctx.activeOrgId;
-      where.status = { notIn: [ApplicationStatus.DRAFT, ApplicationStatus.PENDING_INSTALLER, ApplicationStatus.CANCELLED] };
+    } else if (hasServiceCapability(ctx, "install") || hasServiceCapability(ctx, "om")) {
+      const serviceFilters: Prisma.ApplicationWhereInput[] = [];
+
+      if (hasServiceCapability(ctx, "install")) {
+        serviceFilters.push({
+          OR: [
+            { installerOrgId: ctx.activeOrgId },
+            {
+              delegations: {
+                some: {
+                  organizationId: ctx.activeOrgId,
+                  accessType: DelegationType.INSTALLER,
+                },
+              },
+            },
+          ],
+          status: { notIn: [ApplicationStatus.DRAFT, ApplicationStatus.CANCELLED] },
+        });
+      }
+
+      if (hasServiceCapability(ctx, "om")) {
+        serviceFilters.push({
+          OR: [
+            { certifierOrgId: ctx.activeOrgId },
+            {
+              delegations: {
+                some: {
+                  organizationId: ctx.activeOrgId,
+                  accessType: DelegationType.CERTIFIER,
+                },
+              },
+            },
+          ],
+          status: {
+            notIn: [
+              ApplicationStatus.DRAFT,
+              ApplicationStatus.PENDING_INSTALLER,
+              ApplicationStatus.CANCELLED,
+            ],
+          },
+        });
+      }
+
+      where.OR = serviceFilters;
     } else {
       return [];
     }
@@ -488,7 +624,9 @@ export class ApplicationService {
         ownerOrg: true,
         installerOrg: true,
         certifierOrg: true,
-        delegations: true,
+        delegations: {
+          include: { organization: { select: { name: true } } },
+        },
         targetElevator: true,
         currentAssignee: { select: { id: true, firstName: true, lastName: true } },
         fieldReviewAssignments: {
@@ -502,6 +640,55 @@ export class ApplicationService {
       },
       orderBy: { updatedAt: "desc" },
     });
+  }
+
+  /** Aplikime të kthyera nga IQMT që presin veprim nga roli aktual (pronar, instalues, OM). */
+  static async listReturnedForContext(ctx: AuthContext) {
+    const include = {
+      data: { include: { municipality: true } },
+      returnedBy: { select: { firstName: true, lastName: true } },
+      ownerOrg: true,
+      installerOrg: true,
+      certifierOrg: true,
+    } as const;
+
+    if (ctx.roleCode === ROLE_CODES.OWNER) {
+      return db.application.findMany({
+        where: {
+          ownerOrgId: ctx.activeOrgId,
+          deletedAt: null,
+          status: ApplicationStatus.RETURNED,
+        },
+        include,
+        orderBy: { returnedAt: "desc" },
+      });
+    }
+
+    if (hasServiceCapability(ctx, "om")) {
+      return db.application.findMany({
+        where: {
+          deletedAt: null,
+          certifierOrgId: ctx.activeOrgId,
+          ...applicationReturnedToRoleWhere(ReturnTargetRole.CERTIFIER),
+        },
+        include,
+        orderBy: { returnedAt: "desc" },
+      });
+    }
+
+    if (hasServiceCapability(ctx, "install")) {
+      return db.application.findMany({
+        where: {
+          deletedAt: null,
+          installerOrgId: ctx.activeOrgId,
+          ...applicationReturnedToRoleWhere(ReturnTargetRole.INSTALLER),
+        },
+        include,
+        orderBy: { returnedAt: "desc" },
+      });
+    }
+
+    return [];
   }
 
   static getFieldReviewProgressSummary(
@@ -579,7 +766,7 @@ export class ApplicationService {
     }
 
     if (application.status === ApplicationStatus.RETURNED && !isReturnedToRole(application, ReturnTargetRole.OWNER)) {
-      throw new Error("Korrigjimi duhet të bëhet nga roli i caktuar nga ISHMT.");
+      throw new Error("Korrigjimi duhet të bëhet nga roli i caktuar nga IQMT.");
     }
 
     await db.applicationData.update({
@@ -622,7 +809,8 @@ export class ApplicationService {
       ApplicationStatus.BASIC_DATA_COMPLETED,
     ]);
 
-    await this.assertActiveLicensedCompany(installerOrgId, OrgType.INSTALLER);
+    await OrganizationCapabilityService.assertInstallerProvider(installerOrgId);
+    assertInstallerDistinctFromCertifier(installerOrgId, application.certifierOrgId);
 
     const toStatus = assertTransition(
       application.type,
@@ -701,6 +889,7 @@ export class ApplicationService {
     ]);
 
     await this.assertActiveLicensedCompany(certifierOrgId, OrgType.CERTIFIER);
+    assertInstallerDistinctFromCertifier(application.installerOrgId, certifierOrgId);
 
     const toStatus = assertTransition(
       application.type,
@@ -858,8 +1047,30 @@ export class ApplicationService {
 
     await this.updateTechnicalData(ctx, applicationId, technicalData);
 
-    const refreshed = await db.application.findUnique({ where: { id: applicationId } });
+    const refreshed = await db.application.findUnique({
+      where: { id: applicationId },
+      include: { data: true, delegations: true },
+    });
     if (!refreshed) throw new Error("Aplikimi nuk u gjet.");
+
+    if (refreshed.type === ApplicationType.NEW_REGISTRATION) {
+      const links = await db.documentLink.findMany({
+        where: { entityType: "application", entityId: applicationId },
+        select: { purpose: true },
+      });
+      const uploadedPurposes = links.map((link) => link.purpose ?? "").filter(Boolean);
+      const missingInstallerDocs = getMissingRequiredApplicationDocumentsForPhases({
+        type: ApplicationType.NEW_REGISTRATION,
+        data: refreshed.data,
+        uploadedPurposes,
+        phases: ["installer"],
+      });
+      if (missingInstallerDocs.length > 0) {
+        throw new Error(
+          `Dokumentacioni i instaluesit i paplotë: ${missingInstallerDocs.map((doc) => `Mungon ${doc.label}`).join("; ")}`,
+        );
+      }
+    }
 
     if (
       refreshed.status === ApplicationStatus.RETURNED &&
@@ -955,6 +1166,14 @@ export class ApplicationService {
     if (!application) throw new Error("Aplikimi nuk u gjet.");
 
     if (application.type === ApplicationType.NEW_REGISTRATION || application.type === ApplicationType.MODERNIZATION) {
+      if (
+        !isInstallerTechnicalReviewApproved(application.data, application.status)
+      ) {
+        throw new Error(
+          "Duhet të miratoni të dhënat teknike të instaluesit para se të përfundoni certifikimin.",
+        );
+      }
+
       const links = await db.documentLink.findMany({
         where: { entityType: "application", entityId: application.id },
         select: { purpose: true },
@@ -991,6 +1210,247 @@ export class ApplicationService {
     );
 
     return this.transition(ctx, application, "COMPLETE_CERTIFIER", toStatus);
+  }
+
+  static async approveInstallerTechnicalReview(ctx: AuthContext, applicationId: string) {
+    const application = await db.application.findUnique({
+      where: { id: applicationId, deletedAt: null },
+      include: { data: true },
+    });
+    if (!application) throw new Error("Aplikimi nuk u gjet.");
+    if (application.certifierOrgId !== ctx.activeOrgId) {
+      throw new Error("Ky aplikim nuk është caktuar për organizatën tuaj.");
+    }
+    if (application.type !== ApplicationType.NEW_REGISTRATION) {
+      throw new Error("Rakordimi i të dhënave teknike vlen vetëm për regjistrim të ri.");
+    }
+
+    const allowed: ApplicationStatus[] = [
+      ApplicationStatus.CERTIFIER_ACCEPTED,
+      ApplicationStatus.CERTIFICATION_IN_PROGRESS,
+    ];
+    if (!allowed.includes(application.status)) {
+      throw new Error("Aplikimi nuk është në fazën e verifikimit të instaluesit.");
+    }
+
+    const review = getInstallerTechnicalReview(application.data);
+    if (review.status === "APPROVED") {
+      if (application.status === ApplicationStatus.CERTIFICATION_IN_PROGRESS) {
+        return this.getById(ctx, applicationId);
+      }
+    } else if (review.status === "CORRECTIONS_REQUESTED") {
+      throw new Error("Instaluesi ende nuk ka dërguar korrigjimet e kërkuara.");
+    }
+
+    const extended = mergeInstallerTechnicalReview(application.data?.registrationExtendedData, {
+      status: "APPROVED",
+      approvedAt: new Date().toISOString(),
+    });
+
+    await db.applicationData.update({
+      where: { applicationId },
+      data: { registrationExtendedData: extended as Prisma.InputJsonValue },
+    });
+
+    let refreshed = await db.application.findUnique({
+      where: { id: applicationId },
+      include: { data: true },
+    });
+    if (!refreshed) throw new Error("Aplikimi nuk u gjet.");
+
+    if (refreshed.status === ApplicationStatus.CERTIFIER_ACCEPTED) {
+      const toStatus = assertTransition(
+        refreshed.type,
+        refreshed.status,
+        "START_CERTIFICATION",
+        ctx.roleCode,
+      );
+      await this.transition(ctx, refreshed, "START_CERTIFICATION", toStatus);
+      refreshed = await db.application.findUniqueOrThrow({
+        where: { id: applicationId },
+        include: { data: true },
+      });
+    }
+
+    if (refreshed.installerOrgId) {
+      await NotificationService.notifyOrgMembers(refreshed.installerOrgId, {
+        title: "Të dhënat teknike u miratuan",
+        body: `Certifikuesi miratoi të dhënat teknike për ${refreshed.applicationNumber}.`,
+        entityType: "application",
+        entityId: applicationId,
+      });
+    }
+    await NotificationService.notifyOrgMembers(refreshed.ownerOrgId, {
+      title: "Rakordimi instalues–certifikues u mbyll",
+      body: `Të dhënat teknike u miratuan nga OM për ${refreshed.applicationNumber}.`,
+      entityType: "application",
+      entityId: applicationId,
+    });
+
+    return this.getById(ctx, applicationId);
+  }
+
+  static async requestInstallerTechnicalCorrections(
+    ctx: AuthContext,
+    applicationId: string,
+    notes: string,
+  ) {
+    const trimmed = notes.trim();
+    if (trimmed.length < 10) {
+      throw new Error("Shkruani kërkesat për korrigjim (min 10 karaktere).");
+    }
+
+    const application = await db.application.findUnique({
+      where: { id: applicationId, deletedAt: null },
+      include: { data: true },
+    });
+    if (!application) throw new Error("Aplikimi nuk u gjet.");
+    if (application.certifierOrgId !== ctx.activeOrgId) {
+      throw new Error("Ky aplikim nuk është caktuar për organizatën tuaj.");
+    }
+    if (application.status !== ApplicationStatus.CERTIFIER_ACCEPTED) {
+      throw new Error("Kërkesat për korrigjim mund të dërgohen vetëm para fillimit të certifikimit.");
+    }
+
+    const extended = mergeInstallerTechnicalReview(application.data?.registrationExtendedData, {
+      status: "CORRECTIONS_REQUESTED",
+      certifierNotes: trimmed,
+      requestedAt: new Date().toISOString(),
+    });
+
+    await db.applicationData.update({
+      where: { applicationId },
+      data: { registrationExtendedData: extended as Prisma.InputJsonValue },
+    });
+
+    await db.applicationWorkflowHistory.create({
+      data: {
+        applicationId,
+        fromStatus: application.status,
+        toStatus: application.status,
+        action: "INSTALLER_TECHNICAL_CORRECTIONS_REQUESTED",
+        actorId: ctx.userId,
+        comment: trimmed,
+      },
+    });
+
+    if (application.installerOrgId) {
+      await NotificationService.notifyOrgMembers(application.installerOrgId, {
+        title: "Kërkohen korrigjime teknike",
+        body: `Certifikuesi kërkon korrigjime për ${application.applicationNumber}.`,
+        entityType: "application",
+        entityId: applicationId,
+      });
+    }
+
+    return this.getById(ctx, applicationId);
+  }
+
+  static async resubmitInstallerTechnicalReview(
+    ctx: AuthContext,
+    applicationId: string,
+    input: {
+      technicalData: Parameters<typeof ApplicationService.updateTechnicalData>[2];
+      installerResponse: string;
+    },
+  ) {
+    const response = input.installerResponse.trim();
+    if (response.length < 10) {
+      throw new Error("Shkruani përgjigjen ndaj kërkesave të certifikuesit (min 10 karaktere).");
+    }
+
+    const application = await db.application.findUnique({
+      where: { id: applicationId, deletedAt: null },
+      include: { data: true, delegations: true },
+    });
+    if (!application) throw new Error("Aplikimi nuk u gjet.");
+
+    const review = getInstallerTechnicalReview(application.data);
+    if (review.status !== "CORRECTIONS_REQUESTED") {
+      throw new Error("Nuk ka kërkesë aktive për korrigjime nga certifikuesi.");
+    }
+    if (application.installerOrgId !== ctx.activeOrgId) {
+      throw new Error("Ky aplikim nuk është caktuar për organizatën tuaj.");
+    }
+    if (!(await this.canViewApplication(ctx, application))) {
+      throw new Error("Nuk keni leje.");
+    }
+    if (application.status !== ApplicationStatus.CERTIFIER_ACCEPTED) {
+      throw new Error("Korrigjimet mund të dërgohen vetëm gjatë rakordimit me certifikuesin.");
+    }
+
+    const { technicalData } = input;
+    await db.applicationData.update({
+      where: { applicationId },
+      data: {
+        elevatorType: technicalData.elevatorType as Prisma.ApplicationDataUpdateInput["elevatorType"],
+        manufacturer: technicalData.manufacturer,
+        model: technicalData.model,
+        serialNumber: technicalData.serialNumber,
+        manufacturingYear: technicalData.manufacturingYear,
+        capacityKg: technicalData.capacityKg,
+        capacityPersons: technicalData.capacityPersons,
+        speedMs: technicalData.speedMs,
+        floorsServed: technicalData.floorsServed,
+        stops: technicalData.stops,
+        driveType: technicalData.driveType,
+      },
+    });
+
+    const refreshed = await db.application.findUnique({
+      where: { id: applicationId },
+      include: { data: true },
+    });
+    if (!refreshed?.data) throw new Error("Aplikimi nuk u gjet.");
+
+    const links = await db.documentLink.findMany({
+      where: { entityType: "application", entityId: applicationId },
+      select: { purpose: true },
+    });
+    const uploadedPurposes = links.map((link) => link.purpose ?? "").filter(Boolean);
+    const missingInstallerDocs = getMissingRequiredApplicationDocumentsForPhases({
+      type: ApplicationType.NEW_REGISTRATION,
+      data: refreshed.data,
+      uploadedPurposes,
+      phases: ["installer"],
+    });
+    if (missingInstallerDocs.length > 0) {
+      throw new Error(
+        `Dokumentacioni i instaluesit i paplotë: ${missingInstallerDocs.map((doc) => `Mungon ${doc.label}`).join("; ")}`,
+      );
+    }
+
+    const extended = mergeInstallerTechnicalReview(refreshed.data.registrationExtendedData, {
+      status: "PENDING_REVIEW",
+      installerResponse: response,
+    });
+
+    await db.applicationData.update({
+      where: { applicationId },
+      data: { registrationExtendedData: extended as Prisma.InputJsonValue },
+    });
+
+    await db.applicationWorkflowHistory.create({
+      data: {
+        applicationId,
+        fromStatus: application.status,
+        toStatus: application.status,
+        action: "INSTALLER_TECHNICAL_RESUBMITTED",
+        actorId: ctx.userId,
+        comment: response,
+      },
+    });
+
+    if (application.certifierOrgId) {
+      await NotificationService.notifyOrgMembers(application.certifierOrgId, {
+        title: "Instaluesi dërgoi korrigjime",
+        body: `Të dhënat teknike u përditësuan për ${application.applicationNumber}.`,
+        entityType: "application",
+        entityId: applicationId,
+      });
+    }
+
+    return this.getById(ctx, applicationId);
   }
 
   private static async assertRequiredDocumentsUploaded(application: {
@@ -1031,7 +1491,7 @@ export class ApplicationService {
     return this.submitLifecycleToIshmt(ctx, application);
   }
 
-  /** Modernizim: pas instaluesit + certifikuesit → ISHMT */
+  /** Modernizim: pas instaluesit + certifikuesit → IQMT */
   static async submitModernizationToIshmt(ctx: AuthContext, applicationId: string) {
     const application = await this.getMutableApplication(ctx, applicationId, [
       ApplicationStatus.PENDING_OWNER_SUBMISSION,
@@ -1081,7 +1541,16 @@ export class ApplicationService {
     const application = await this.getMutableApplication(ctx, applicationId, [
       ApplicationStatus.PENDING_OWNER_SUBMISSION,
       ApplicationStatus.CERTIFICATION_COMPLETED,
+      ApplicationStatus.CERTIFICATION_COMPLETED_WITH_ISSUES,
+      ApplicationStatus.RETURNED,
     ]);
+
+    if (
+      application.status === ApplicationStatus.RETURNED &&
+      !isReturnedToRole(application, ReturnTargetRole.OWNER)
+    ) {
+      throw new Error("Korrigjimi duhet të bëhet nga roli i caktuar nga IQMT.");
+    }
 
     const data = await db.applicationData.findUnique({ where: { applicationId } });
     const missing = this.validateSubmissionReadiness(application, data);
@@ -1109,6 +1578,10 @@ export class ApplicationService {
     }
 
     const toStatus = assertTransition(application.type, application.status, "SUBMIT", ctx.roleCode);
+
+    await db.$transaction(async (tx) => {
+      await this.invalidateFieldReviewAssignments(tx, applicationId, ctx.userId);
+    });
 
     const result = await this.transition(ctx, application, "SUBMIT", toStatus, {
       submittedAt: new Date(),
@@ -1157,7 +1630,7 @@ export class ApplicationService {
 
     await NotificationService.notifyOrgMembers(application.ownerOrgId, {
       title: "Aplikimi u dërgua për Registrim",
-      body: `Aplikimi ${application.applicationNumber} u dërgua te ISHMT.`,
+      body: `Aplikimi ${application.applicationNumber} u dërgua te IQMT.`,
       entityType: "application",
       entityId: applicationId,
     });
@@ -1201,6 +1674,10 @@ export class ApplicationService {
     await OwnershipTransferService.assertReadyForIshmt(application.id);
 
     const toStatus = assertTransition(application.type, application.status, "SUBMIT", ctx.roleCode);
+
+    await db.$transaction(async (tx) => {
+      await this.invalidateFieldReviewAssignments(tx, application.id, ctx.userId);
+    });
 
     const result = await this.transition(ctx, application, "SUBMIT", toStatus, {
       submittedAt: new Date(),
@@ -1254,7 +1731,7 @@ export class ApplicationService {
     if (!data?.manufacturer) missing.push("prodhuesi");
     if (!data?.floorsServed) missing.push("katet");
     if (!application.certifierOrgId) missing.push("certifikuesi");
-    if (!data?.omiNumber) missing.push("numri OMI");
+    if (!data?.omiNumber) missing.push("numri OM");
     if (!data?.examinationDate) missing.push("data e ekzaminimit");
     if (!data?.installationCertificateNumber) missing.push("referenca e certifikatës");
     if (!data?.installationCertificateDate) missing.push("data e certifikatës");
@@ -1262,6 +1739,14 @@ export class ApplicationService {
     const ext = (data?.registrationExtendedData as Record<string, unknown> | null) ?? {};
     if (!data?.applicationDate) missing.push("data e aplikimit (Aneksi 1)");
     if (!ext.elevatorConditionType) missing.push("lloji i ashensorit (i ri/ekzistues)");
+    const additional = (data?.additionalTechnical as Record<string, unknown> | null) ?? {};
+    if (
+      !ext.elevatorInServiceDate &&
+      !additional.installationDate &&
+      !additional.commissioningDate
+    ) {
+      missing.push("data e instalimit / vënies në shërbim");
+    }
     if (!ext.applicationSubtype) missing.push("nënlloji i aplikimit");
     if (!ext.responsibleEntityType) missing.push("lloji i personit përgjegjës");
     if (
@@ -1279,6 +1764,10 @@ export class ApplicationService {
   }
 
   static async listFieldInspectors(orgId: string) {
+    return this.listFieldInspectorsWithWorkload(orgId);
+  }
+
+  static async listFieldInspectorsWithWorkload(orgId: string) {
     const memberships = await db.orgMembership.findMany({
       where: {
         organizationId: orgId,
@@ -1290,10 +1779,53 @@ export class ApplicationService {
       },
       orderBy: { user: { lastName: "asc" } },
     });
-    return memberships.map((m) => ({
-      id: m.user.id,
-      label: `${m.user.firstName} ${m.user.lastName}`.trim(),
-    }));
+
+    if (memberships.length === 0) return [];
+
+    const inspectorIds = memberships.map((m) => m.user.id);
+
+    const [documentReviews, fieldInspections] = await Promise.all([
+      db.applicationFieldReviewAssignment.groupBy({
+        by: ["inspectorId"],
+        where: {
+          inspectorId: { in: inspectorIds },
+          status: ApplicationFieldReviewAssignmentStatus.PENDING,
+          application: {
+            deletedAt: null,
+            status: ApplicationStatus.PENDING_FIELD_REVIEW,
+          },
+        },
+        _count: { _all: true },
+      }),
+      db.fieldInspectionAssignment.groupBy({
+        by: ["assigneeId"],
+        where: {
+          assigneeId: { in: inspectorIds },
+          status: {
+            in: [
+              FieldInspectionAssignmentStatus.SCHEDULED,
+              FieldInspectionAssignmentStatus.IN_PROGRESS,
+            ],
+          },
+        },
+        _count: { _all: true },
+      }),
+    ]);
+
+    const docByInspector = new Map(documentReviews.map((r) => [r.inspectorId, r._count._all]));
+    const fieldByInspector = new Map(fieldInspections.map((r) => [r.assigneeId, r._count._all]));
+
+    return memberships.map((m) => {
+      const pendingDocumentReviews = docByInspector.get(m.user.id) ?? 0;
+      const pendingFieldInspections = fieldByInspector.get(m.user.id) ?? 0;
+      return {
+        id: m.user.id,
+        label: `${m.user.firstName} ${m.user.lastName}`.trim(),
+        pendingDocumentReviews,
+        pendingFieldInspections,
+        totalActive: pendingDocumentReviews + pendingFieldInspections,
+      };
+    });
   }
 
   static async getFieldReviewAssignments(applicationId: string) {
@@ -1310,6 +1842,124 @@ export class ApplicationService {
     });
   }
 
+  /** Pas kthimit për korrigjim, raportet e vjetra të inspektorëve nuk vlejnë më. */
+  private static async ensurePendingFieldReviewAssignment(
+    tx: Prisma.TransactionClient,
+    input: {
+      applicationId: string;
+      inspectorId: string;
+      assignedById: string;
+      assignedByRole: string;
+      actorId: string;
+    },
+  ) {
+    const active = await tx.applicationFieldReviewAssignment.findMany({
+      where: {
+        applicationId: input.applicationId,
+        inspectorId: input.inspectorId,
+        status: { not: ApplicationFieldReviewAssignmentStatus.REPLACED },
+      },
+    });
+
+    const pending = active.find((a) => a.status === ApplicationFieldReviewAssignmentStatus.PENDING);
+    if (pending) return pending;
+
+    for (const row of active) {
+      await tx.applicationFieldReviewAssignment.update({
+        where: { id: row.id },
+        data: {
+          status: ApplicationFieldReviewAssignmentStatus.REPLACED,
+          replacedAt: new Date(),
+          replacedById: input.actorId,
+        },
+      });
+    }
+
+    return tx.applicationFieldReviewAssignment.create({
+      data: {
+        applicationId: input.applicationId,
+        inspectorId: input.inspectorId,
+        assignedById: input.assignedById,
+        assignedByRole: input.assignedByRole,
+        status: ApplicationFieldReviewAssignmentStatus.PENDING,
+      },
+    });
+  }
+
+  private static async invalidateFieldReviewAssignments(
+    tx: Prisma.TransactionClient,
+    applicationId: string,
+    actorId: string,
+  ) {
+    await tx.applicationFieldReviewAssignment.updateMany({
+      where: {
+        applicationId,
+        status: { not: ApplicationFieldReviewAssignmentStatus.REPLACED },
+      },
+      data: {
+        status: ApplicationFieldReviewAssignmentStatus.REPLACED,
+        replacedAt: new Date(),
+        replacedById: actorId,
+      },
+    });
+  }
+
+  /** Riparim për cikle të vjetra: RETURN pas raportit COMPLETED → hap caktim të ri PENDING. */
+  static async reconcileSupersededFieldReviewAssignments(applicationId: string) {
+    const application = await db.application.findFirst({
+      where: { id: applicationId, deletedAt: null },
+      select: { id: true, status: true },
+    });
+    if (!application || application.status !== ApplicationStatus.PENDING_FIELD_REVIEW) {
+      return;
+    }
+
+    const completed = await db.applicationFieldReviewAssignment.findMany({
+      where: {
+        applicationId,
+        status: ApplicationFieldReviewAssignmentStatus.COMPLETED,
+      },
+    });
+    if (completed.length === 0) return;
+
+    for (const assignment of completed) {
+      const returnAfterReport = await db.applicationWorkflowHistory.findFirst({
+        where: {
+          applicationId,
+          action: "RETURN",
+          createdAt: { gt: assignment.completedAt ?? assignment.updatedAt },
+        },
+        orderBy: { createdAt: "asc" },
+      });
+      if (!returnAfterReport) continue;
+
+      const assignAfterReturn = await db.applicationWorkflowHistory.findFirst({
+        where: {
+          applicationId,
+          action: "ASSIGN_FIELD_INSPECTORS",
+          createdAt: { gt: returnAfterReport.createdAt },
+        },
+        orderBy: { createdAt: "desc" },
+      });
+
+      await db.$transaction(async (tx) => {
+        await this.ensurePendingFieldReviewAssignment(tx, {
+          applicationId,
+          inspectorId: assignment.inspectorId,
+          assignedById: assignAfterReturn?.actorId ?? assignment.assignedById,
+          assignedByRole: assignment.assignedByRole,
+          actorId: assignAfterReturn?.actorId ?? assignment.assignedById,
+        });
+        await upsertParticipation(tx, {
+          applicationId,
+          userId: assignment.inspectorId,
+          roleCode: ROLE_CODES.FIELD_INSPECTOR,
+          canAct: true,
+        });
+      });
+    }
+  }
+
   static readonly ISHMT_TRAIL_ACTIONS = [
     "DELEGATE_TO_DIRECTOR",
     "DELEGATE_TO_SECTOR_HEAD",
@@ -1321,6 +1971,7 @@ export class ApplicationService {
     "APPROVE",
     "REJECT",
     "RETURN",
+    "UPDATE_PLANNED_INSPECTORS",
   ] as const;
 
   static async getIshmtWorkflowTrail(applicationId: string) {
@@ -1402,7 +2053,7 @@ export class ApplicationService {
       select: { userId: true },
     });
     if (inspectors.length !== inspectorIds.length) {
-      throw new Error("Të gjithë inspektorët e zgjedhur duhet të kenë rol Inspektor në ISHMT.");
+      throw new Error("Të gjithë inspektorët e zgjedhur duhet të kenë rol Inspektor në IQMT.");
     }
   }
 
@@ -1486,6 +2137,13 @@ export class ApplicationService {
         requiresFieldVerification: input.requiresFieldVerification,
       });
 
+      const fieldVerificationSync = await syncFieldVerificationAssignmentIfReady(tx, {
+        applicationId,
+        assigneeIds: inspectorIds,
+        assignedById: ctx.userId,
+        instructions: input.noteText,
+      });
+
       await upsertParticipation(tx, {
         applicationId,
         userId: ctx.userId,
@@ -1509,7 +2167,10 @@ export class ApplicationService {
         tx,
       );
 
-      return { ok: true };
+      return {
+        fieldVerificationCreated: fieldVerificationSync.created,
+        applicationNumber: application.applicationNumber,
+      };
     }).then(async (result) => {
       await notifyUser(directorUserId!, {
         title: ISHMT_NOTIFICATION_COPY.chiefToDirector.title,
@@ -1517,7 +2178,15 @@ export class ApplicationService {
         entityType: "application",
         entityId: applicationId,
       });
-      return result;
+      for (const assignment of result.fieldVerificationCreated) {
+        await notifyFieldVerificationAssignment(
+          assignment.id,
+          assignment.assigneeId,
+          result.applicationNumber,
+          assignment.scheduledDate,
+        );
+      }
+      return { ok: true };
     });
   }
 
@@ -1600,6 +2269,19 @@ export class ApplicationService {
         requiresFieldVerification: input.requiresFieldVerification,
       });
 
+      const effectiveInspectorIds =
+        inspectorIds ??
+        (Array.isArray(application.plannedInspectorIds)
+          ? (application.plannedInspectorIds as string[])
+          : undefined);
+
+      const fieldVerificationSync = await syncFieldVerificationAssignmentIfReady(tx, {
+        applicationId,
+        assigneeIds: effectiveInspectorIds,
+        assignedById: ctx.userId,
+        instructions: input.noteText,
+      });
+
       await upsertParticipation(tx, {
         applicationId,
         userId: ctx.userId,
@@ -1612,7 +2294,10 @@ export class ApplicationService {
         roleCode: ROLE_CODES.SECTOR_HEAD,
       });
 
-      return { ok: true };
+      return {
+        fieldVerificationCreated: fieldVerificationSync.created,
+        applicationNumber: application.applicationNumber,
+      };
     }).then(async (result) => {
       await notifyUser(sectorHeadUserId!, {
         title: ISHMT_NOTIFICATION_COPY.directorToSectorHead.title,
@@ -1620,7 +2305,125 @@ export class ApplicationService {
         entityType: "application",
         entityId: applicationId,
       });
-      return result;
+      for (const assignment of result.fieldVerificationCreated) {
+        await notifyFieldVerificationAssignment(
+          assignment.id,
+          assignment.assigneeId,
+          result.applicationNumber,
+          assignment.scheduledDate,
+        );
+      }
+      return { ok: true };
+    });
+  }
+
+  static async chiefUpdatePlannedInspectors(
+    ctx: AuthContext,
+    applicationId: string,
+    input: { inspectorIds: string[]; noteText?: string },
+  ) {
+    if (!canChiefHandleApplications(ctx.roleCode)) {
+      throw new Error("Vetëm kryeinspektori mund të ndryshojë inspektorët e caktuar.");
+    }
+
+    const allowedStatuses: ApplicationStatus[] = [
+      ApplicationStatus.PENDING_DIRECTOR,
+      ApplicationStatus.PENDING_SECTOR_HEAD,
+      ApplicationStatus.PENDING_FIELD_REVIEW,
+      ApplicationStatus.RETURNED_TO_INSPECTORS,
+    ];
+
+    const application = await this.getMutableApplication(ctx, applicationId, allowedStatuses);
+    const inspectorIds = [...new Set(input.inspectorIds)];
+    if (inspectorIds.length === 0) {
+      throw new Error("Duhet të caktoni të paktën një inspektor.");
+    }
+
+    await this.assertFieldInspectorMemberships(ctx.activeOrgId, inspectorIds);
+
+    const chiefAssignerId = ctx.userId;
+    const syncFieldReview =
+      application.status === ApplicationStatus.PENDING_FIELD_REVIEW ||
+      application.status === ApplicationStatus.RETURNED_TO_INSPECTORS;
+
+    return db.$transaction(async (tx) => {
+      await tx.application.update({
+        where: { id: applicationId },
+        data: {
+          plannedInspectorIds: inspectorIds,
+          requiredFieldInspectorCount: inspectorIds.length,
+          inspectorAssignmentLockedBy: ROLE_CODES.CHIEF_INSPECTOR,
+        },
+      });
+
+      if (syncFieldReview) {
+        const existing = await tx.applicationFieldReviewAssignment.findMany({
+          where: { applicationId, status: { not: ApplicationFieldReviewAssignmentStatus.REPLACED } },
+        });
+
+        for (const row of existing) {
+          if (!inspectorIds.includes(row.inspectorId)) {
+            await tx.applicationFieldReviewAssignment.update({
+              where: { id: row.id },
+              data: {
+                status: ApplicationFieldReviewAssignmentStatus.REPLACED,
+                replacedAt: new Date(),
+                replacedById: ctx.userId,
+              },
+            });
+          }
+        }
+
+        for (const inspectorId of inspectorIds) {
+          await this.ensurePendingFieldReviewAssignment(tx, {
+            applicationId,
+            inspectorId,
+            assignedById: chiefAssignerId,
+            assignedByRole: ROLE_CODES.CHIEF_INSPECTOR,
+            actorId: ctx.userId,
+          });
+          await upsertParticipation(tx, {
+            applicationId,
+            userId: inspectorId,
+            roleCode: ROLE_CODES.FIELD_INSPECTOR,
+            canAct: true,
+          });
+        }
+
+      }
+
+      if (application.requiresFieldVerification) {
+        await syncApplicationFieldVerificationAssignments(tx, {
+          applicationId,
+          assigneeIds: inspectorIds,
+          assignedById: chiefAssignerId,
+          instructions: input.noteText,
+        });
+      }
+
+      await this.recordTransition(tx, {
+        applicationId,
+        fromStatus: application.status,
+        toStatus: application.status,
+        action: "UPDATE_PLANNED_INSPECTORS",
+        actorId: ctx.userId,
+        comment: input.noteText?.trim() || undefined,
+        metadata: { reviewLevel: "CHIEF", inspectorIds },
+      });
+
+      return { inspectorIds };
+    }).then(async ({ inspectorIds: ids }) => {
+      if (syncFieldReview) {
+        for (const inspectorId of ids) {
+          await notifyUser(inspectorId, {
+            title: ISHMT_NOTIFICATION_COPY.sectorHeadToInspectors.title,
+            body: ISHMT_NOTIFICATION_COPY.sectorHeadToInspectors.body(application.applicationNumber),
+            entityType: "field_review_assignment",
+            entityId: applicationId,
+          });
+        }
+      }
+      return { ok: true };
     });
   }
 
@@ -1692,24 +2495,12 @@ export class ApplicationService {
       }
 
       for (const inspectorId of inspectorIds) {
-        const current = existing.find((r) => r.inspectorId === inspectorId);
-        if (current && current.status !== ApplicationFieldReviewAssignmentStatus.REPLACED) {
-          await upsertParticipation(tx, {
-            applicationId,
-            userId: inspectorId,
-            roleCode: ROLE_CODES.FIELD_INSPECTOR,
-            canAct: current.status === ApplicationFieldReviewAssignmentStatus.PENDING,
-          });
-          continue;
-        }
-        await tx.applicationFieldReviewAssignment.create({
-          data: {
-            applicationId,
-            inspectorId,
-            assignedById: ctx.userId,
-            assignedByRole: ctx.roleCode,
-            status: ApplicationFieldReviewAssignmentStatus.PENDING,
-          },
+        await this.ensurePendingFieldReviewAssignment(tx, {
+          applicationId,
+          inspectorId,
+          assignedById: ctx.userId,
+          assignedByRole: ctx.roleCode,
+          actorId: ctx.userId,
         });
       }
 
@@ -1722,14 +2513,8 @@ export class ApplicationService {
         comment: input.noteText?.trim() || undefined,
         metadata: this.reviewMetadata("ASSIGN_FIELD_INSPECTORS", {
           inspectorIds,
-          requiresFieldVerification: input.requiresFieldVerification ?? false,
+          requiresFieldVerification: application.requiresFieldVerification ?? false,
         }),
-      });
-
-      await applyFieldVerificationRequest(tx, {
-        applicationId,
-        roleCode: ctx.roleCode as RoleCode,
-        requiresFieldVerification: input.requiresFieldVerification,
       });
 
       await upsertParticipation(tx, {
@@ -1749,29 +2534,38 @@ export class ApplicationService {
         })),
       );
 
-      const fieldVerificationAssignment = await ensureApplicationFieldVerificationAssignments(tx, {
+      const fieldVerificationAssignerId =
+        isChiefLockedFieldVerification(application)
+          ? (await resolveChiefFieldVerificationAssignerId(tx, applicationId)) ?? ctx.userId
+          : ctx.userId;
+
+      const fieldVerificationSync = await syncApplicationFieldVerificationAssignments(tx, {
         applicationId,
-        assigneeId: inspectorIds[0]!,
-        assignedById: ctx.userId,
+        assigneeIds: inspectorIds,
+        assignedById: fieldVerificationAssignerId,
         instructions: input.noteText,
       });
 
-      return { inspectorIds, fieldVerificationAssignment, applicationNumber: application.applicationNumber };
-    }).then(async ({ inspectorIds: ids, fieldVerificationAssignment, applicationNumber }) => {
+      return {
+        inspectorIds,
+        fieldVerificationCreated: fieldVerificationSync.created,
+        applicationNumber: application.applicationNumber,
+      };
+    }).then(async ({ inspectorIds: ids, fieldVerificationCreated, applicationNumber }) => {
       for (const inspectorId of ids) {
         await notifyUser(inspectorId, {
           title: ISHMT_NOTIFICATION_COPY.sectorHeadToInspectors.title,
           body: ISHMT_NOTIFICATION_COPY.sectorHeadToInspectors.body(applicationNumber),
-          entityType: "application",
+          entityType: "field_review_assignment",
           entityId: applicationId,
         });
       }
-      if (fieldVerificationAssignment) {
+      for (const assignment of fieldVerificationCreated) {
         await notifyFieldVerificationAssignment(
-          fieldVerificationAssignment.id,
-          fieldVerificationAssignment.assigneeId,
+          assignment.id,
+          assignment.assigneeId,
           applicationNumber,
-          fieldVerificationAssignment.scheduledDate,
+          assignment.scheduledDate,
         );
       }
       return { ok: true };
@@ -1809,12 +2603,14 @@ export class ApplicationService {
       throw new Error("Raporti është dorëzuar tashmë.");
     }
 
-    assertTransition(
-      assignment.application.type,
-      assignment.application.status,
-      "SUBMIT_FIELD_REPORT",
-      ctx.roleCode,
-    );
+    if (submit) {
+      assertTransition(
+        assignment.application.type,
+        assignment.application.status,
+        "SUBMIT_FIELD_REPORT",
+        ctx.roleCode,
+      );
+    }
 
     return db.$transaction(async (tx) => {
       await tx.applicationFieldReviewAssignment.update({
@@ -1852,7 +2648,7 @@ export class ApplicationService {
         }
       }
 
-      return { ok: true };
+      return { ok: true, applicationId: assignment.application.id };
     });
   }
 
@@ -2309,7 +3105,7 @@ export class ApplicationService {
     await ElevatorLifecycleService.notifyLifecycleComplete(
       application,
       "Aplikimi u miratua",
-      `${application.applicationNumber} u përpunua me sukses nga ISHMT.`,
+      `${application.applicationNumber} u përpunua me sukses nga IQMT.`,
     );
 
     const newCertNumber =
@@ -2382,7 +3178,7 @@ export class ApplicationService {
       throw new Error("Korrigjimi vlen vetëm për aplikime të kthyera.");
     }
     if (!isReturnedToRole(application, completedRole)) {
-      throw new Error("Ky rol nuk është në listën e korrigimit nga ISHMT.");
+      throw new Error("Ky rol nuk është në listën e korrigimit nga IQMT.");
     }
 
     const pending = getReturnToRoles(application);
@@ -2430,7 +3226,7 @@ export class ApplicationService {
     if (toStatus === ApplicationStatus.PENDING_OWNER_SUBMISSION) {
       await NotificationService.notifyOrgMembers(application.ownerOrgId, {
         title: "Korrigimet u plotësuan",
-        body: `${application.applicationNumber} është gati për riparashtrim te ISHMT.`,
+        body: `${application.applicationNumber} është gati për riparashtrim te IQMT.`,
         entityType: "application",
         entityId: application.id,
       });
@@ -2503,11 +3299,18 @@ export class ApplicationService {
           returnedAt: new Date(),
           returnedById: ctx.userId,
           reviewedAt: new Date(),
+          currentAssigneeId: null,
         },
       });
       if (locked.count === 0) {
         throw new Error("Aplikimi u përpunua tashmë nga një veprim tjetër.");
       }
+
+      await tx.applicationParticipation.updateMany({
+        where: { applicationId: application.id },
+        data: { canAct: false },
+      });
+
       const updated = await tx.application.findUniqueOrThrow({ where: { id: application.id } });
 
       await this.recordTransition(
@@ -2556,6 +3359,9 @@ export class ApplicationService {
     });
 
     // Notify after commit so a rolled-back transaction never leaves a stray notification.
+    const primaryTarget = pickPrimaryReturnToRole(input.returnToRoles);
+    const targetLabels = input.returnToRoles.map((role) => RETURN_TARGET_LABELS[role]).join(", ");
+
     const notifyTargets = [
       { orgId: application.ownerOrgId, role: ReturnTargetRole.OWNER },
       application.installerOrgId
@@ -2564,15 +3370,17 @@ export class ApplicationService {
       application.certifierOrgId
         ? { orgId: application.certifierOrgId, role: ReturnTargetRole.CERTIFIER }
         : null,
-    ].filter(
-      (t): t is { orgId: string; role: ReturnTargetRole } =>
-        t !== null && input.returnToRoles.includes(t.role),
-    );
+    ].filter((t): t is { orgId: string; role: ReturnTargetRole } => t !== null);
 
     for (const target of notifyTargets) {
+      const mustAct = input.returnToRoles.includes(target.role);
       await NotificationService.notifyOrgMembers(target.orgId, {
-        title: "Aplikimi u kthye për korrigjim",
-        body: input.reason,
+        title: mustAct
+          ? `${application.applicationNumber}: kërkohet korrigjim nga ju`
+          : `${application.applicationNumber}: u kthye për korrigjim`,
+        body: mustAct
+          ? `${input.reason}\n\nKorrigjimi i kërkuar: ${input.requiredCorrection}`
+          : `IQMT e ktheu aplikimin te ${targetLabels} (${RETURN_TARGET_LABELS[primaryTarget]}). Arsyeja: ${input.reason}`,
         entityType: "application",
         entityId: application.id,
       });
@@ -2609,24 +3417,16 @@ export class ApplicationService {
   }
 
   private static async assertActiveLicensedCompany(organizationId: string, type: OrgType) {
-    const now = new Date();
+    if (type !== OrgType.CERTIFIER) {
+      throw new Error("Verifikimi i licencës mbështetet vetëm për kompanitë OM.");
+    }
+
     const org = await db.organization.findFirst({
-      where: {
-        id: organizationId,
-        type,
-        status: { in: [OrgStatus.ACTIVE_AUTHORIZED, OrgStatus.ACTIVE] },
-        deletedAt: null,
-        licenses: {
-          some: {
-            status: OrgStatus.ACTIVE,
-            expiryDate: { gte: now },
-          },
-        },
-      },
+      where: { ...activeCertifierOrgWhere(), id: organizationId },
     });
 
     if (!org) {
-      throw new Error("Kompania e zgjedhur nuk është e autorizuar nga Drejtoria ose licenca ka skaduar.");
+      throw new Error("Kompania e zgjedhur nuk është e autorizuar nga Drejtoria ose licenca OM ka skaduar.");
     }
   }
 

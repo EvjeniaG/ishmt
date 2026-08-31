@@ -64,7 +64,9 @@ export function commissioningOrInstallationDate(data?: ApplicationDataLike | nul
 }
 
 function commissioningDateFromTechnical(data?: ApplicationDataLike | null): Date | null {
+  const ext = data?.registrationExtendedData as Record<string, unknown> | null;
   const raw =
+    objectValue(ext, "elevatorInServiceDate") ??
     objectValue(data?.additionalTechnical, "commissioningDate") ??
     objectValue(data?.additionalTechnical, "installationDate") ??
     data?.installationCertificateDate;
@@ -122,36 +124,12 @@ export function getApplicationDocumentSpecs(input: {
     const isExisting = !isNew;
     return [
       spec({
-        purpose: "REGISTRATION_REQUEST",
-        label: "Kërkesë/Formular regjistrimi i nënshkruar (Aneksi 1)",
-        classification: DocumentClassification.APPLICATION,
-        required: false,
-        reason: "Opsionale kur formulari plotësohet drejtpërdrejt në sistem; mund të shkarkohet i parambushur.",
-        phase: "owner",
-      }),
-      spec({
         purpose: "LAYOUT_PLAN",
         label: "Planvendosje ose dokument pozicionimi në ndërtesë",
         classification: DocumentClassification.TECHNICAL,
         required: true,
-        reason: "Identifikon ashensorin në ndërtesë, sidomos kur ka më shumë se një ashensor.",
+        reason: "E detyrueshme për identifikimin e ashensorit në ndërtesë.",
         phase: "owner",
-      }),
-      spec({
-        purpose: "TECHNICAL_DOSSIER",
-        label: "Dokumentacion teknik i ashensorit",
-        classification: DocumentClassification.TECHNICAL,
-        required: true,
-        reason: "Kërkohet për verifikimin teknik të të dhënave të formularit.",
-        phase: "installer",
-      }),
-      spec({
-        purpose: "INSTALLATION_DOCUMENT",
-        label: "Dokument instalimi / dokument prodhuesi",
-        classification: DocumentClassification.TECHNICAL,
-        required: true,
-        reason: "Provon instalimin dhe identifikimin teknik të ashensorit.",
-        phase: "installer",
       }),
       spec({
         purpose: "EU_DECLARATION_CE",
@@ -159,7 +137,7 @@ export function getApplicationDocumentSpecs(input: {
         classification: DocumentClassification.CERTIFICATE,
         required: isNew,
         reason: isNew
-          ? "E detyrueshme për ashensorët e instaluar/vënë në shërbim nga 01/01/2020 (Udhëzim p.6.e)."
+          ? "Udhëzim p.6.e.iv - e detyrueshme për ashensorët e instaluar/vënë në shërbim nga 01/01/2020."
           : "Kërkohet vetëm për ashensorët e rinj (nga 01/01/2020).",
         accept: ".pdf",
         maxMb: 10,
@@ -171,7 +149,7 @@ export function getApplicationDocumentSpecs(input: {
         classification: DocumentClassification.CERTIFICATE,
         required: isNew,
         reason: isNew
-          ? "E detyrueshme për ashensorët e rinj sipas pikës 6.e të Udhëzimit."
+          ? "Udhëzim p.6.e.v - e detyrueshme për ashensorët e rinj."
           : "Kërkohet vetëm për ashensorët e rinj (nga 01/01/2020).",
         accept: ".pdf",
         maxMb: 10,
@@ -183,18 +161,18 @@ export function getApplicationDocumentSpecs(input: {
         classification: DocumentClassification.TECHNICAL,
         required: isNew,
         reason: isNew
-          ? "E detyrueshme për ashensorët e rinj sipas pikës 6.e të Udhëzimit."
+          ? "Udhëzim p.6.e.vi - e detyrueshme për ashensorët e rinj."
           : "Kërkohet vetëm për ashensorët e rinj (nga 01/01/2020).",
         phase: "installer",
       }),
       spec({
         purpose: "INITIAL_INSPECTION_CERT",
-        label: "Raport i Ekzaminimit të Parë të Plotë nga OMI",
+        label: "Raport i Ekzaminimit të Parë të Plotë nga OM",
         classification: DocumentClassification.CERTIFICATE,
         required: isExisting,
         reason: isExisting
-          ? "I detyrueshëm për ashensorët ekzistues (para 31/12/2019), i lëshuar nga një OMI i vlefshëm dhe kalues."
-          : "Për ashensorët e rinj zëvendësohet nga deklarata EU e konformitetit.",
+          ? "Udhëzim p.6.e.iii - i detyrueshëm për ashensorët ekzistues (para 31/12/2019), i lëshuar nga një OM i vlefshëm dhe kalues."
+          : "Për ashensorët e rinj zëvendësohet nga deklarata EU e konformitetit (p.6.e.iv).",
         phase: "certifier",
       }),
     ];
@@ -293,7 +271,7 @@ export function getApplicationDocumentSpecs(input: {
           label: "Njoftim zyrtar nga Organ i Miratuar për ndryshimin e serialit",
           classification: DocumentClassification.CERTIFICATE,
           required: true,
-          reason: "Udhëzim p.16.a.i - njoftim zyrtar OMI.",
+          reason: "Udhëzim p.16.a.i - njoftim zyrtar OM.",
         }),
         spec({
           purpose: "SERIAL_CHANGE_CONFORMITY",
@@ -327,6 +305,13 @@ export function getApplicationDocumentSpecs(input: {
           classification: DocumentClassification.APPLICATION,
           required: true,
           reason: "Udhëzim p.16.c.ii - akt kontraktual ose administrativ.",
+        }),
+        spec({
+          purpose: "RESPONSIBLE_ENTITY_CHANGE_SUPPLEMENT",
+          label: "Dokumentacion plotësues (sipas kërkesës së IQMT)",
+          classification: DocumentClassification.APPLICATION,
+          required: false,
+          reason: "Udhëzim p.16.c.iii - kur IQMT kërkon dokumentacion shtesë.",
         }),
         spec({
           purpose: "ORIGINAL_REGISTRATION_CERTIFICATE",
@@ -367,7 +352,7 @@ export function getApplicationDocumentSpecs(input: {
       }),
       spec({
         purpose: "MODERNIZATION_OMI_REPORT",
-        label: "Raport OMI pas modernizimit",
+        label: "Raport OM pas modernizimit",
         classification: DocumentClassification.CERTIFICATE,
         required: true,
         reason: "Kërkohet verifikim pas ndërhyrjes teknike.",
@@ -383,6 +368,19 @@ export function getApplicationDocumentSpecs(input: {
   }
 
   return [];
+}
+
+/** Checklist për një fazë - vetëm dokumentet që janë ngarkuar (pamje read-only). */
+export function getUploadedDocumentsChecklistForPhase(input: {
+  phase: RegistrationDocPhase;
+  type: ApplicationType;
+  data?: ApplicationDataLike | null;
+  uploadedPurposes: string[];
+}) {
+  const uploaded = new Set(input.uploadedPurposes);
+  return getApplicationDocumentSpecs(input)
+    .filter((item) => item.phase === input.phase && uploaded.has(item.purpose))
+    .map((item) => ({ ...item, uploaded: true }));
 }
 
 export function getRegistrationDocumentSpecsByPhase(
@@ -414,8 +412,61 @@ export function getMissingRequiredApplicationDocumentsForPhases(input: {
   return getMissingRequiredApplicationDocuments(input).filter((item) => phaseSet.has(item.phase));
 }
 
+/** Të gjitha dokumentet e një faze - të detyrueshmet dhe opsionale (si te personi përgjegjës). */
+export function getPhaseDocumentChecklist(input: {
+  phase: RegistrationDocPhase;
+  type: ApplicationType;
+  data?: ApplicationDataLike | null;
+}): ApplicationDocumentSpec[] {
+  return getApplicationDocumentSpecs(input).filter((item) => item.phase === input.phase);
+}
+
+export const REGISTRATION_DOC_PHASE_LABELS: Record<RegistrationDocPhase, string> = {
+  owner: "Personi përgjegjës i ashensorit",
+  installer: "Instaluesi",
+  certifier: "Certifikuesi / OM",
+};
+
 /** Fazat e dokumenteve që certifikuesi duhet të verifikojë para përfundimit të certifikimit. */
 export const CERTIFIER_COMPLETION_DOC_PHASES: RegistrationDocPhase[] = ["installer", "certifier"];
+
+export const SUPPLEMENTARY_PURPOSE_PREFIX = "SUPPLEMENTARY_";
+
+export function supplementaryDocumentPurpose(phase: RegistrationDocPhase): string {
+  return `${SUPPLEMENTARY_PURPOSE_PREFIX}${phase.toUpperCase()}`;
+}
+
+export function isSupplementaryDocumentPurpose(purpose?: string | null): boolean {
+  return Boolean(purpose?.startsWith(SUPPLEMENTARY_PURPOSE_PREFIX));
+}
+
+export function supplementaryPhaseFromPurpose(purpose: string): RegistrationDocPhase | null {
+  if (!isSupplementaryDocumentPurpose(purpose)) return null;
+  const phase = purpose.slice(SUPPLEMENTARY_PURPOSE_PREFIX.length).toLowerCase();
+  if (phase === "owner" || phase === "installer" || phase === "certifier") return phase;
+  return null;
+}
+
+export const SUPPLEMENTARY_PHASE_LABELS: Record<RegistrationDocPhase, string> = {
+  owner: "Personi përgjegjës",
+  installer: "Instaluesi",
+  certifier: "Certifikuesi (OM)",
+};
+
+export function filterSupplementaryDocuments<T extends { purpose?: string }>(
+  documents: T[],
+  phase: RegistrationDocPhase,
+): T[] {
+  const purpose = supplementaryDocumentPurpose(phase);
+  return documents.filter((doc) => doc.purpose === purpose);
+}
+
+export function hasSupplementaryDocuments(
+  documents: { purpose?: string }[],
+  phase: RegistrationDocPhase,
+): boolean {
+  return filterSupplementaryDocuments(documents, phase).length > 0;
+}
 
 /** Dokumentet që shfaqen në checklist dhe selector - vetëm të detyrueshmet ose të ngarkuara tashmë. */
 export function getVisibleApplicationDocumentSpecs(input: {

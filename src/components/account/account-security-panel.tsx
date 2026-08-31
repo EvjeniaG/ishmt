@@ -1,6 +1,6 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { useRouter } from "@/lib/navigation/use-app-router";
 import { useEffect, useRef, useState } from "react";
 import QRCode from "qrcode";
 import { ProfileSectionHeader } from "@/components/account/profile-section-header";
@@ -278,7 +278,7 @@ export function AccountSecurityPanel({ security }: { security: SecurityState }) 
               <p className="text-sm text-muted-foreground">
                 {security.twoFactorEnabled
                   ? "Aktiv - kërkohet kod nga aplikacioni autentifikues gjatë hyrjes."
-                  : "Joaktiv - rekomandohet për llogaritë ISHMT dhe kompanive."}
+                  : "Joaktiv - rekomandohet për llogaritë IQMT dhe kompanive."}
               </p>
             </div>
             {!editingTwoFa ? (

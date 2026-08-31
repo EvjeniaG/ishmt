@@ -4,12 +4,12 @@ import {
   DataUpdateType,
   DeregistrationReason,
   ModernizationType,
-  OrgType,
 } from "@prisma/client";
 import { db } from "@/lib/db";
 import { DocumentService } from "@/lib/services/document-service";
 import { minimalDemoPdfBuffer } from "@/lib/demo/minimal-pdf";
 import { RegistrationDemoService } from "@/lib/demo/registration-demo-service";
+import { resolveDemoCertifierOrganization, resolveDemoInstallerOrganization } from "@/lib/demo/demo-seed-orgs";
 import type { ApplicationDemoStep } from "@/lib/demo/application-demo-steps";
 import { isDemoToolsEnabled } from "@/lib/demo/application-demo-steps";
 import type { RegistrationDemoStep } from "@/lib/demo/registration-demo-steps";
@@ -22,6 +22,7 @@ export type ApplicationDemoFillResult = {
   refreshPage?: boolean;
   prefilledOrgField?: "installerOrgId" | "certifierOrgId";
   prefilledOrgId?: string;
+  prefilledOrgQuery?: string;
 };
 
 function isRegistrationStep(step: ApplicationDemoStep): step is RegistrationDemoStep {
@@ -97,20 +98,27 @@ export class ApplicationDemoService {
       }
 
       case "modernization-installer": {
-        const installer = await db.organization.findFirst({
-          where: { type: OrgType.INSTALLER, status: { in: ["ACTIVE", "ACTIVE_AUTHORIZED"] }, deletedAt: null },
-          orderBy: { name: "asc" },
-        });
-        if (!installer) throw new Error("Nuk u gjet instalues - ekzekutoni seed-in.");
-        return { step, prefilledOrgField: "installerOrgId", prefilledOrgId: installer.id };
+        const installer = await resolveDemoInstallerOrganization();
+        if (!installer) {
+          throw new Error(
+            "Nuk u gjet instalues demo - ekzekutoni seed-demo (Ashensorë Pro, Lift Master ose Euro Ashensorë).",
+          );
+        }
+        return {
+          step,
+          prefilledOrgField: "installerOrgId",
+          prefilledOrgId: installer.id,
+          prefilledOrgQuery: installer.nipt ?? installer.name,
+        };
       }
 
       case "modernization-certifier": {
-        const certifier = await db.organization.findFirst({
-          where: { type: OrgType.CERTIFIER, status: { in: ["ACTIVE", "ACTIVE_AUTHORIZED"] }, deletedAt: null },
-          orderBy: { name: "asc" },
-        });
-        if (!certifier) throw new Error("Nuk u gjet certifikues - ekzekutoni seed-in.");
+        const certifier = await resolveDemoCertifierOrganization();
+        if (!certifier) {
+          throw new Error(
+            "Nuk u gjet certifikues demo - ekzekutoni seed-demo (OM Certifikim, Inspekt OM ose Quality Lift).",
+          );
+        }
         return { step, prefilledOrgField: "certifierOrgId", prefilledOrgId: certifier.id };
       }
 

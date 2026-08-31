@@ -5,18 +5,19 @@ import type { AuthContext } from "@/lib/permissions/guards";
 import { PERMISSIONS } from "@/lib/permissions/codes";
 import { hasPermission } from "@/lib/permissions/guards";
 import { ROLE_CODES } from "@/lib/constants/roles";
+import { hasServiceCapability } from "@/lib/organizations/org-capabilities";
 import { QkbLookupService } from "@/lib/services/qkb-lookup-service";
 
 export class QkbValidationService {
   static async submitNipt(ctx: AuthContext, nipt: string) {
-    if (ctx.roleCode !== ROLE_CODES.MAINTENANCE || !hasPermission(ctx, PERMISSIONS.QKB_SUBMIT)) {
+    if (!hasServiceCapability(ctx, "maintenance") || !hasPermission(ctx, PERMISSIONS.QKB_SUBMIT)) {
       throw new Error("Vetëm kompanitë e mirëmbajtjes mund të parashtrojnë NIPT.");
     }
 
     const normalizedNipt = nipt.trim().toUpperCase();
 
     const org = await db.organization.findUnique({ where: { id: ctx.activeOrgId } });
-    if (!org || org.type !== "MAINTENANCE") {
+    if (!org || !org.capMaintenance) {
       throw new Error("Organizata e pavlefshme.");
     }
 

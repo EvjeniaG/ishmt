@@ -9,7 +9,6 @@ import { getAuthSession } from "@/lib/auth";
 import { QrService } from "@/lib/services/qr-service";
 import { loadDigitalFileForViewer } from "@/lib/elevators/digital-file-access";
 import { portalEyebrowForRole } from "@/lib/constants/portal-labels";
-import { ROLE_CODES } from "@/lib/constants/roles";
 import { isIshmtStaffRole } from "@/lib/permissions/routes";
 
 export default async function ElevatorQrPrintPage({
@@ -25,12 +24,14 @@ export default async function ElevatorQrPrintPage({
     roleCode: session.user.roleCode,
     activeOrgId: session.user.activeOrgId,
     userId: session.user.id,
+    permissions: session.user.permissions ?? [],
+    orgCapabilities: session.user.orgCapabilities,
   });
   if (digitalFile.status === "unauthorized") redirect("/unauthorized");
   if (digitalFile.status === "not_found") notFound();
 
   const ownerScopeOrgId =
-    session.user.roleCode === ROLE_CODES.OWNER ? session.user.activeOrgId : null;
+    digitalFile.access.kind === "owner" ? session.user.activeOrgId : null;
   const data = await QrService.getPrintableData(id, ownerScopeOrgId, session.user.id);
   const qrImageDataUrl = data?.qrCode ? await QrService.generateQrImageDataUrl(data.qrCode) : null;
 
@@ -62,11 +63,11 @@ export default async function ElevatorQrPrintPage({
               </p>
               <ul className="mt-1 list-inside list-disc space-y-1 text-sm">
                 <li>Aplikimi nuk është miratuar ende</li>
-                <li>Ka një problem në procesin e gjenerimit (kontaktoni ISHMT)</li>
+                <li>Ka një problem në procesin e gjenerimit (kontaktoni IQMT)</li>
                 <li>Ashensori nuk ka një sertifikatë aktive regjistrimi</li>
               </ul>
               <p className="mt-2 text-sm">
-                <strong>Zgjidhja:</strong> Kontaktoni ISHMT nëse kjo situatë vazhdon.
+                <strong>Zgjidhja:</strong> Kontaktoni IQMT nëse kjo situatë vazhdon.
               </p>
             </InstitutionalNotice>
           </StandardPageLayout>
@@ -82,7 +83,7 @@ export default async function ElevatorQrPrintPage({
             }
           >
             <SectionCard
-              title="ISHMT - Regjistri Digjital i Ashensorëve"
+              title="IQMT - Regjistri Digjital i Ashensorëve"
               className="print:border-0 print:shadow-none"
               padded
             >

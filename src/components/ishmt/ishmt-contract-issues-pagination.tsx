@@ -1,6 +1,6 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { useRouter } from "@/lib/navigation/use-app-router";
 import { cn } from "@/lib/utils";
 
 export function IshmtContractIssuesPagination({

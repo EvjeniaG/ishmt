@@ -2,7 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { ApplicationStatus } from "@prisma/client";
 import { AppShell } from "@/components/layout/app-shell";
-import { PageHeader } from "@/components/layout/page-header";
+import { StandardPageLayout } from "@/components/layout/standard-page-layout";
 import { ApplicationStatusBadge } from "@/components/applications/application-status-badge";
 import { PortalEmptyState, PortalTableWrap } from "@/components/shared/portal-table";
 import {
@@ -39,13 +39,11 @@ export default async function ChiefApprovalsPage() {
 
   return (
     <AppShell>
-      <div className="space-y-6">
-        <PageHeader
-          eyebrow="ISHMT"
-          title="Aplikime për miratim"
-          description="Dosjet e shqyrtuara nga zinxhiri hierarkik, në pritje të vendimit final të miratimit ose refuzimit."
-        />
-
+      <StandardPageLayout
+        eyebrow="IQMT"
+        title="Aplikime për miratim"
+        description="Dosjet e shqyrtuara nga zinxhiri hierarkik, në pritje të vendimit final të miratimit ose refuzimit."
+      >
         <SectionCard
           title="Regjistri i miratimeve"
           subtitle="Dosjet në pritje të vendimit final"
@@ -103,7 +101,7 @@ export default async function ChiefApprovalsPage() {
             </>
           )}
         </SectionCard>
-      </div>
+      </StandardPageLayout>
     </AppShell>
   );
 }

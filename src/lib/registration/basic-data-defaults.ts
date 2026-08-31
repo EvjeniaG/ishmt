@@ -1,7 +1,14 @@
+import {
+  mergeApplicationDataWithOwnerPrefill,
+  type OwnerRegistrationPrefill,
+} from "@/lib/registration/owner-registration-prefill";
+
 type ApplicationDataLike = {
   applicationDate?: Date | string | null;
   buildingName?: string | null;
   buildingAddress?: string | null;
+  gpsLatitude?: unknown;
+  gpsLongitude?: unknown;
   municipalityId?: string | null;
   administrativeUnitId?: string | null;
   entrance?: string | null;
@@ -16,30 +23,52 @@ type ApplicationDataLike = {
   responsibleEntityPhone?: string | null;
   notes?: string | null;
   registrationExtendedData?: unknown;
+  additionalTechnical?: unknown;
 };
 
-export function buildRegistrationFormDefaults(data: ApplicationDataLike | null | undefined) {
-  const ext = (data?.registrationExtendedData as Record<string, string> | null) ?? {};
-  const appDate = data?.applicationDate
-    ? new Date(data.applicationDate).toISOString().slice(0, 10)
+export function buildRegistrationFormDefaults(
+  data: ApplicationDataLike | null | undefined,
+  prefill?: OwnerRegistrationPrefill | null,
+) {
+  const merged = mergeApplicationDataWithOwnerPrefill(data, prefill);
+  const ext = (merged?.registrationExtendedData as Record<string, string> | null) ?? {};
+  const additional = (merged?.additionalTechnical as Record<string, string> | null) ?? {};
+  const appDate = merged?.applicationDate
+    ? new Date(merged.applicationDate).toISOString().slice(0, 10)
     : undefined;
 
   return {
     applicationDate: appDate,
-    buildingName: data?.buildingName ?? undefined,
-    buildingAddress: data?.buildingAddress ?? undefined,
-    municipalityId: data?.municipalityId ?? undefined,
-    administrativeUnitId: data?.administrativeUnitId ?? undefined,
-    entrance: data?.entrance ?? undefined,
-    specificPosition: data?.specificPosition ?? data?.floorLocation ?? undefined,
-    legacyDistrictCode: data?.legacyDistrictCode ?? undefined,
-    responsibleEntityName: data?.responsibleEntityName ?? undefined,
-    responsibleEntityIdentifier: data?.responsibleEntityIdentifier ?? undefined,
-    responsibleEntityEmail: data?.responsibleEntityEmail ?? undefined,
-    responsibleEntityPhone: data?.responsibleEntityPhone ?? undefined,
-    ownerNotes: data?.notes ?? undefined,
+    elevatorInServiceDate:
+      ext.elevatorInServiceDate ??
+      additional.installationDate ??
+      additional.commissioningDate ??
+      undefined,
+    buildingName: merged?.buildingName ?? undefined,
+    buildingAddress: merged?.buildingAddress ?? undefined,
+    buildingAddressMode:
+      ext.buildingAddressMode ??
+      (merged?.gpsLatitude != null && merged?.gpsLongitude != null ? "gps" : "text"),
+    gpsLatitude:
+      merged?.gpsLatitude != null && merged?.gpsLatitude !== ""
+        ? Number(merged.gpsLatitude)
+        : undefined,
+    gpsLongitude:
+      merged?.gpsLongitude != null && merged?.gpsLongitude !== ""
+        ? Number(merged.gpsLongitude)
+        : undefined,
+    municipalityId: merged?.municipalityId ?? undefined,
+    administrativeUnitId: merged?.administrativeUnitId ?? undefined,
+    entrance: merged?.entrance ?? undefined,
+    specificPosition: merged?.specificPosition ?? merged?.floorLocation ?? undefined,
+    legacyDistrictCode: merged?.legacyDistrictCode ?? undefined,
+    responsibleEntityName: merged?.responsibleEntityName ?? undefined,
+    responsibleEntityIdentifier: merged?.responsibleEntityIdentifier ?? undefined,
+    responsibleEntityEmail: merged?.responsibleEntityEmail ?? undefined,
+    responsibleEntityPhone: merged?.responsibleEntityPhone ?? undefined,
+    ownerNotes: merged?.notes ?? undefined,
     registrationExtendedData:
-      (data?.registrationExtendedData as Record<string, unknown> | null) ?? undefined,
+      (merged?.registrationExtendedData as Record<string, unknown> | null) ?? undefined,
     elevatorConditionType: ext.elevatorConditionType,
     applicationSubtype: ext.applicationSubtype,
     responsibleEntityType: ext.responsibleEntityType,
@@ -54,5 +83,6 @@ export function buildRegistrationFormDefaults(data: ApplicationDataLike | null |
     usagePurposeCode: ext.usagePurposeCode,
     usagePurposeOther: ext.usagePurposeOther,
     existingRegisteredElevatorsCount: ext.existingRegisteredElevatorsCount,
+    ownerProfileSnapshot: prefill?.profileSnapshot,
   };
 }

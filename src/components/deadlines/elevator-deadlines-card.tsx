@@ -1,14 +1,18 @@
-import Link from "next/link";
+import { AppLink } from "@/components/shared/app-link";
 import type { UnifiedDeadlineItem } from "@/lib/deadlines/deadline-service";
 import { DeadlineSeverityBadge } from "@/components/deadlines/deadline-badge";
 
 const CATEGORY_LABELS: Record<UnifiedDeadlineItem["category"], string> = {
-  procedure: "Procedurë ISHMT",
+  procedure: "Procedurë IQMT",
   inspection: "Inspektim periodik",
+  inspection_contract_missing: "Kontratë kontrolli periodik",
+  inspection_contract_pending: "Kontratë kontrolli periodik",
+  inspection_contract: "Kontratë kontrolli periodik",
   maintenance_contract: "Kontratë mirëmbajtjeje",
   maintenance_report: "Raport mirëmbajtjeje",
   maintenance_missing: "Mirëmbajtje",
   certificate: "Certifikatë",
+  qr_placement: "Kodi QR",
 };
 
 function formatDue(item: UnifiedDeadlineItem) {
@@ -25,15 +29,21 @@ function severityLabel(item: UnifiedDeadlineItem): string {
 }
 
 export function ElevatorDeadlinesCard({ items }: { items: UnifiedDeadlineItem[] }) {
-  const visible = items.filter((i) => i.severity !== "ok");
-  const display = visible.length > 0 ? visible : items.slice(0, 3);
+  const actionable = items.filter(
+    (item) =>
+      item.severity !== "ok" ||
+      item.category === "inspection_contract_missing" ||
+      item.category === "qr_placement" ||
+      item.category === "maintenance_missing",
+  );
+  const display = actionable.length > 0 ? actionable : items.slice(0, 4);
 
   return (
     <div className="rounded-lg border border-border">
       <div className="border-b border-border px-4 py-3">
         <h3 className="text-sm font-semibold">Afatet dhe detyrimet</h3>
         <p className="text-xs text-muted-foreground">
-          Inspektim periodik (6/12 muaj) · mirëmbajtje · certifikatë
+          Kontrata OM · mirëmbajtje · kontroll periodik · QR · certifikatë
         </p>
       </div>
       <ul className="divide-y">
@@ -50,9 +60,9 @@ export function ElevatorDeadlinesCard({ items }: { items: UnifiedDeadlineItem[] 
               <p className="text-xs text-muted-foreground">{formatDue(item)}</p>
             </div>
             {item.href && item.actionLabel && (
-              <Link href={item.href} className="text-xs font-medium text-gov-primary hover:underline">
+              <AppLink href={item.href} className="text-xs font-medium text-gov-primary hover:underline">
                 {item.actionLabel} →
-              </Link>
+              </AppLink>
             )}
           </li>
         ))}
@@ -74,9 +84,9 @@ export function DeadlinesListCompact({ items }: { items: UnifiedDeadlineItem[] }
             <p className="truncate text-xs text-muted-foreground">{item.subtitle}</p>
           </div>
           {item.href ? (
-            <Link href={item.href} className="shrink-0 text-xs text-gov-primary hover:underline">
+            <AppLink href={item.href} className="shrink-0 text-xs text-gov-primary hover:underline">
               Shiko
-            </Link>
+            </AppLink>
           ) : null}
         </li>
       ))}

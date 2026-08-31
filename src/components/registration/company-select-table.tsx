@@ -1,6 +1,6 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { useRouter } from "@/lib/navigation/use-app-router";
 import { useState } from "react";
 import {
   assignRegistrationCertifierAction,
@@ -52,7 +52,7 @@ export function CompanySelectTable({
     <Card>
       <CardHeader className="border-b bg-muted/20">
         <CardTitle className="text-base text-gov-primary">
-          {type === "installer" ? "Zgjidhni kompaninë instaluese" : "Zgjidhni kompaninë OMI / certifikuese"}
+          {type === "installer" ? "Zgjidhni kompaninë instaluese" : "Zgjidhni kompaninë OM / certifikuese"}
         </CardTitle>
       </CardHeader>
       <CardContent className="pt-5">
@@ -101,7 +101,7 @@ export function CompanySelectTable({
                             ? "Duke dërguar..."
                             : type === "installer"
                               ? "Dërgo ftesë instaluesit"
-                              : "Dërgo ftesë OMI"}
+                              : "Dërgo ftesë OM"}
                         </Button>
                       </td>
                     </tr>

@@ -1,11 +1,21 @@
-import { OrgStatus, OrgType } from "@prisma/client";
+import { OrgStatus, OrgType, type OwnerBuildingRole } from "@prisma/client";
 import { createHash, randomBytes } from "crypto";
 import { db } from "@/lib/db";
 import { hashPassword, validatePassword } from "@/lib/auth/password";
 import { ROLE_CODES, type RoleCode } from "@/lib/constants/roles";
+import {
+  capabilitiesFromRegistration,
+  resolvePrimaryOrgType,
+  resolvePrimaryRoleCode,
+  type OrgCapabilities,
+} from "@/lib/organizations/org-capabilities";
+import { MembershipService } from "@/lib/services/membership-service";
+import { InstallLicenseRegistrationService, OmLicenseRegistrationService } from "@/lib/services/om-license-registration-service";
+import { LicensedCompanyRegistrationService } from "@/lib/services/licensed-company-registration-service";
 
 type RegistrationLevel =
   | "OWNER"
+  | "COMPANY"
   | "INSTALLER"
   | "CERTIFIER"
   | "MAINTENANCE"
@@ -15,7 +25,7 @@ type RegistrationLevel =
   | "DIRECTORATE";
 
 const LEVEL_CONFIG: Record<
-  RegistrationLevel,
+  Exclude<RegistrationLevel, "COMPANY">,
   { orgType: OrgType; roleCode: RoleCode; status: OrgStatus; sharedOrg: boolean; requiresQkb: boolean }
 > = {
   OWNER: { orgType: OrgType.OWNER, roleCode: ROLE_CODES.OWNER, status: OrgStatus.ACTIVE, sharedOrg: false, requiresQkb: false },
@@ -205,6 +215,11 @@ export class AuthService {
   /** Generic self-registration that works for every access level. */
   static async registerAccount(input: {
     level: RegistrationLevel;
+    capInstall?: boolean;
+    capMaintenance?: boolean;
+    capOm?: boolean;
+    omLicenseNumber?: string;
+    installLicenseNumber?: string;
     personalNumber?: string;
     idCardNumber?: string;
     email: string;
@@ -216,6 +231,7 @@ export class AuthService {
     birthDate?: string;
     phone?: string;
     organizationName?: string;
+    ownerBuildingRole?: string;
     nipt?: string;
     municipalityId?: string;
   }) {
@@ -223,6 +239,7 @@ export class AuthService {
     // can NEVER create privileged institutional accounts. These are provisioned internally.
     const PUBLIC_SELF_REGISTRATION_LEVELS: RegistrationLevel[] = [
       "OWNER",
+      "COMPANY",
       "INSTALLER",
       "CERTIFIER",
       "MAINTENANCE",
@@ -231,20 +248,55 @@ export class AuthService {
       throw new Error("Ky nivel aksesi nuk mund të regjistrohet publikisht.");
     }
 
-    const config = LEVEL_CONFIG[input.level];
-    if (!config) {
-      throw new Error("Niveli i aksesit nuk është i vlefshëm.");
-    }
+    const isCompany = ["COMPANY", "INSTALLER", "CERTIFIER", "MAINTENANCE"].includes(input.level);
 
     const passwordCheck = validatePassword(input.password);
     if (!passwordCheck.valid) {
       throw new Error(passwordCheck.errors.join(" "));
     }
 
-    const isCompany = ["INSTALLER", "CERTIFIER", "MAINTENANCE"].includes(input.level);
     const email = input.email.toLowerCase().trim();
     const nid = input.personalNumber?.trim().toUpperCase() || null;
     const nipt = input.nipt?.trim().toUpperCase() || null;
+
+    let companyCapabilities: OrgCapabilities | null = null;
+
+    if (isCompany && input.level === "COMPANY" && nipt) {
+      const niptLookup = await LicensedCompanyRegistrationService.lookupNiptStatus(nipt);
+      if (niptLookup.status === "HAS_ACTIVE_ACCOUNT") {
+        throw new Error(`Ekziston tashmë llogari aktive për këtë kompani (${niptLookup.orgName}).`);
+      }
+      if (niptLookup.status === "DIRECTORATE_REGISTERED") {
+        companyCapabilities = {
+          capInstall: niptLookup.capabilities.capInstall,
+          capOm: niptLookup.capabilities.capOm,
+          capMaintenance: input.capMaintenance === true,
+        };
+      } else if (niptLookup.status === "NOT_IN_DIRECTORATE" || niptLookup.status === "TOO_SHORT") {
+        companyCapabilities = {
+          capInstall: false,
+          capOm: false,
+          capMaintenance: true,
+        };
+      }
+    }
+
+    if (isCompany && !companyCapabilities) {
+      companyCapabilities = capabilitiesFromRegistration({
+        level: input.level,
+        capInstall: input.capInstall,
+        capMaintenance: input.capMaintenance,
+        capOm: input.capOm,
+      });
+    }
+
+    const config =
+      input.level === "COMPANY"
+        ? null
+        : LEVEL_CONFIG[input.level as Exclude<RegistrationLevel, "COMPANY">];
+    if (!isCompany && !config) {
+      throw new Error("Niveli i aksesit nuk është i vlefshëm.");
+    }
 
     const existingEmail = await db.authUser.findUnique({ where: { email } });
     if (existingEmail) {
@@ -267,34 +319,77 @@ export class AuthService {
       }
     }
 
-    const role = await db.authRole.findUnique({ where: { code: config.roleCode } });
+    const roleCode = isCompany
+      ? resolvePrimaryRoleCode(companyCapabilities!)
+      : config!.roleCode;
+    const role = await db.authRole.findUnique({ where: { code: roleCode } });
     if (!role) {
-      throw new Error(`Roli ${config.roleCode} nuk ekziston. Ekzekutoni seed-in.`);
+      throw new Error(`Roli ${roleCode} nuk ekziston. Ekzekutoni seed-in.`);
     }
 
-    if (!config.sharedOrg) {
-      if (!input.municipalityId) {
-        throw new Error("Bashkia është e detyrueshme.");
+    let claimOrgId: string | null = null;
+
+    if (isCompany && input.level === "COMPANY" && (companyCapabilities!.capInstall || companyCapabilities!.capOm)) {
+      const niptClaim = await LicensedCompanyRegistrationService.validateNiptClaim(nipt!);
+      claimOrgId = niptClaim.organization.id;
+    } else if (isCompany && companyCapabilities!.capInstall) {
+      if (!input.installLicenseNumber?.trim()) {
+        throw new Error("Numri i licencës së instalimit është i detyrueshëm.");
       }
-      if (config.orgType !== OrgType.OWNER && !nipt) {
+      const installClaim = await InstallLicenseRegistrationService.validateClaim({
+        licenseNumber: input.installLicenseNumber,
+        nipt: nipt!,
+      });
+      claimOrgId = installClaim.organization.id;
+    }
+
+    if (isCompany && companyCapabilities!.capOm && !claimOrgId) {
+      if (!input.omLicenseNumber?.trim()) {
+        throw new Error("Numri i licencës OM është i detyrueshëm.");
+      }
+      const omClaim = await OmLicenseRegistrationService.validateClaim({
+        licenseNumber: input.omLicenseNumber,
+        nipt: nipt!,
+      });
+      if (claimOrgId && omClaim.organization.id !== claimOrgId) {
+        throw new Error("Licencat e instalimit dhe OM duhet t'i përkasin të njëjtës kompani.");
+      }
+      claimOrgId = omClaim.organization.id;
+    }
+
+    const isOwner = input.level === "OWNER";
+    const ownerBuildingRole = isOwner
+      ? (input.ownerBuildingRole as OwnerBuildingRole | undefined)
+      : undefined;
+
+    if (isCompany || !config?.sharedOrg) {
+      if (isCompany && !nipt) {
+        throw new Error("NIPT është i detyrueshëm për kompanitë.");
+      }
+      if (!isCompany && config!.orgType !== OrgType.OWNER && !nipt) {
         throw new Error("NIPT është i detyrueshëm për këtë nivel.");
+      }
+      if (isOwner && ownerBuildingRole && ownerBuildingRole !== "ADMINISTRATOR" && !nipt) {
+        throw new Error("NIPT është i detyrueshëm për këtë lloj subjekti.");
       }
       if (nipt) {
         const existingNipt = await db.organization.findFirst({ where: { nipt, deletedAt: null } });
-        if (existingNipt) {
+        if (existingNipt && existingNipt.id !== claimOrgId) {
           throw new Error("Ky NIPT është i regjistruar tashmë.");
         }
       }
     }
 
     const passwordHash = await hashPassword(input.password);
-    const organizationName =
-      input.organizationName?.trim() || `${input.firstName} ${input.lastName}`.trim();
+    const organizationName = isOwner
+      ? input.organizationName?.trim() || `${input.firstName} ${input.lastName}`.trim()
+      : input.organizationName?.trim() || `${input.firstName} ${input.lastName}`.trim();
+    const representativeName = isOwner ? `${input.firstName} ${input.lastName}`.trim() : null;
 
     return db.$transaction(async (tx) => {
       let organizationId: string;
 
-      if (config.sharedOrg) {
+      if (config?.sharedOrg) {
         const existingOrg = await tx.organization.findFirst({
           where: { type: config.orgType, deletedAt: null },
           orderBy: { createdAt: "asc" },
@@ -303,18 +398,99 @@ export class AuthService {
           throw new Error("Organizata institucionale nuk ekziston. Kontaktoni administratorin.");
         }
         organizationId = existingOrg.id;
+      } else if (claimOrgId) {
+        const existingOrg = await tx.organization.findUniqueOrThrow({ where: { id: claimOrgId } });
+        const preservedStatuses: OrgStatus[] = [OrgStatus.ACTIVE, OrgStatus.ACTIVE_AUTHORIZED];
+        const nextStatus = preservedStatuses.includes(existingOrg.status)
+          ? existingOrg.status
+          : OrgStatus.PENDING_VALIDATION;
+
+        await tx.organization.update({
+          where: { id: claimOrgId },
+          data: {
+            type: resolvePrimaryOrgType(companyCapabilities!),
+            capInstall: companyCapabilities!.capInstall || existingOrg.capInstall === true,
+            capMaintenance: companyCapabilities!.capMaintenance || existingOrg.capMaintenance === true,
+            capOm: companyCapabilities!.capOm || existingOrg.capOm === true,
+            name: organizationName || existingOrg.name,
+            nipt: nipt ?? existingOrg.nipt,
+            municipalityId: input.municipalityId ?? existingOrg.municipalityId,
+            email: email,
+            phone: input.phone ?? existingOrg.phone,
+            status: nextStatus,
+            qkbValidated: companyCapabilities!.capMaintenance ? false : existingOrg.qkbValidated,
+          },
+        });
+        organizationId = claimOrgId;
       } else {
         const organization = await tx.organization.create({
           data: {
-            type: config.orgType,
+            type: isCompany ? resolvePrimaryOrgType(companyCapabilities!) : config!.orgType,
+            capInstall: companyCapabilities?.capInstall ?? false,
+            capMaintenance: companyCapabilities?.capMaintenance ?? false,
+            capOm: companyCapabilities?.capOm ?? false,
             name: organizationName,
             nipt,
-            municipalityId: input.municipalityId,
-            status: config.status,
-            qkbValidated: config.requiresQkb ? false : undefined,
+            municipalityId: input.municipalityId ?? null,
+            email: isOwner ? email : undefined,
+            phone: isOwner ? input.phone ?? null : undefined,
+            ownerBuildingRole: ownerBuildingRole ?? undefined,
+            representativeName,
+            status: isCompany ? OrgStatus.PENDING_VALIDATION : config!.status,
+            qkbValidated: isCompany
+              ? !companyCapabilities!.capMaintenance
+              : config!.requiresQkb
+                ? false
+                : undefined,
           },
         });
         organizationId = organization.id;
+      }
+
+      if (isCompany) {
+        const organization = await tx.organization.findUniqueOrThrow({ where: { id: organizationId } });
+        const user = await tx.authUser.create({
+          data: {
+            email,
+            passwordHash,
+            firstName: input.firstName,
+            lastName: input.lastName,
+            phone: input.phone,
+            nid,
+            idCardNumber: input.idCardNumber?.trim().toUpperCase() || null,
+            fatherName: input.fatherName || null,
+            motherName: input.motherName || null,
+            birthDate: input.birthDate ? new Date(input.birthDate) : null,
+            emailVerified: true,
+          },
+        });
+
+        await MembershipService.grantCapabilityMemberships(tx, user.id, organization, {
+          primaryRoleCode: roleCode,
+        });
+
+        if (companyCapabilities!.capMaintenance && nipt) {
+          const existingQkb = await tx.qkbValidation.findFirst({
+            where: { organizationId, nipt, status: "PENDING" },
+          });
+          if (!existingQkb) {
+            await tx.qkbValidation.create({
+              data: {
+                organizationId,
+                nipt,
+                status: "PENDING",
+                initiatedById: user.id,
+                requestData: {
+                  nipt,
+                  organizationName,
+                  submittedAt: new Date().toISOString(),
+                },
+              },
+            });
+          }
+        }
+
+        return { user, organizationId };
       }
 
       const user = await tx.authUser.create({
@@ -342,7 +518,7 @@ export class AuthService {
         },
       });
 
-      if (config.requiresQkb && nipt) {
+      if (config?.requiresQkb && nipt) {
         await tx.qkbValidation.create({
           data: {
             organizationId,

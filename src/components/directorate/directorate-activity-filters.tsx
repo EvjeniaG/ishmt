@@ -1,6 +1,7 @@
 "use client";
 
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
+import { useRouter } from "@/lib/navigation/use-app-router";
 import { ApplicationStatus, ApplicationType, OrgType } from "@prisma/client";
 import { Button } from "@/components/ui/button";
 import { APPLICATION_TYPE_LABELS } from "@/lib/constants/application-labels";

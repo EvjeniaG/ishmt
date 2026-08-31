@@ -1,21 +1,29 @@
 import type { ReactNode } from "react";
+import { WorkflowSection, WorkflowSubsection } from "@/components/applications/workflow-section";
 
 export function FormDocumentsSection({
   title = "Dokumentet",
+  description,
   children,
+  variant = "subsection",
 }: {
   title?: string;
+  description?: string;
   children: ReactNode;
+  /** `section` - panel i plotë; `subsection` - brenda një seksioni tjetër */
+  variant?: "section" | "subsection";
 }) {
+  if (variant === "section") {
+    return (
+      <WorkflowSection title={title} description={description}>
+        {children}
+      </WorkflowSection>
+    );
+  }
+
   return (
-    <section className="space-y-3 border-t border-border/60 pt-5">
-      <div>
-        <h3 className="text-sm font-semibold text-foreground">{title}</h3>
-        <p className="mt-0.5 text-xs text-muted-foreground">
-          Ngarkoni dokumentet e kërkuara para se të ruani ose të vazhdoni.
-        </p>
-      </div>
-      <div className="space-y-3">{children}</div>
-    </section>
+    <WorkflowSubsection title={title} description={description}>
+      {children}
+    </WorkflowSubsection>
   );
 }

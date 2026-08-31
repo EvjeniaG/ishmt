@@ -1,4 +1,5 @@
 import { db } from "@/lib/db";
+import { COMPLIANCE_NOTIFY_COOLDOWN_DAYS } from "@/lib/ishmt/compliance-notify-feedback";
 
 export type OwnerComplianceAlert = {
   dedupeKey: string;
@@ -29,22 +30,86 @@ function isInspectionIssueType(issueType: string): boolean {
   );
 }
 
+export type ComplianceNotifyBatchResult = {
+  created: number;
+  skipped: number;
+  organizations: number;
+  lastSentAt: Date | null;
+  sentAt: Date | null;
+};
+
+type ComplianceNotifySyncResult = Pick<
+  ComplianceNotifyBatchResult,
+  "created" | "skipped" | "lastSentAt" | "sentAt"
+>;
+
+const emptyNotifySyncResult = (): ComplianceNotifySyncResult => ({
+  created: 0,
+  skipped: 0,
+  lastSentAt: null,
+  sentAt: null,
+});
+
+function mergeNotifyBatchResults(
+  results: ComplianceNotifySyncResult[],
+): ComplianceNotifySyncResult {
+  return results.reduce(
+    (acc, result) => ({
+      created: acc.created + result.created,
+      skipped: acc.skipped + result.skipped,
+      lastSentAt:
+        result.lastSentAt && (!acc.lastSentAt || result.lastSentAt > acc.lastSentAt)
+          ? result.lastSentAt
+          : acc.lastSentAt,
+      sentAt:
+        result.sentAt && (!acc.sentAt || result.sentAt > acc.sentAt)
+          ? result.sentAt
+          : acc.sentAt,
+    }),
+    emptyNotifySyncResult(),
+  );
+}
+
 /** Njoftime in-app për pronarët dhe kompanitë - kontrata, afate, mungesa përputhshmërie. */
 export class OwnerComplianceNotificationService {
+  static async getLastNotifiedAtForScope(
+    elevatorIds: string[],
+    titles: string[],
+  ): Promise<Date | null> {
+    if (elevatorIds.length === 0 || titles.length === 0) return null;
+
+    const row = await db.notification.findFirst({
+      where: {
+        entityType: "compliance_alert",
+        entityId: { in: elevatorIds },
+        title: { in: titles },
+      },
+      orderBy: [{ sentAt: "desc" }, { createdAt: "desc" }],
+      select: { sentAt: true, createdAt: true },
+    });
+
+    return row?.sentAt ?? row?.createdAt ?? null;
+  }
+
   static async syncForOrganization(orgId: string, alerts: OwnerComplianceAlert[]) {
-    if (alerts.length === 0) return { created: 0 };
+    if (alerts.length === 0) {
+      return { created: 0, skipped: 0, lastSentAt: null as Date | null, sentAt: null as Date | null };
+    }
 
     const members = await db.orgMembership.findMany({
       where: { organizationId: orgId, deactivatedAt: null },
       select: { userId: true },
     });
-    if (members.length === 0) return { created: 0 };
+    if (members.length === 0) {
+      return { created: 0, skipped: 0, lastSentAt: null as Date | null, sentAt: null as Date | null };
+    }
 
     const weekAgo = new Date();
-    weekAgo.setDate(weekAgo.getDate() - 7);
+    weekAgo.setDate(weekAgo.getDate() - COMPLIANCE_NOTIFY_COOLDOWN_DAYS);
 
     const userIds = members.map((m) => m.userId);
     const elevatorIds = [...new Set(alerts.map((alert) => alert.elevatorId))];
+    const titles = [...new Set(alerts.map((alert) => alert.title))];
 
     const existing = await db.notification.findMany({
       where: {
@@ -67,10 +132,15 @@ export class OwnerComplianceNotificationService {
       entityId: string;
     }> = [];
 
+    let skipped = 0;
+
     for (const member of members) {
       for (const alert of alerts) {
         const key = `${member.userId}:${alert.elevatorId}:${alert.title}`;
-        if (existingKeys.has(key)) continue;
+        if (existingKeys.has(key)) {
+          skipped++;
+          continue;
+        }
         existingKeys.add(key);
         toCreate.push({
           userId: member.userId,
@@ -81,7 +151,16 @@ export class OwnerComplianceNotificationService {
       }
     }
 
-    if (toCreate.length === 0) return { created: 0 };
+    const lastSentAt =
+      skipped > 0
+        ? await this.getLastNotifiedAtForScope(elevatorIds, titles)
+        : null;
+
+    if (toCreate.length === 0) {
+      return { created: 0, skipped, lastSentAt, sentAt: null };
+    }
+
+    const sentAt = new Date();
 
     await db.notification.createMany({
       data: toCreate.map((row) => ({
@@ -92,11 +171,11 @@ export class OwnerComplianceNotificationService {
         body: row.body,
         entityType: "compliance_alert",
         entityId: row.entityId,
-        sentAt: new Date(),
+        sentAt,
       })),
     });
 
-    return { created: toCreate.length };
+    return { created: toCreate.length, skipped, lastSentAt, sentAt };
   }
 
   static resolveStakeholderOrgIds(row: {
@@ -130,13 +209,12 @@ export class OwnerComplianceNotificationService {
     const alert = this.alertFromContractIssue(row);
     const orgIds = this.resolveStakeholderOrgIds(row);
 
-    let created = 0;
+    const results: ComplianceNotifySyncResult[] = [];
     for (const orgId of orgIds) {
-      const result = await this.syncForOrganization(orgId, [alert]);
-      created += result.created;
+      results.push(await this.syncForOrganization(orgId, [alert]));
     }
 
-    return { organizations: orgIds.length, created };
+    return { ...mergeNotifyBatchResults(results), organizations: orgIds.length };
   }
 
   static async notifyStakeholdersForContractIssues(
@@ -164,13 +242,12 @@ export class OwnerComplianceNotificationService {
       }
     }
 
-    let created = 0;
+    const results: ComplianceNotifySyncResult[] = [];
     for (const [orgId, alerts] of byOrg) {
-      const result = await this.syncForOrganization(orgId, alerts);
-      created += result.created;
+      results.push(await this.syncForOrganization(orgId, alerts));
     }
 
-    return { organizations: byOrg.size, created };
+    return { ...mergeNotifyBatchResults(results), organizations: byOrg.size };
   }
 
   static async notifyForContractIssue(row: {
@@ -242,13 +319,12 @@ export class OwnerComplianceNotificationService {
       }
     }
 
-    let created = 0;
+    const results: ComplianceNotifySyncResult[] = [];
     for (const [orgId, alerts] of byOrg) {
-      const result = await this.syncForOrganization(orgId, alerts);
-      created += result.created;
+      results.push(await this.syncForOrganization(orgId, alerts));
     }
 
-    return { organizations: byOrg.size, created };
+    return { ...mergeNotifyBatchResults(results), organizations: byOrg.size };
   }
 
   static alertsFromDeadlineItems(
@@ -284,7 +360,7 @@ export class OwnerComplianceNotificationService {
         item.type === "inspection-contract-expiring" ||
         item.type === "inspection-contract-expired"
       ) {
-        href = `/portal/elevators/${item.elevatorId}?tab=inspections`;
+        href = `/portal/kontroll-periodik`;
       }
 
       return {

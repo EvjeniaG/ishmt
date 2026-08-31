@@ -69,7 +69,7 @@ export function PublicElevatorView({ profile, code }: { profile: PublicQrProfile
     <div className="min-h-screen bg-slate-50">
       <header className="border-b bg-white">
         <div className="mx-auto max-w-3xl px-4 py-6">
-          <p className="text-sm font-medium text-primary">ISHMT - Regjistri Publik i Ashensorëve</p>
+          <p className="text-sm font-medium text-primary">IQMT - Regjistri Publik i Ashensorëve</p>
           <h1 className="mt-1 text-2xl font-bold">{profile.registryNumber}</h1>
           <p className="text-sm text-muted-foreground">
             {profile.buildingName ? `${profile.buildingName} · ` : ""}
@@ -126,20 +126,20 @@ export function PublicElevatorView({ profile, code }: { profile: PublicQrProfile
           </dl>
         </Section>
 
-        <Section title="Inspektime">
+        <Section title="Kontrolle periodike">
           {!profile.lastInspectionDate && (
             <p className="mb-4 rounded-md border border-red-300 bg-red-50 p-3 text-sm font-medium text-red-900">
-              Nuk ka asnjë inspektim të regjistruar për këtë ashensor.
+              Nuk ka asnjë kontroll periodik të regjistruar për këtë ashensor.
             </p>
           )}
           <dl className="grid gap-4 text-sm md:grid-cols-2">
             <DataRow
-              label="Inspektimi i fundit"
+              label="Kontrolli i fundit"
               value={fmtDate(profile.lastInspectionDate)}
               missing={!profile.lastInspectionDate}
             />
             <DataRow
-              label="Lloji i inspektimit"
+              label="Lloji i kontrollit"
               value={
                 profile.lastInspectionType
                   ? INSPECTION_TYPE_LABELS[profile.lastInspectionType] ?? profile.lastInspectionType
@@ -156,13 +156,13 @@ export function PublicElevatorView({ profile, code }: { profile: PublicQrProfile
               }
               missing={!profile.lastInspectionResult}
             />
-            <DataRow label="Inspektimi i radhës deri më" value={fmtDate(profile.nextInspectionDate)} />
+            <DataRow label="Kontrolli i radhës deri më" value={fmtDate(profile.nextInspectionDate)} />
             <DataRow
-              label="Gjendja e inspektimit"
+              label="Gjendja e kontrollit periodik"
               missing={!profile.lastInspectionDate || !profile.compliance.inspectionValid}
               value={
                 !profile.lastInspectionDate
-                  ? "Mungon - nuk ka inspektim të regjistruar"
+                  ? "Mungon - nuk ka kontroll të regjistruar"
                   : !profile.compliance.inspectionValid
                     ? "Jo në përputhje"
                     : profile.compliance.inspectionExpiring
@@ -250,22 +250,14 @@ export function PublicElevatorView({ profile, code }: { profile: PublicQrProfile
 
         <Section title="Raportoni një problem">
           <p className="mb-4 text-sm text-muted-foreground">
-            Nëse vëreni një problem sigurie, mungesë informacioni ose ashensor të paregjistruar, raportojeni te ISHMT.
+            Nëse vëreni një problem sigurie ose mungesë informacioni për këtë ashensor, raportojeni te IQMT.
           </p>
-          <div className="flex flex-col gap-2 sm:flex-row">
-            <a
-              href={`/report?code=${encodeURIComponent(code)}`}
-              className="inline-flex h-10 items-center justify-center rounded-md bg-gov-primary px-4 text-sm font-medium text-white hover:bg-gov-secondary"
-            >
-              Raporto problem për këtë ashensor
-            </a>
-            <a
-              href="/report/unregistered"
-              className="inline-flex h-10 items-center justify-center rounded-md border px-4 text-sm font-medium text-gov-primary hover:bg-gov-primary/5"
-            >
-              Raporto ashensor të paregjistruar
-            </a>
-          </div>
+          <a
+            href={`/report?code=${encodeURIComponent(code)}`}
+            className="inline-flex h-10 items-center justify-center rounded-md bg-gov-primary px-4 text-sm font-medium text-white hover:bg-gov-secondary"
+          >
+            Raporto problem për këtë ashensor
+          </a>
         </Section>
 
         <p className="text-center text-xs text-muted-foreground">

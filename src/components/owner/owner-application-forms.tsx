@@ -1,6 +1,6 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { useRouter } from "@/lib/navigation/use-app-router";
 import { useState } from "react";
 import { assignInstallerAction } from "@/lib/actions/application-actions";
 import { assignCertifierAction, updateBasicApplicationDataAction } from "@/lib/actions/owner-actions";
@@ -9,6 +9,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { RegistryCompanySelectOptions } from "@/components/owner/registry-company-select-options";
+import type { SelectableRegistryCompany } from "@/lib/organizations/registry-company-display";
 
 const BUILDING_TYPES = [
   { value: "CO_OWNERSHIP_BUILDING", label: "Ndërtesë në bashkëpronësi" },
@@ -93,7 +95,7 @@ export function AssignCertifierForm({
   certifiers,
 }: {
   applicationId: string;
-  certifiers: { id: string; name: string }[];
+  certifiers: SelectableRegistryCompany[];
 }) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
@@ -110,12 +112,12 @@ export function AssignCertifierForm({
 
   return (
     <Card>
-      <CardHeader><CardTitle>Cakto kompaninë certifikuese / OMI</CardTitle></CardHeader>
+      <CardHeader><CardTitle>Cakto kompaninë certifikuese / OM</CardTitle></CardHeader>
       <CardContent>
         <form onSubmit={onSubmit} className="grid gap-3">
           <select name="certifierOrgId" required className="flex h-10 w-full rounded-md border px-3 text-sm">
             <option value="">Zgjidhni</option>
-            {certifiers.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+            <RegistryCompanySelectOptions companies={certifiers} />
           </select>
           {error && <p className="text-sm text-red-600">{error}</p>}
           <Button type="submit">Dërgo ftesë tek kompania certifikuese</Button>
@@ -128,9 +130,11 @@ export function AssignCertifierForm({
 export function AssignCertifierFormWrapper({
   applicationId,
   certifiers,
+  installerOrgId,
 }: {
   applicationId: string;
-  certifiers: { id: string; name: string }[];
+  certifiers: SelectableRegistryCompany[];
+  installerOrgId?: string | null;
 }) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
@@ -148,15 +152,31 @@ export function AssignCertifierFormWrapper({
   return (
     <form onSubmit={onSubmit} className="max-w-lg space-y-4">
       <div className="space-y-1.5">
-        <Label className="text-sm font-medium">Kompania certifikuese (OMI) *</Label>
-        <RegistrationSelect name="certifierOrgId" required defaultValue="">
-          <option value="">Zgjidhni nga lista</option>
-          {certifiers.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-        </RegistrationSelect>
+        <Label className="text-sm font-medium">Kompania certifikuese (OM) *</Label>
+        {certifiers.length === 0 ? (
+          <p className="text-sm text-muted-foreground">
+            Nuk ka kompani OM të disponueshme - instaluesi dhe OM duhet të jenë subjekte të ndryshme.
+            {installerOrgId ? " Kompania e instalimit është përjashtuar nga lista." : ""}
+          </p>
+        ) : (
+          <>
+            <RegistrationSelect name="certifierOrgId" required defaultValue="">
+              <option value="">Zgjidhni</option>
+              <RegistryCompanySelectOptions companies={certifiers.filter((c) => c.id !== installerOrgId)} />
+            </RegistrationSelect>
+            <p className="text-xs text-muted-foreground">
+              Lista përfshin kompanitë me licencë aktive OM, përfshirë ato pa llogari portal.
+            </p>
+          </>
+        )}
       </div>
       {error && <p className="text-sm text-destructive">{error}</p>}
       <RegistrationStepActions hint="Pas dërgimit, certifikuesi merr njoftim për të plotësuar certifikimin.">
-        <Button type="submit" className="rounded-lg bg-gov-primary hover:bg-gov-secondary">
+        <Button
+          type="submit"
+          className="rounded-lg bg-gov-primary hover:bg-gov-secondary"
+          disabled={certifiers.length === 0}
+        >
           Dërgo ftesën →
         </Button>
       </RegistrationStepActions>
@@ -167,16 +187,33 @@ export function AssignCertifierFormWrapper({
 export function AssignInstallerFormWrapper({
   applicationId,
   installers,
+  certifierOrgId,
 }: {
   applicationId: string;
-  installers: { id: string; name: string }[];
+  installers: SelectableRegistryCompany[];
+  certifierOrgId?: string | null;
 }) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+
+  const availableInstallers = installers.filter((company) => company.id !== certifierOrgId);
 
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    const result = await assignInstallerAction(applicationId, new FormData(e.currentTarget));
+    setError(null);
+
+    const formData = new FormData(e.currentTarget);
+    const installerOrgId = String(formData.get("installerOrgId") ?? "");
+    if (!installerOrgId) {
+      setError("Zgjidhni një kompani instaluese nga regjistri i Drejtorisë.");
+      return;
+    }
+
+    setSubmitting(true);
+    const result = await assignInstallerAction(applicationId, formData);
+    setSubmitting(false);
+
     if (!result.success) {
       setError(result.error);
       return;
@@ -187,16 +224,35 @@ export function AssignInstallerFormWrapper({
   return (
     <form onSubmit={onSubmit} className="max-w-lg space-y-4">
       <div className="space-y-1.5">
-        <Label className="text-sm font-medium">Kompania instaluese *</Label>
-        <RegistrationSelect name="installerOrgId" required defaultValue="">
-          <option value="">Zgjidhni nga lista</option>
-          {installers.map((i) => <option key={i.id} value={i.id}>{i.name}</option>)}
-        </RegistrationSelect>
+        <Label className="text-sm font-medium" htmlFor="installerOrgId">
+          Kompania instaluese *
+        </Label>
+        {availableInstallers.length === 0 ? (
+          <p className="text-sm text-muted-foreground">
+            Nuk ka kompani instaluese të regjistruara në Drejtori me licencë aktive instalimi.
+            {certifierOrgId ? " Instaluesi dhe OM duhet të jenë subjekte të ndryshme." : ""}
+          </p>
+        ) : (
+          <>
+            <RegistrationSelect id="installerOrgId" name="installerOrgId" required defaultValue="">
+              <option value="">Zgjidhni</option>
+              <RegistryCompanySelectOptions companies={availableInstallers} />
+            </RegistrationSelect>
+            <p className="text-xs text-muted-foreground">
+              Lista përfshin kompanitë me licencë aktive instalimi, përfshirë ato pa llogari portal.
+            </p>
+          </>
+        )}
       </div>
+
       {error && <p className="text-sm text-destructive">{error}</p>}
       <RegistrationStepActions hint="Instaluesi plotëson të dhënat teknike pasi të pranojë ftesën.">
-        <Button type="submit" className="rounded-lg bg-gov-primary hover:bg-gov-secondary">
-          Dërgo ftesën →
+        <Button
+          type="submit"
+          disabled={submitting || availableInstallers.length === 0}
+          className="rounded-lg bg-gov-primary hover:bg-gov-secondary"
+        >
+          {submitting ? "Duke dërguar…" : "Dërgo ftesën →"}
         </Button>
       </RegistrationStepActions>
     </form>

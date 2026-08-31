@@ -108,7 +108,9 @@ export function buildParticipationQueueWhere(
   if (bucket === "needs_action") {
     return {
       participations: { some: { userId, canAct: true } },
-      status: { notIn: TERMINAL_STATUSES },
+      status: {
+        notIn: [...TERMINAL_STATUSES, ApplicationStatus.RETURNED],
+      },
     };
   }
 
@@ -149,12 +151,17 @@ export async function hasIshmtApplicationParticipation(
   });
   if (participation) return true;
 
-  if (
-    roleCode === ROLE_CODES.CHIEF_INSPECTOR &&
-    application.currentAssigneeId === userId &&
-    CHIEF_ASSIGNEE_STATUSES.includes(application.status)
-  ) {
-    return true;
+  if (roleCode === ROLE_CODES.CHIEF_INSPECTOR) {
+    // Radha e aplikimeve të reja - kryeinspektori sheh SUBMITTED edhe pa assignee/pjesëmarrje
+    // (p.sh. aplikime demo ose të parashtruara para backfill-it).
+    if (application.status === ApplicationStatus.SUBMITTED) return true;
+
+    if (
+      application.currentAssigneeId === userId &&
+      CHIEF_ASSIGNEE_STATUSES.includes(application.status)
+    ) {
+      return true;
+    }
   }
 
   const fieldAssignment = await db.applicationFieldReviewAssignment.findFirst({

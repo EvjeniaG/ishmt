@@ -25,7 +25,7 @@ export async function GET(request: NextRequest) {
 
     const { buffer, rowCount } = await NationalRegistryExportService.buildFilteredWorkbook(ctx, filters);
     const today = new Date().toISOString().slice(0, 10);
-    const filename = `Regjistri-ISHMT-${today}-${rowCount}-ashensore.xlsx`;
+    const filename = `Regjistri-IQMT-${today}-${rowCount}-ashensore.xlsx`;
 
     return new NextResponse(new Uint8Array(buffer), {
       status: 200,

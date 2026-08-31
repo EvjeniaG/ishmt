@@ -1,5 +1,7 @@
+import { DEMO_OWNER_NID } from "./demo-owner";
+
 /**
- * Aplikim regjistrimi demo i plotë — gati për miratim nga kryeinspektori.
+ * Aplikim regjistrimi demo i plotë - gati për miratim nga kryeinspektori.
  * Idempotent: rivendos APP-{year}-DEMO-CHIEF çdo herë.
  */
 export async function seedChiefApprovalDemo(prisma: import("@prisma/client").PrismaClient) {
@@ -10,6 +12,32 @@ export async function seedChiefApprovalDemo(prisma: import("@prisma/client").Pri
   const { ROLE_PERMISSION_MATRIX } = await import("../../src/lib/permissions/matrix");
   const year = new Date().getFullYear();
   const applicationNumber = `APP-${year}-DEMO-CHIEF`;
+
+  async function ctxForNid(nid: string) {
+    const user = await prisma.authUser.findFirst({ where: { nid, deletedAt: null } });
+    if (!user) throw new Error(`Përdoruesi demo me NID '${nid}' nuk u gjet.`);
+
+    const membership = await prisma.orgMembership.findFirst({
+      where: { userId: user.id, deactivatedAt: null },
+      include: { organization: true, role: true },
+      orderBy: { joinedAt: "asc" },
+    });
+    if (!membership) throw new Error(`Anëtarësia mungon për NID '${nid}'.`);
+
+    const roleCode = membership.role.code as import("../../src/lib/constants/roles").RoleCode;
+
+    return {
+      userId: user.id,
+      email: user.email,
+      firstName: user.firstName,
+      lastName: user.lastName,
+      activeOrgId: membership.organizationId,
+      activeOrgType: membership.organization.type,
+      activeOrgName: membership.organization.name,
+      roleCode,
+      permissions: ROLE_PERMISSION_MATRIX[roleCode] ?? [],
+    };
+  }
 
   async function ctxForEmail(email: string) {
     const user = await prisma.authUser.findFirst({ where: { email } });
@@ -51,7 +79,7 @@ export async function seedChiefApprovalDemo(prisma: import("@prisma/client").Pri
     await prisma.application.delete({ where: { id: existing.id } });
   }
 
-  const ownerCtx = await ctxForEmail("personi përgjegjës i ashensorit@example.al");
+  const ownerCtx = await ctxForNid(DEMO_OWNER_NID);
   const installerCtx = await ctxForEmail("installer@ashensorepro.al");
   const certifierCtx = await ctxForEmail("cert@inspektomi.al");
   const chiefCtx = await ctxForEmail("kryeinspektor@ishmt.gov.al");
@@ -114,6 +142,7 @@ export async function seedChiefApprovalDemo(prisma: import("@prisma/client").Pri
 
   await ApplicationService.assignCertifier(ownerCtx, applicationId, certifierCtx.activeOrgId);
   await RegistrationService.acceptCertifierDelegation(certifierCtx, applicationId);
+  await ApplicationService.approveInstallerTechnicalReview(certifierCtx, applicationId);
   await RegistrationDemoService.fillStepFields(certifierCtx, applicationId, "certifier-certification");
   await ApplicationService.completeCertifierStep(certifierCtx, applicationId, {
     installationCertificateNumber: `DEMO-CERT-${year}`,
@@ -133,7 +162,7 @@ export async function seedChiefApprovalDemo(prisma: import("@prisma/client").Pri
   const inspectorIds = [fieldCtx1.userId, fieldCtx2.userId];
 
   await ApplicationService.delegateToDirector(chiefCtx, applicationId, {
-    noteText: "Demo: delegim te drejtori — 2 inspektorë për shqyrtim.",
+    noteText: "Demo: delegim te drejtori - 2 inspektorë për shqyrtim.",
     inspectorIds,
   });
   await ApplicationService.delegateToSectorHead(directorCtx, applicationId, {
@@ -153,7 +182,7 @@ export async function seedChiefApprovalDemo(prisma: import("@prisma/client").Pri
     await ApplicationService.submitFieldReport(
       fieldCtx,
       assignment.id,
-      `Demo: raport inspektori ${fieldCtx.lastName} — dosja në rregull.`,
+      `Demo: raport inspektori ${fieldCtx.lastName} - dosja në rregull.`,
       { submit: true },
     );
   }
@@ -161,12 +190,12 @@ export async function seedChiefApprovalDemo(prisma: import("@prisma/client").Pri
   await ApplicationService.forwardToDirectorFromSectorHead(
     sectorCtx,
     applicationId,
-    "Demo: raport përgjegjësi — rekomandohet vazhdimi.",
+    "Demo: raport përgjegjësi - rekomandohet vazhdimi.",
   );
   await ApplicationService.forwardToChiefFromDirector(
     directorCtx,
     applicationId,
-    "Demo: raport drejtor — dërgohet për vendim final.",
+    "Demo: raport drejtor - dërgohet për vendim final.",
   );
 
   const finalApp = await prisma.application.findUnique({

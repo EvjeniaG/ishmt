@@ -46,7 +46,6 @@ export function InstallerDashboard({ data }: { data: Data }) {
         <MetricCard label="Të Dhëna Teknike për Plotësim" value={data.cards.technicalPending} />
         <MetricCard label="Të Dhëna Teknike të Dorëzuara" value={data.cards.technicalCompleted} accent="success" />
         <MetricCard label="Të Kthyera për Korrigjim" value={data.cards.returned} accent="warning" />
-        <MetricCard label="Dokumente të Ngarkuara" value={data.cards.uploadedDocs} />
       </div>
 
       <RequiredActionsPanel
@@ -84,7 +83,12 @@ export function InstallerDashboard({ data }: { data: Data }) {
                   <td>{a.owner}</td>
                   <td>{a.address}</td>
                   <td>
-                    <ApplicationStatusBadge status={a.status} type={a.type} roleCode={ROLE_CODES.INSTALLER} />
+                    <ApplicationStatusBadge
+                      status={a.status}
+                      type={a.type}
+                      roleCode={ROLE_CODES.INSTALLER}
+                      delegationRevoked={a.delegationRevoked}
+                    />
                   </td>
                   <td>{a.nextAction}</td>
                   <td><Link href={a.href} className="portal-table-link">Hap</Link></td>

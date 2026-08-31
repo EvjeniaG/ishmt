@@ -148,6 +148,85 @@ export async function completeCertifierAction(applicationId: string, formData: F
   }
 }
 
+export async function approveInstallerTechnicalReviewAction(applicationId: string) {
+  try {
+    const ctx = await requirePermission(PERMISSIONS.APPLICATIONS_UPLOAD_CERTIFICATION);
+    await ApplicationService.approveInstallerTechnicalReview(ctx, applicationId);
+    revalidateApplicationPaths(applicationId);
+    return { success: true as const };
+  } catch (error) {
+    return {
+      success: false as const,
+      error: error instanceof Error ? error.message : "Miratimi dështoi",
+    };
+  }
+}
+
+export async function requestInstallerTechnicalCorrectionsAction(
+  applicationId: string,
+  formData: FormData,
+) {
+  const notes = String(formData.get("certifierNotes") ?? "").trim();
+  if (notes.length < 10) {
+    return { success: false as const, error: "Shkruani kërkesat për korrigjim (min 10 karaktere)." };
+  }
+
+  try {
+    const ctx = await requirePermission(PERMISSIONS.APPLICATIONS_UPLOAD_CERTIFICATION);
+    await ApplicationService.requestInstallerTechnicalCorrections(ctx, applicationId, notes);
+    revalidateApplicationPaths(applicationId);
+    return { success: true as const };
+  } catch (error) {
+    return {
+      success: false as const,
+      error: error instanceof Error ? error.message : "Dërgimi i kërkesave dështoi",
+    };
+  }
+}
+
+export async function resubmitInstallerTechnicalReviewAction(applicationId: string, formData: FormData) {
+  const parsed = technicalDataSchema.safeParse({
+    elevatorType: formData.get("elevatorType"),
+    manufacturer: formData.get("manufacturer"),
+    model: formData.get("model") || undefined,
+    serialNumber: formData.get("serialNumber"),
+    manufacturingYear: formData.get("manufacturingYear") || undefined,
+    capacityKg: formData.get("capacityKg") || undefined,
+    capacityPersons: formData.get("capacityPersons") || undefined,
+    speedMs: formData.get("speedMs") || undefined,
+    floorsServed: formData.get("floorsServed"),
+    stops: formData.get("stops") || undefined,
+    driveType: formData.get("driveType") || undefined,
+  });
+
+  if (!parsed.success) {
+    return { success: false as const, error: parsed.error.errors[0]?.message ?? "Të dhëna të pavlefshme" };
+  }
+
+  const installerResponse = String(formData.get("installerResponse") ?? "").trim();
+  if (installerResponse.length < 10) {
+    return {
+      success: false as const,
+      error: "Shkruani përgjigjen ndaj kërkesave të certifikuesit (min 10 karaktere).",
+    };
+  }
+
+  try {
+    const ctx = await requirePermission(PERMISSIONS.APPLICATIONS_FILL_TECHNICAL);
+    await ApplicationService.resubmitInstallerTechnicalReview(ctx, applicationId, {
+      technicalData: parsed.data,
+      installerResponse,
+    });
+    revalidateApplicationPaths(applicationId);
+    return { success: true as const };
+  } catch (error) {
+    return {
+      success: false as const,
+      error: error instanceof Error ? error.message : "Dërgimi i korrigjimeve dështoi",
+    };
+  }
+}
+
 export async function submitApplicationAction(applicationId: string) {
   try {
     const ctx = await requirePermission(PERMISSIONS.APPLICATIONS_SUBMIT);
@@ -218,6 +297,23 @@ export async function assignFieldInspectorsAction(
   }
 }
 
+export async function chiefUpdatePlannedInspectorsAction(
+  applicationId: string,
+  input: { inspectorIds: string[]; noteText?: string },
+) {
+  try {
+    const ctx = await requirePermission(PERMISSIONS.APPLICATIONS_APPROVE);
+    await ApplicationService.chiefUpdatePlannedInspectors(ctx, applicationId, input);
+    revalidateApplicationPaths(applicationId);
+    return { success: true as const };
+  } catch (error) {
+    return {
+      success: false as const,
+      error: error instanceof Error ? error.message : "Ri-caktimi i inspektorëve dështoi",
+    };
+  }
+}
+
 export async function submitFieldReportAction(
   assignmentId: string,
   reportText: string,
@@ -228,9 +324,10 @@ export async function submitFieldReportAction(
   }
   try {
     const ctx = await requirePermission(PERMISSIONS.APPLICATIONS_REVIEW);
-    await ApplicationService.submitFieldReport(ctx, assignmentId, reportText, options);
+    const result = await ApplicationService.submitFieldReport(ctx, assignmentId, reportText, options);
     revalidatePath("/ishmt/my-application-reviews");
     revalidatePath("/ishmt/review");
+    revalidatePath(`/ishmt/review/${result.applicationId}`);
     return { success: true as const };
   } catch (error) {
     return {

@@ -1,6 +1,9 @@
 import { ApplicationStatus, ApplicationType } from "@prisma/client";
 import type { RoleCode } from "@/lib/constants/roles";
 import {
+  DELEGATION_REVOKED_STATUS_LABEL,
+} from "@/lib/delegation/delegation-revoked";
+import {
   getApplicationStatusDisplay,
   workflowStatusClass,
   type StatusTone,
@@ -29,13 +32,25 @@ export function ApplicationStatusBadge({
   status,
   type,
   roleCode,
+  delegationRevoked,
   className,
 }: {
   status: ApplicationStatus;
   type?: ApplicationType;
   roleCode?: RoleCode;
+  delegationRevoked?: boolean;
   className?: string;
 }) {
+  if (delegationRevoked) {
+    return (
+      <WorkflowStatusChip
+        label={DELEGATION_REVOKED_STATUS_LABEL}
+        tone="waiting"
+        className={className}
+      />
+    );
+  }
+
   const { label, tone } = getApplicationStatusDisplay(status, { type, roleCode });
   return <WorkflowStatusChip label={label} tone={tone} className={className} />;
 }

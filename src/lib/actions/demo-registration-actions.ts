@@ -27,6 +27,7 @@ export async function fillApplicationDemoStepAction(
       refreshPage: result.refreshPage ?? false,
       prefilledOrgField: result.prefilledOrgField,
       prefilledOrgId: result.prefilledOrgId,
+      prefilledOrgQuery: result.prefilledOrgQuery,
     };
   } catch (error) {
     return {

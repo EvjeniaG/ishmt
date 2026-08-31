@@ -1,6 +1,8 @@
 import { cn } from "@/lib/utils";
 import { AlertPanel } from "@/components/registration/registration-ui";
 import { ApplicationStepper, workflowStepsToStepper } from "@/components/applications/application-stepper";
+import { RETURN_TARGET_LABELS } from "@/lib/workflows/return-targets";
+import type { ReturnTargetRole } from "@prisma/client";
 import { RotateCcw } from "lucide-react";
 
 export type WorkflowStep = {
@@ -55,15 +57,33 @@ export function ApplicationWorkflowSection({
 export function ApplicationReturnBanner({
   returnReason,
   requiredCorrection,
+  showResubmitHint = true,
+  returnToRoles,
 }: {
   returnReason?: string | null;
   requiredCorrection?: string | null;
+  showResubmitHint?: boolean;
+  returnToRoles?: ReturnTargetRole[];
 }) {
   if (!returnReason && !requiredCorrection) return null;
   return (
-    <AlertPanel variant="warning" title="Kthyer për korrigjim" icon={RotateCcw}>
-      {returnReason && <p>Arsyeja: {returnReason}</p>}
-      {requiredCorrection && <p className="mt-1">Kërkohet: {requiredCorrection}</p>}
+    <AlertPanel variant="warning" title="Korrigjim i kërkuar" icon={RotateCcw}>
+      {returnReason ? <p>{returnReason}</p> : null}
+      {requiredCorrection ? (
+        <p className="mt-1">
+          <strong>Çfarë duhet bërë:</strong> {requiredCorrection}
+        </p>
+      ) : null}
+      {showResubmitHint ? (
+        <p className="mt-2 font-medium text-emerald-800">
+          Riparashtroni aplikimin kur të jeni gati.
+        </p>
+      ) : null}
+      {returnToRoles && returnToRoles.length > 1 ? (
+        <p className="mt-2 text-sm text-muted-foreground">
+          Palët: {returnToRoles.map((role) => RETURN_TARGET_LABELS[role]).join(", ")}
+        </p>
+      ) : null}
     </AlertPanel>
   );
 }

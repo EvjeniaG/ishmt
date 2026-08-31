@@ -1,6 +1,6 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { useRouter } from "@/lib/navigation/use-app-router";
 import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -33,11 +33,21 @@ async function uploadDocument(file: File, elevatorId: string): Promise<string> {
   return data.documentId as string;
 }
 
-export function PeriodicInspectionForm({ elevators }: { elevators: InspectionElevatorOption[] }) {
+export function PeriodicInspectionForm({
+  elevators,
+  defaultConductedDate,
+  defaultApprovedBodyNumber,
+}: {
+  elevators: InspectionElevatorOption[];
+  defaultConductedDate?: string;
+  defaultApprovedBodyNumber?: string;
+}) {
   const router = useRouter();
   const [elevatorId, setElevatorId] = useState("");
-  const [conductedDate, setConductedDate] = useState("");
-  const [approvedBodyNumber, setApprovedBodyNumber] = useState("");
+  const [conductedDate, setConductedDate] = useState(
+    defaultConductedDate ?? new Date().toISOString().slice(0, 10),
+  );
+  const [approvedBodyNumber, setApprovedBodyNumber] = useState(defaultApprovedBodyNumber ?? "");
   const [examinationType, setExaminationType] = useState("EKZAMINIM I PLOTË");
   const [result, setResult] = useState<"PASS" | "FAIL">("PASS");
   const [findings, setFindings] = useState("");
@@ -53,7 +63,7 @@ export function PeriodicInspectionForm({ elevators }: { elevators: InspectionEle
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!elevatorId) return setError("Zgjidhni ashensorin.");
-    if (!file) return setError("Ngarkoni raportin e inspektimit.");
+    if (!file) return setError("Ngarkoni raportin e kontrollit.");
     if (result === "FAIL" && findings.trim().length === 0)
       return setError("Specifikoni defektet e konstatuara.");
     setLoading(true);
@@ -114,12 +124,12 @@ export function PeriodicInspectionForm({ elevators }: { elevators: InspectionEle
         >
           {selected.overdue ? (
             <p className="font-medium">
-              ⛔ INSPEKTIMI PERIODIK ËSHTË VONUAR - duhej bërë më{" "}
+              ⛔ KONTROLLI PERIODIK ËSHTË VONUAR - duhej bërë më{" "}
               {new Date(selected.nextDue).toLocaleDateString("sq-AL")}
             </p>
           ) : (
             <p>
-              Inspektimi i ardhshëm periodik:{" "}
+              Kontrolli i ardhshëm periodik:{" "}
               <strong>{new Date(selected.nextDue).toLocaleDateString("sq-AL")}</strong> -{" "}
               {selected.daysRemaining} ditë mbetur (çdo {selected.intervalMonths} muaj)
             </p>
@@ -129,7 +139,7 @@ export function PeriodicInspectionForm({ elevators }: { elevators: InspectionEle
 
       <div className="grid gap-3 md:grid-cols-2">
         <div className="space-y-1">
-          <Label htmlFor="conductedDate" className="text-xs">Data e inspektimit *</Label>
+          <Label htmlFor="conductedDate" className="text-xs">Data e kontrollit *</Label>
           <Input
             id="conductedDate"
             type="date"
@@ -197,7 +207,7 @@ export function PeriodicInspectionForm({ elevators }: { elevators: InspectionEle
       )}
 
       <div className="space-y-1">
-        <Label htmlFor="report" className="text-xs">Raporti i inspektimit *</Label>
+        <Label htmlFor="report" className="text-xs">Raporti i kontrollit *</Label>
         <Input
           id="report"
           type="file"
@@ -211,7 +221,7 @@ export function PeriodicInspectionForm({ elevators }: { elevators: InspectionEle
       {error && <p className="text-sm text-destructive">{error}</p>}
 
       <Button type="submit" disabled={loading}>
-        {loading ? "Duke ruajtur…" : "Regjistro inspektimin periodik"}
+        {loading ? "Duke ruajtur…" : "Regjistro kontrollin periodik"}
       </Button>
     </form>
   );

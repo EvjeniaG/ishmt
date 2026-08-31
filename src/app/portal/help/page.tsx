@@ -10,7 +10,7 @@ import { ROLE_CODES } from "@/lib/constants/roles";
 const FAQ = [
   {
     q: "Si regjistroj një ashensor të ri?",
-    a: "Shkoni te Aplikimet → Aplikim i ri → Regjistrim i ri. Plotësoni 6 hapat e wizard-it dhe dërgoni aplikimin te ISHMT.",
+    a: "Shkoni te Aplikimet → Aplikim i ri → Regjistrim i ri. Plotësoni 6 hapat e wizard-it dhe dërgoni aplikimin te IQMT.",
   },
   {
     q: "Kush mund të caktohet si kompani mirëmbajtjeje?",

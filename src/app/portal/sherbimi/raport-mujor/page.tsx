@@ -1,14 +1,12 @@
 import Link from "next/link";
-import { redirect } from "next/navigation";
 import { AppShell } from "@/components/layout/app-shell";
 import { StandardPageLayout } from "@/components/layout/standard-page-layout";
 import { SectionCard } from "@/components/shared/institutional";
 import { MonthlyReportForm } from "@/components/maintenance/monthly-report-form";
 import { MonthlyControlDetails } from "@/components/maintenance/monthly-control-details";
-import { getAuthSession } from "@/lib/auth";
-import { requireAuthForPage } from "@/lib/auth/page-guards";
+import { requireServiceCapabilityForPage } from "@/lib/auth/page-guards";
+import { buildTechnicianDisplayName } from "@/lib/forms/system-form-prefill";
 import { MaintenanceWorkService } from "@/lib/services/maintenance-work-service";
-import { ROLE_CODES } from "@/lib/constants/roles";
 import { fmtDateSq } from "@/components/elevators/registry-shared";
 import {
   formatMonthlyControlSummary,
@@ -21,11 +19,7 @@ const MONTHS = [
 ];
 
 export default async function MonthlyReportPage() {
-  const session = await getAuthSession();
-  if (!session?.user) redirect("/auth/login");
-  if (session.user.roleCode !== ROLE_CODES.MAINTENANCE) redirect("/unauthorized");
-
-  const ctx = await requireAuthForPage();
+  const ctx = await requireServiceCapabilityForPage("maintenance");
   const [elevators, reports] = await Promise.all([
     MaintenanceWorkService.listAssignedElevators(ctx),
     MaintenanceWorkService.listMonthlyReports(ctx),
@@ -49,7 +43,10 @@ export default async function MonthlyReportPage() {
         }
       >
         <SectionCard title="Regjistro kontrollin periodik" padded>
-          <MonthlyReportForm elevators={options} />
+          <MonthlyReportForm
+            elevators={options}
+            defaultTechnicianName={buildTechnicianDisplayName(ctx)}
+          />
         </SectionCard>
 
         <SectionCard

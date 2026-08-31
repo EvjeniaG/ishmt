@@ -14,5 +14,5 @@ export function DelegateWorkflowProgress({
     state: step.done ? "completed" : step.active ? "active" : "upcoming",
   }));
 
-  return <ApplicationStepper title={title} steps={stepperSteps} />;
+  return <ApplicationStepper title={title} steps={stepperSteps} compact />;
 }

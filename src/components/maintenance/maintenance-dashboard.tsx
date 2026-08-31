@@ -21,8 +21,8 @@ export function MaintenanceDashboardPanel({ data }: { data: Data }) {
         <MetricCard label="Ndërhyrje këtë muaj" value={data.cards.interventionsThisMonth} />
         <MetricCard label="Kontrolle periodike të paplotësuara" value={data.cards.missingMonthlyReports} accent="warning" />
         <MetricCard label="Pa ndërhyrje të regjistruar" value={data.cards.missingInterventions} accent="danger" />
-        <MetricCard label="Pa inspektim të regjistruar" value={data.cards.missingInspections} accent="danger" />
-        <MetricCard label="Inspektime në afat" value={data.cards.inspectionsDue} accent="warning" />
+        <MetricCard label="Pa kontroll të regjistruar" value={data.cards.missingInspections} accent="danger" />
+        <MetricCard label="Kontrolle në afat" value={data.cards.inspectionsDue} accent="warning" />
         <MetricCard label="Ashensorë me problem" value={data.cards.problemElevators} accent="danger" />
         <MetricCard label="Kontrata që skadojnë" value={data.cards.expiringContracts} accent="warning" />
       </div>

@@ -80,7 +80,7 @@ export class RegisterExportService {
         Bashkia: elv.municipality?.nameSq ?? "",
         "Personi Përgjegjës": data?.responsibleEntityName ?? elv.ownerOrg?.name ?? "",
         "NIPT/NID": data?.responsibleEntityIdentifier ?? elv.ownerOrg?.nipt ?? "",
-        OMI: data?.omiNumber ?? "",
+        OM: data?.omiNumber ?? "",
         "Lloji i ekzaminimit": examinationLabel(data?.examinationType),
         Statusi: elv.status,
       };
@@ -96,7 +96,7 @@ export class RegisterExportService {
       "Lloji i ekzaminimit": examinationLabel(insp.examinationType),
       "Data e kryer": fmtDate(insp.conductedDate),
       Rezultati: insp.result ?? "",
-      "Organi i Miratuar (OMI)": insp.approvedBodyNumber ?? "",
+      "Organi i Miratuar (OM)": insp.approvedBodyNumber ?? "",
       "Inspektimi i ardhshëm": fmtDate(insp.nextInspectionDate),
     }));
 

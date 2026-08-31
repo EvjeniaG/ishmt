@@ -28,7 +28,7 @@ export class IshmtContractExportService {
       "Personi përgjegjës": row.ownerName,
       NIPT: row.ownerNipt ?? "",
       Mirëmbajtja: row.maintenanceCompany ?? "",
-      OMI: row.inspectionCompany ?? "",
+      OM: row.inspectionCompany ?? "",
       Skadimi: fmtDate(row.dueDate),
     }));
 

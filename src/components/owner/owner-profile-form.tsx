@@ -1,10 +1,15 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { useRouter } from "@/lib/navigation/use-app-router";
 import { useRef, useState } from "react";
-import { updateAccountProfileAction } from "@/lib/actions/account-actions";
+import { updateOwnerContactProfileAction } from "@/lib/actions/account-actions";
 import { updateOwnerOrganizationAction } from "@/lib/actions/owner-actions";
 import { ProfileSectionHeader } from "@/components/account/profile-section-header";
+import { PROFILE_SECTION_TITLES } from "@/lib/registration/profile-sections";
+import {
+  ownerRequiresNipt,
+  ownerSubjectNameRequired,
+} from "@/lib/registration/owner-entity-role";
 import { OWNER_BUILDING_ROLE_LABELS } from "@/lib/constants/owner-labels";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -15,39 +20,30 @@ type ProfileData = {
   user: {
     firstName: string;
     lastName: string;
+    fatherName: string | null;
     email: string;
     phone: string | null;
     nid: string | null;
+    birthDate: Date | string | null;
   };
   org: {
     name: string;
     nipt: string | null;
-    legalForm: string | null;
-    email: string | null;
-    phone: string | null;
-    address: string | null;
-    municipalityId: string | null;
     ownerBuildingRole: OwnerBuildingRole | null;
-    representativeName: string | null;
-    representativeNid: string | null;
-    representativePhone: string | null;
-    representativeEmail: string | null;
-    municipality: { nameSq: string; region: { nameSq: string } } | null;
   };
 };
-
-type Municipality = { id: string; nameSq: string };
 
 const USER_FORM_ID = "owner-user-profile-form";
 const ORG_FORM_ID = "owner-org-profile-form";
 
-export function OwnerProfileForm({
-  data,
-  municipalities,
-}: {
-  data: ProfileData;
-  municipalities: Municipality[];
-}) {
+function formatBirthDate(value: Date | string | null | undefined) {
+  if (!value) return "";
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return date.toISOString().slice(0, 10);
+}
+
+export function OwnerProfileForm({ data }: { data: ProfileData }) {
   const router = useRouter();
   const userFormRef = useRef<HTMLFormElement>(null);
   const orgFormRef = useRef<HTMLFormElement>(null);
@@ -60,11 +56,17 @@ export function OwnerProfileForm({
   const [userSuccess, setUserSuccess] = useState(false);
   const [orgSuccess, setOrgSuccess] = useState(false);
 
+  const ownerRole = data.org.ownerBuildingRole;
+  const showSubjectName = ownerSubjectNameRequired(ownerRole ?? undefined);
+  const showNipt = ownerRequiresNipt(ownerRole ?? undefined);
+  const roleLabel = ownerRole ? OWNER_BUILDING_ROLE_LABELS[ownerRole] : "-";
+  const canEditOrg = showSubjectName || showNipt;
+
   async function onSubmitUser(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setSavingUser(true);
     setUserSuccess(false);
-    const result = await updateAccountProfileAction(new FormData(e.currentTarget));
+    const result = await updateOwnerContactProfileAction(new FormData(e.currentTarget));
     setSavingUser(false);
     if (!result.success) {
       setUserError(result.error);
@@ -80,7 +82,11 @@ export function OwnerProfileForm({
     e.preventDefault();
     setSavingOrg(true);
     setOrgSuccess(false);
-    const result = await updateOwnerOrganizationAction(new FormData(e.currentTarget));
+    const fd = new FormData(e.currentTarget);
+    if (ownerRole) {
+      fd.set("ownerBuildingRole", ownerRole);
+    }
+    const result = await updateOwnerOrganizationAction(fd);
     setSavingOrg(false);
     if (!result.success) {
       setOrgError(result.error);
@@ -93,14 +99,89 @@ export function OwnerProfileForm({
   }
 
   const fieldClass = (editing: boolean) => (!editing ? "bg-muted" : undefined);
-  const selectClass = (editing: boolean) =>
-    `flex h-10 w-full rounded-md border px-3 text-sm ${!editing ? "bg-muted" : ""}`;
 
   return (
     <div className="space-y-6">
       <Card>
         <ProfileSectionHeader
-          title="Të dhënat personale"
+          title={PROFILE_SECTION_TITLES.ownerSubject}
+          isEditing={canEditOrg ? isEditingOrg : false}
+          formId={canEditOrg ? ORG_FORM_ID : undefined}
+          onEdit={
+            canEditOrg
+              ? () => {
+                  setIsEditingOrg(true);
+                  setOrgError(null);
+                  setOrgSuccess(false);
+                }
+              : undefined
+          }
+          onCancel={
+            canEditOrg
+              ? () => {
+                  orgFormRef.current?.reset();
+                  setIsEditingOrg(false);
+                  setOrgError(null);
+                  setOrgSuccess(false);
+                }
+              : undefined
+          }
+          saving={savingOrg}
+        />
+        <CardContent>
+          {canEditOrg ? (
+            <form ref={orgFormRef} id={ORG_FORM_ID} onSubmit={onSubmitOrg} className="grid gap-4 md:grid-cols-2">
+              <div className="space-y-2 md:col-span-2">
+                <Label>Lloji i subjektit</Label>
+                <Input value={roleLabel} disabled className="bg-muted" />
+              </div>
+              {showSubjectName && (
+                <div className="space-y-2 md:col-span-2">
+                  <Label htmlFor="name">Emri i subjektit *</Label>
+                  <Input
+                    id="name"
+                    name="name"
+                    defaultValue={data.org.name}
+                    required={isEditingOrg}
+                    disabled={!isEditingOrg}
+                    className={fieldClass(isEditingOrg)}
+                  />
+                </div>
+              )}
+              {showNipt && (
+                <div className="space-y-2 md:col-span-2">
+                  <Label htmlFor="nipt">NIPT *</Label>
+                  <Input
+                    id="nipt"
+                    name="nipt"
+                    defaultValue={data.org.nipt ?? ""}
+                    required={isEditingOrg}
+                    disabled={!isEditingOrg}
+                    className={fieldClass(isEditingOrg)}
+                  />
+                </div>
+              )}
+              {orgError && <p className="text-sm text-destructive md:col-span-2">{orgError}</p>}
+              {orgSuccess && (
+                <p className="text-sm text-gov-success md:col-span-2">
+                  U ruajt me sukses. Ndryshimi u regjistrua në audit.
+                </p>
+              )}
+            </form>
+          ) : (
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="space-y-2 md:col-span-2">
+                <Label>Lloji i subjektit</Label>
+                <Input value={roleLabel} disabled className="bg-muted" />
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <ProfileSectionHeader
+          title={PROFILE_SECTION_TITLES.ownerContact}
           isEditing={isEditingUser}
           formId={USER_FORM_ID}
           onEdit={() => {
@@ -130,6 +211,17 @@ export function OwnerProfileForm({
               />
             </div>
             <div className="space-y-2">
+              <Label htmlFor="fatherName">Atësia *</Label>
+              <Input
+                id="fatherName"
+                name="fatherName"
+                defaultValue={data.user.fatherName ?? ""}
+                required={isEditingUser}
+                disabled={!isEditingUser}
+                className={fieldClass(isEditingUser)}
+              />
+            </div>
+            <div className="space-y-2">
               <Label htmlFor="lastName">Mbiemri *</Label>
               <Input
                 id="lastName"
@@ -141,211 +233,45 @@ export function OwnerProfileForm({
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="userEmail">Email</Label>
-              <Input id="userEmail" value={data.user.email} disabled className="bg-muted" />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="userPhone">Telefon</Label>
+              <Label htmlFor="personalNumber">Numri Personal *</Label>
               <Input
-                id="userPhone"
-                name="phone"
-                defaultValue={data.user.phone ?? ""}
+                id="personalNumber"
+                name="personalNumber"
+                defaultValue={data.user.nid ?? ""}
+                required={isEditingUser}
                 disabled={!isEditingUser}
                 className={fieldClass(isEditingUser)}
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="nid">NID</Label>
+              <Label htmlFor="birthDate">Data e Lindjes *</Label>
               <Input
-                id="nid"
-                name="nid"
-                defaultValue={data.user.nid ?? ""}
+                id="birthDate"
+                name="birthDate"
+                type="date"
+                defaultValue={formatBirthDate(data.user.birthDate)}
+                required={isEditingUser}
+                disabled={!isEditingUser}
+                className={fieldClass(isEditingUser)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="userEmail">Email *</Label>
+              <Input id="userEmail" value={data.user.email} disabled className="bg-muted" />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="userPhone">Numri i Telefonit *</Label>
+              <Input
+                id="userPhone"
+                name="phone"
+                defaultValue={data.user.phone ?? ""}
+                required={isEditingUser}
                 disabled={!isEditingUser}
                 className={fieldClass(isEditingUser)}
               />
             </div>
             {userError && <p className="text-sm text-destructive md:col-span-2">{userError}</p>}
             {userSuccess && (
-              <p className="text-sm text-gov-success md:col-span-2">
-                U ruajt me sukses. Ndryshimi u regjistrua në audit.
-              </p>
-            )}
-          </form>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <ProfileSectionHeader
-          title="Të dhënat e subjektit përgjegjës"
-          isEditing={isEditingOrg}
-          formId={ORG_FORM_ID}
-          onEdit={() => {
-            setIsEditingOrg(true);
-            setOrgError(null);
-            setOrgSuccess(false);
-          }}
-          onCancel={() => {
-            orgFormRef.current?.reset();
-            setIsEditingOrg(false);
-            setOrgError(null);
-            setOrgSuccess(false);
-          }}
-          saving={savingOrg}
-        />
-        <CardContent>
-          <form ref={orgFormRef} id={ORG_FORM_ID} onSubmit={onSubmitOrg} className="grid gap-4 md:grid-cols-2">
-            <div className="space-y-2 md:col-span-2">
-              <Label htmlFor="ownerBuildingRole">Lloji i rolit *</Label>
-              <select
-                id="ownerBuildingRole"
-                name="ownerBuildingRole"
-                defaultValue={data.org.ownerBuildingRole ?? ""}
-                required
-                disabled={!isEditingOrg}
-                className={selectClass(isEditingOrg)}
-              >
-                <option value="">- Zgjidhni -</option>
-                {(Object.entries(OWNER_BUILDING_ROLE_LABELS) as [OwnerBuildingRole, string][]).map(
-                  ([value, label]) => (
-                    <option key={value} value={value}>{label}</option>
-                  ),
-                )}
-              </select>
-            </div>
-            <div className="space-y-2 md:col-span-2">
-              <Label htmlFor="name">Emri i subjektit *</Label>
-              <Input
-                id="name"
-                name="name"
-                defaultValue={data.org.name}
-                required
-                disabled={!isEditingOrg}
-                className={fieldClass(isEditingOrg)}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="nipt">NIPT *</Label>
-              <Input
-                id="nipt"
-                name="nipt"
-                defaultValue={data.org.nipt ?? ""}
-                required
-                disabled={!isEditingOrg}
-                className={fieldClass(isEditingOrg)}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="legalForm">Forma ligjore</Label>
-              <Input
-                id="legalForm"
-                name="legalForm"
-                defaultValue={data.org.legalForm ?? ""}
-                disabled={!isEditingOrg}
-                className={fieldClass(isEditingOrg)}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="email">Email i subjektit *</Label>
-              <Input
-                id="email"
-                name="email"
-                type="email"
-                defaultValue={data.org.email ?? ""}
-                required
-                disabled={!isEditingOrg}
-                className={fieldClass(isEditingOrg)}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="phone">Telefon *</Label>
-              <Input
-                id="phone"
-                name="phone"
-                defaultValue={data.org.phone ?? ""}
-                required
-                disabled={!isEditingOrg}
-                className={fieldClass(isEditingOrg)}
-              />
-            </div>
-            <div className="space-y-2 md:col-span-2">
-              <Label htmlFor="address">Adresa *</Label>
-              <Input
-                id="address"
-                name="address"
-                defaultValue={data.org.address ?? ""}
-                required
-                disabled={!isEditingOrg}
-                className={fieldClass(isEditingOrg)}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>Qarku</Label>
-              <Input value={data.org.municipality?.region.nameSq ?? "-"} disabled className="bg-muted" />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="municipalityId">Bashkia *</Label>
-              <select
-                id="municipalityId"
-                name="municipalityId"
-                defaultValue={data.org.municipalityId ?? ""}
-                required
-                disabled={!isEditingOrg}
-                className={selectClass(isEditingOrg)}
-              >
-                <option value="">-</option>
-                {municipalities.map((m) => (
-                  <option key={m.id} value={m.id}>{m.nameSq}</option>
-                ))}
-              </select>
-            </div>
-
-            <div className="md:col-span-2 border-t pt-4">
-              <p className="mb-3 text-sm font-medium text-gov-primary">Përfaqësuesi ligjor</p>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="representativeName">Emër</Label>
-              <Input
-                id="representativeName"
-                name="representativeName"
-                defaultValue={data.org.representativeName ?? ""}
-                disabled={!isEditingOrg}
-                className={fieldClass(isEditingOrg)}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="representativeNid">NID</Label>
-              <Input
-                id="representativeNid"
-                name="representativeNid"
-                defaultValue={data.org.representativeNid ?? ""}
-                disabled={!isEditingOrg}
-                className={fieldClass(isEditingOrg)}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="representativePhone">Telefon</Label>
-              <Input
-                id="representativePhone"
-                name="representativePhone"
-                defaultValue={data.org.representativePhone ?? ""}
-                disabled={!isEditingOrg}
-                className={fieldClass(isEditingOrg)}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="representativeEmail">Email</Label>
-              <Input
-                id="representativeEmail"
-                name="representativeEmail"
-                type="email"
-                defaultValue={data.org.representativeEmail ?? ""}
-                disabled={!isEditingOrg}
-                className={fieldClass(isEditingOrg)}
-              />
-            </div>
-
-            {orgError && <p className="text-sm text-destructive md:col-span-2">{orgError}</p>}
-            {orgSuccess && (
               <p className="text-sm text-gov-success md:col-span-2">
                 U ruajt me sukses. Ndryshimi u regjistrua në audit.
               </p>

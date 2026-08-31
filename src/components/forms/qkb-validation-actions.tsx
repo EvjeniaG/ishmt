@@ -1,6 +1,6 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { useRouter } from "@/lib/navigation/use-app-router";
 import { useState } from "react";
 import { approveQkbAction, rejectQkbAction } from "@/lib/actions/qkb-actions";
 import { Button } from "@/components/ui/button";

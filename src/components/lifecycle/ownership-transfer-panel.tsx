@@ -1,10 +1,12 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { useRouter } from "@/lib/navigation/use-app-router";
 import { useState } from "react";
 import { DelegationStatus } from "@prisma/client";
 import { inviteOwnershipRecipientAction } from "@/lib/actions/ownership-transfer-actions";
+import { revokeOwnershipDelegationAction } from "@/lib/actions/delegation-actions";
 import { DELEGATION_STATUS_LABELS } from "@/lib/constants/display-labels";
+import { RevokeDelegationForm } from "@/components/delegation/revoke-delegation-form";
 import { WorkflowStatusChip } from "@/components/applications/application-status-badge";
 import type { StatusTone } from "@/lib/registration/status-presentation";
 import { Button } from "@/components/ui/button";
@@ -14,7 +16,7 @@ import { Label } from "@/components/ui/label";
 const INVITE_STATUS_LABELS: Partial<Record<DelegationStatus, string>> = {
   PENDING: "Në pritje",
   INVITED: "Ftesa u dërgua - prit përgjigjen e marrësit",
-  ACCEPTED: "Marrësi pranoi - mund të parashtrosh te ISHMT",
+  ACCEPTED: "Marrësi pranoi - mund të parashtrosh te IQMT",
   REJECTED: "Marrësi refuzoi - zgjidh marrës tjetër",
 };
 
@@ -117,14 +119,21 @@ export function OwnershipTransferPanel({
         </form>
       )}
 
-      {delegationStatus === "INVITED" && !canInvite && (
-        <p className="text-sm text-amber-700">
-          Ftesa u dërgua te <strong>{targetName ?? targetNipt}</strong>. Nuk mund të parashtrosh te ISHMT derisa marrësi të pranojë.
-        </p>
+      {delegationStatus === DelegationStatus.INVITED && !canInvite && (
+        <div className="space-y-3">
+          <p className="text-sm text-amber-700">
+            Ftesa u dërgua te <strong>{targetName ?? targetNipt}</strong>. Nuk mund të parashtrosh te IQMT derisa marrësi të pranojë.
+          </p>
+          <RevokeDelegationForm
+            label="Arsyeja e tërheqjes së ftesës"
+            hint="Mund ta tërhiqni ftesën dhe të dërgoni te marrës tjetër."
+            onRevoke={(reason) => revokeOwnershipDelegationAction(applicationId, reason)}
+          />
+        </div>
       )}
-      {delegationStatus === "ACCEPTED" && (
+      {delegationStatus === DelegationStatus.ACCEPTED && (
         <p className="text-sm text-green-700">
-          Marrësi pranoi transferimin. Vazhdo poshtë - ngarko dokumentet dhe parashtro te ISHMT.
+          Marrësi pranoi transferimin. Vazhdo poshtë - ngarko dokumentet dhe parashtro te IQMT.
         </p>
       )}
     </div>

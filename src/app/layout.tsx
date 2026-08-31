@@ -13,9 +13,9 @@ const sans = Plus_Jakarta_Sans({
 });
 
 export const metadata: Metadata = {
-  title: "ISHMT - Regjistri Digjital i Ashensorëve",
+  title: "IQMT - Regjistri Digjital i Ashensorëve",
   description:
-    "Platforma zyrtare kombëtare e regjistrimit të ashensorëve - Inspektorati Shtetëror i Mbikeqyrjes së Tregut",
+    "Platforma zyrtare kombëtare e regjistrimit të ashensorëve - Inspektorati Qendror i Mbikeqyrjes së Tregut",
 };
 
 export default function RootLayout({

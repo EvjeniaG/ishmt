@@ -468,13 +468,16 @@ export class ElevatorService {
 
     if (!certificate.documentId || !qr.imageDocumentId) {
       try {
-        await PostApprovalAssetService.tryGenerate({
+        const result = await PostApprovalAssetService.tryGenerate({
           elevatorId: elevator.id,
           certificateId: certificate.id,
           qrCodeId: qr.id,
           applicationId: elevator.originatingApplication.id,
           actorId,
         });
+        if (!result.success) {
+          return this.getDigitalFile(elevatorId, ownerOrgId);
+        }
       } catch {
         return this.getDigitalFile(elevatorId, ownerOrgId);
       }

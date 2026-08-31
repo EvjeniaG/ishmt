@@ -28,7 +28,7 @@ export default async function BuildingsListPage({
   return (
     <AppShell title="Ndërtesat">
       <StandardPageLayout
-        eyebrow="ISHMT · Regjistri"
+        eyebrow="IQMT · Regjistri"
         title="Ndërtesat"
         description="Entitet ndërtese - grumbullon ashensorët sipas vendndodhjes"
         actions={session.user.roleCode === ROLE_CODES.ADMIN ? <BackfillBuildingsButton /> : undefined}

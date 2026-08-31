@@ -93,8 +93,8 @@ export function evaluateElevatorComplianceGaps(input: {
       level: "danger",
       title: "Ashensor i çregjistruar",
       detail: deregistrationDate
-        ? `Ky ashensor nuk është më i regjistruar në ISHMT (që nga ${fmtDate(deregistrationDate)}).`
-        : "Ky ashensor nuk është më i regjistruar në ISHMT.",
+        ? `Ky ashensor nuk është më i r (që nga ${fmtDate(deregistrationDate)}).`
+        : "Ky ashensor nuk është më i r.",
     });
     return gaps;
   }
@@ -122,7 +122,7 @@ export function evaluateElevatorComplianceGaps(input: {
       key: "unverified",
       level: "warning",
       title: "Në pritje verifikimi",
-      detail: "Regjistrimi nuk është verifikuar plotësisht nga ISHMT.",
+      detail: "Regjistrimi nuk është verifikuar plotësisht nga IQMT.",
     });
   }
 
@@ -131,26 +131,26 @@ export function evaluateElevatorComplianceGaps(input: {
       gaps.push({
         key: "missing-inspection",
         level: "danger",
-        title: "Nuk ka inspektim të regjistruar",
-        detail: "Në regjistër nuk figuron asnjë inspektim i kryer për këtë ashensor.",
+        title: "Nuk ka kontroll të regjistruar",
+        detail: "Në regjistër nuk figuron asnjë kontroll periodik i kryer për këtë ashensor.",
       });
     } else if (!s.inspectionValid) {
       gaps.push({
         key: "inspection-invalid",
         level: "danger",
-        title: "Inspektimi periodik - jo në përputhje",
+        title: "Kontrolli periodik - jo në përputhje",
         detail: s.nextInspectionDate
-          ? `Afati i inspektimit (${fmtDate(s.nextInspectionDate)}) ka kaluar ose inspektimi i fundit nuk ka kaluar.`
-          : "Inspektimi i fundit nuk plotëson kërkesat e regjistrit.",
+          ? `Afati i kontrollit (${fmtDate(s.nextInspectionDate)}) ka kaluar ose kontrolli i fundit nuk ka kaluar.`
+          : "Kontrolli i fundit nuk plotëson kërkesat e regjistrit.",
       });
     } else if (s.inspectionExpiring) {
       gaps.push({
         key: "inspection-expiring",
         level: "warning",
-        title: "Inspektimi periodik - afati po skadon",
+        title: "Kontrolli periodik - afati po skadon",
         detail: s.nextInspectionDate
-          ? `Inspektimi i radhës duhet kryer deri më ${fmtDate(s.nextInspectionDate)}.`
-          : "Inspektimi periodik duhet planifikuar së shpejti.",
+          ? `Kontrolli i radhës duhet kryer deri më ${fmtDate(s.nextInspectionDate)}.`
+          : "Kontrolli periodik duhet planifikuar së shpejti.",
       });
     }
 
@@ -235,7 +235,7 @@ export function evaluateElevatorComplianceGaps(input: {
       key: "under-inspection",
       level: "info",
       title: "Në inspektim",
-      detail: "Ashensori është aktualisht në proces inspektimi nga ISHMT.",
+      detail: "Ashensori është aktualisht në proces inspektimi nga OM.",
     });
   }
 

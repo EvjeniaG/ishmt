@@ -1,5 +1,18 @@
-import { MaintenanceContractStatus } from "@prisma/client";
+import { AuditAction, MaintenanceContractStatus } from "@prisma/client";
 import { db } from "@/lib/db";
+
+export type ContractTerminationMeta = {
+  partyLabel: string;
+  actorName: string | null;
+  terminatedAt: Date;
+};
+
+const TERMINATION_ACTION_LABELS: Record<string, string> = {
+  CONTRACT_TERMINATED_BY_PROVIDER: "Kompania e mirëmbajtjes",
+  MAINTENANCE_CONTRACT_TERMINATED_BY_OWNER: "Personi përgjegjës i ashensorit",
+  INSPECTION_CONTRACT_TERMINATED_BY_OWNER: "Personi përgjegjës i ashensorit",
+  CONTRACT_REJECTED: "Kompania e mirëmbajtjes (refuzim)",
+};
 
 export const CONTRACT_STATUS_LABELS: Record<MaintenanceContractStatus, string> = {
   PENDING: "Në pritje",
@@ -58,5 +71,45 @@ export class MaintenanceContractService {
       data: { status: MaintenanceContractStatus.EXPIRED, isActive: false },
     });
     return result.count;
+  }
+
+  /** Kush e ndërpreu/refuzoi kontratën — lexohet nga audit log. */
+  static async loadTerminationMeta(
+    contractIds: string[],
+  ): Promise<Map<string, ContractTerminationMeta>> {
+    const map = new Map<string, ContractTerminationMeta>();
+    if (contractIds.length === 0) return map;
+
+    const logs = await db.auditLog.findMany({
+      where: {
+        entityType: "maintenance_contract",
+        entityId: { in: contractIds },
+        action: AuditAction.UPDATE,
+      },
+      include: {
+        actor: { select: { firstName: true, lastName: true } },
+      },
+      orderBy: { createdAt: "desc" },
+    });
+
+    for (const log of logs) {
+      if (map.has(log.entityId)) continue;
+
+      const afterState = log.afterState as { action?: string } | null;
+      const actionKey = afterState?.action;
+      if (!actionKey || !(actionKey in TERMINATION_ACTION_LABELS)) continue;
+
+      const actorName = log.actor
+        ? `${log.actor.firstName} ${log.actor.lastName}`.trim()
+        : null;
+
+      map.set(log.entityId, {
+        partyLabel: TERMINATION_ACTION_LABELS[actionKey],
+        actorName,
+        terminatedAt: log.createdAt,
+      });
+    }
+
+    return map;
   }
 }

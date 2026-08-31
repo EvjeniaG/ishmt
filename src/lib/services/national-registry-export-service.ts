@@ -148,7 +148,7 @@ export class NationalRegistryExportService {
         "Lloji ekzaminimit": examinationLabel(data?.examinationType),
         "Kompania mirëmbajtjes": elv.maintenanceOrg?.name ?? maintContract?.maintenanceOrg.name ?? "",
         "Kontrata mirëmbajtjes": maintContract?.contractNumber ?? "",
-        "Kompania inspektimit (OMI)": inspectionContract?.maintenanceOrg.name ?? "",
+        "Kompania inspektimit (OM)": inspectionContract?.maintenanceOrg.name ?? "",
         "Kontrata inspektimit": inspectionContract?.contractNumber ?? "",
         "Nr. certifikate CR": regCert?.certificateNumber ?? "",
         "Data certifikate": fmtDate(regCert?.issuedDate),

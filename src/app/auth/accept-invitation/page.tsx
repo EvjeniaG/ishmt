@@ -63,7 +63,7 @@ export default function AcceptInvitationPage() {
       <Card className="w-full max-w-md">
         <CardHeader>
           <CardTitle>Pranimi i ftesës</CardTitle>
-          <CardDescription>Bashkohuni me organizatën tuaj në Regjistrin ISHMT</CardDescription>
+          <CardDescription>Bashkohuni me organizatën tuaj në Regjistrin IQMT</CardDescription>
         </CardHeader>
         <CardContent>
           <Suspense fallback={<p className="text-sm">Duke ngarkuar...</p>}>

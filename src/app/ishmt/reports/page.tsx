@@ -51,7 +51,7 @@ export default async function CitizenReportsQueuePage({
   return (
     <AppShell title="Raportimet e qytetarëve">
       <StandardPageLayout
-        eyebrow="ISHMT · Raportime publike"
+        eyebrow="IQMT · Raportime publike"
         title="Raportimet e qytetarëve"
         description="Raportime publike për probleme sigurie dhe ashensorë të paregjistruar"
       >

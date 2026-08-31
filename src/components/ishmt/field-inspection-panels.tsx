@@ -2,14 +2,15 @@
 
 import Link from "next/link";
 import { formatDateSq } from "@/lib/format-date";
-import { useRouter } from "next/navigation";
-import { Fragment, useMemo, useState } from "react";
+import { useRouter } from "@/lib/navigation/use-app-router";
+import { useEffect, useMemo, useState } from "react";
 import { FieldInspectionAssignmentStatus } from "@prisma/client";
 import {
   Ban,
   CheckCircle2,
   Download,
   FileText,
+  MapPin,
   Search,
 } from "lucide-react";
 import {
@@ -38,6 +39,8 @@ import {
 import { WorkflowStatusChip } from "@/components/applications/application-status-badge";
 import type { FieldInspectorOption } from "@/lib/services/ishmt-field-inspection-service";
 import type { StatusTone } from "@/lib/registration/status-presentation";
+import { isChiefLockedFieldVerification } from "@/lib/services/application-field-verification";
+import { ROLE_CODES, type RoleCode } from "@/lib/constants/roles";
 import { cn } from "@/lib/utils";
 import { uploadEntityDocumentClient } from "@/lib/documents/upload-entity-document-client";
 import { COMPLIANCE_DOCUMENT_ACCEPT, COMPLIANCE_DOCUMENT_HINT } from "@/lib/constants/document-upload";
@@ -50,6 +53,8 @@ export type FieldInspectionAssignmentRow = {
   application: {
     id: string;
     applicationNumber: string;
+    inspectorAssignmentLockedBy?: string | null;
+    fieldVerificationRequestedBy?: string | null;
     data: {
       buildingAddress: string | null;
       municipality: { nameSq: string } | null;
@@ -73,12 +78,14 @@ export type FieldInspectionAssignmentRow = {
   } | null;
   reportDocument?: { id: string; originalFilename: string } | null;
   verificationResult?: string | null;
+  verificationFindings?: string | null;
+  conductedDate?: Date | null;
 };
 
 function assignmentLabel(a: FieldInspectionAssignmentRow) {
   if (a.elevator) return a.elevator.registryNumber;
   if (a.application) return a.application.applicationNumber;
-  return "—";
+  return "-";
 }
 
 function assignmentAddress(a: FieldInspectionAssignmentRow) {
@@ -114,8 +121,8 @@ function StatusBadge({ status }: { status: FieldInspectionAssignmentStatus }) {
 
 function FormSection({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div className="space-y-3">
-      <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">{title}</p>
+    <div className="reg-wizard-subsection">
+      <p className="reg-wizard-subsection-title">{title}</p>
       {children}
     </div>
   );
@@ -126,7 +133,7 @@ function FormDivider() {
 }
 
 function selectClassName() {
-  return "flex h-10 w-full rounded-lg border border-border/80 bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gov-primary/30";
+  return "reg-wizard-select";
 }
 
 function inspectionResultTone(result: string | null | undefined): StatusTone {
@@ -156,39 +163,48 @@ function AssignmentStatusCell({ assignment }: { assignment: FieldInspectionAssig
 function assignmentDisplayDate(assignment: FieldInspectionAssignmentRow) {
   if (
     assignment.status === FieldInspectionAssignmentStatus.COMPLETED &&
-    assignment.inspection?.conductedDate
+    (assignment.inspection?.conductedDate || assignment.conductedDate)
   ) {
-    return formatDateSq(assignment.inspection.conductedDate);
+    return formatDateSq(assignment.inspection?.conductedDate ?? assignment.conductedDate!);
   }
   return formatDateSq(assignment.scheduledDate);
 }
 
 function CompletedInspectionSummary({
   inspection,
+  assignment,
 }: {
-  inspection: NonNullable<FieldInspectionAssignmentRow["inspection"]>;
+  inspection?: NonNullable<FieldInspectionAssignmentRow["inspection"]> | null;
+  assignment?: FieldInspectionAssignmentRow;
 }) {
+  const findings = inspection?.findings ?? assignment?.verificationFindings ?? null;
+  const reportDocument =
+    inspection?.reportDocument ??
+    assignment?.reportDocument ??
+    null;
+  const reportDocumentId = inspection?.reportDocumentId ?? assignment?.reportDocument?.id ?? null;
+
   return (
-    <div className="overflow-hidden rounded-xl border border-border/70 bg-card divide-y divide-border/60">
-      {inspection.findings && (
-        <div className="px-4 py-3.5 sm:px-5">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">Vërejtje</p>
-          <p className="mt-1.5 text-sm leading-relaxed text-foreground">{inspection.findings}</p>
+    <div className="reg-dossier-block">
+      {findings && (
+        <div className="reg-dossier-section">
+          <p className="text-xs font-medium text-muted-foreground">Vërejtje</p>
+          <p className="mt-1.5 text-sm leading-relaxed text-foreground">{findings}</p>
         </div>
       )}
 
-      <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3.5 sm:px-5">
+      <div className="reg-dossier-section flex flex-wrap items-center justify-between gap-3">
         <div className="flex min-w-0 items-center gap-3">
           <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-border/60 bg-muted/30 text-muted-foreground">
             <FileText className="h-4 w-4" aria-hidden />
           </span>
           <p className="truncate text-sm font-medium text-foreground">
-            {inspection.reportDocument?.originalFilename ?? "Pa raport"}
+            {reportDocument?.originalFilename ?? "Pa raport"}
           </p>
         </div>
-        {inspection.reportDocumentId && (
+        {reportDocumentId && (
           <Button asChild size="sm" variant="outline" className="h-9 shrink-0 rounded-lg px-3 text-xs">
-            <a href={`/api/documents/${inspection.reportDocumentId}/download`}>
+            <a href={`/api/documents/${reportDocumentId}/download`}>
               <Download className="mr-1.5 h-3.5 w-3.5" aria-hidden />
               Shkarko
             </a>
@@ -418,12 +434,26 @@ function CancelAssignmentDialog({
   );
 }
 
+function canCancelFieldInspectionAssignment(
+  assignment: FieldInspectionAssignmentRow,
+  roleCode: RoleCode,
+  globalCanCancel: boolean,
+): boolean {
+  if (!globalCanCancel) return false;
+  if (assignment.application && isChiefLockedFieldVerification(assignment.application)) {
+    return roleCode === ROLE_CODES.CHIEF_INSPECTOR || roleCode === ROLE_CODES.ADMIN;
+  }
+  return true;
+}
+
 export function FieldInspectionAssignmentsTable({
   assignments,
   canCancel,
+  roleCode,
 }: {
   assignments: FieldInspectionAssignmentRow[];
   canCancel?: boolean;
+  roleCode: RoleCode;
 }) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
@@ -514,7 +544,7 @@ export function FieldInspectionAssignmentsTable({
                 )}
               </td>
               <td className="text-right">
-                {canCancel &&
+                {canCancelFieldInspectionAssignment(a, roleCode, Boolean(canCancel)) &&
                   (a.status === FieldInspectionAssignmentStatus.SCHEDULED ||
                     a.status === FieldInspectionAssignmentStatus.IN_PROGRESS) && (
                     <Button
@@ -545,6 +575,64 @@ export function FieldInspectionAssignmentsTable({
   );
 }
 
+function FieldInspectionResultPicker({
+  id,
+  value,
+  onChange,
+}: {
+  id: string;
+  value: "PASS" | "FAIL";
+  onChange: (value: "PASS" | "FAIL") => void;
+}) {
+  const options: { value: "PASS" | "FAIL"; label: string; hint: string; tone: string }[] = [
+    {
+      value: "PASS",
+      label: "Konform",
+      hint: "Gjendja në objekt përputhet me dokumentacionin.",
+      tone: "border-emerald-200/80 bg-emerald-50/40 hover:bg-emerald-50/70",
+    },
+    {
+      value: "FAIL",
+      label: "Jo konform",
+      hint: "Mospërputhje ose mangësi që kërkojnë ndërhyrje.",
+      tone: "border-red-200/80 bg-red-50/40 hover:bg-red-50/70",
+    },
+  ];
+
+  return (
+    <div className="space-y-2">
+      <Label>Rezultati i verifikimit</Label>
+      <div className="grid gap-3 sm:grid-cols-2" role="radiogroup" aria-labelledby={`${id}-label`}>
+        {options.map((option) => {
+          const selected = value === option.value;
+          return (
+            <label
+              key={option.value}
+              className={cn(
+                "cursor-pointer rounded-xl border px-4 py-3.5 transition-all",
+                selected
+                  ? "border-gov-primary bg-gov-primary/[0.05] ring-1 ring-gov-primary/25 shadow-sm"
+                  : cn("border-border/70 bg-muted/10", option.tone),
+              )}
+            >
+              <input
+                type="radio"
+                name={id}
+                value={option.value}
+                checked={selected}
+                onChange={() => onChange(option.value)}
+                className="sr-only"
+              />
+              <p className="text-sm font-semibold text-foreground">{option.label}</p>
+              <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{option.hint}</p>
+            </label>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 function ConductInspectionPanel({
   assignment,
   onDone,
@@ -555,7 +643,7 @@ function ConductInspectionPanel({
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [conductedDate, setConductedDate] = useState("");
-  const [result, setResult] = useState<"PASS" | "FAIL" | "CONDITIONAL">("PASS");
+  const [result, setResult] = useState<"PASS" | "FAIL">("PASS");
   const [findings, setFindings] = useState("");
   const [reportFile, setReportFile] = useState<File | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -624,97 +712,100 @@ function ConductInspectionPanel({
     assignment.status === FieldInspectionAssignmentStatus.IN_PROGRESS;
 
   return (
-    <div className="space-y-4 border-t border-border/70 bg-muted/10 p-4 sm:p-5">
-      {assignment.instructions && canConduct && (
-        <div className="rounded-xl border border-sky-200/70 bg-sky-50/50 px-4 py-3">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-sky-800/70">Udhëzime</p>
-          <p className="mt-1 text-sm leading-relaxed text-foreground">{assignment.instructions}</p>
+    <div className="border-t border-border/60 bg-muted/5 px-4 py-5 sm:px-6 sm:py-6">
+      {assignment.instructions && canConduct ? (
+        <div className="mb-5 rounded-xl border border-amber-200/70 bg-amber-50/50 px-4 py-3.5">
+          <p className="text-xs font-semibold uppercase tracking-wide text-amber-900/80">Udhëzime</p>
+          <p className="mt-1.5 whitespace-pre-wrap text-sm leading-relaxed text-foreground">
+            {assignment.instructions}
+          </p>
         </div>
+      ) : null}
+
+      {assignment.status === FieldInspectionAssignmentStatus.COMPLETED &&
+        (assignment.inspection || assignment.verificationResult) && (
+        <CompletedInspectionSummary inspection={assignment.inspection} assignment={assignment} />
       )}
 
-      {assignment.status === FieldInspectionAssignmentStatus.COMPLETED && assignment.inspection && (
-        <CompletedInspectionSummary inspection={assignment.inspection} />
-      )}
-
-      {canConduct && (
-        <div className="overflow-hidden rounded-xl border border-border/70 bg-card">
-          <div className="border-b border-border/60 px-4 py-3 sm:px-5">
-            <h3 className="text-sm font-semibold text-foreground">Verifikimi</h3>
+      {canConduct ? (
+        <div className="reg-wizard-panel overflow-hidden">
+          <div className="border-b border-border/60 bg-muted/20 px-4 py-3.5 sm:px-5">
+            <p className="text-sm font-semibold text-foreground">Regjistrimi i verifikimit</p>
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              Plotësoni të dhënat pas inspektimit në objekt.
+            </p>
           </div>
-
-          <div className="space-y-4 p-4 sm:p-5">
+          <div className="reg-wizard-body space-y-5">
             {assignment.status === FieldInspectionAssignmentStatus.SCHEDULED && (
-              <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-amber-200/70 bg-amber-50/40 px-3.5 py-3">
-                <p className="text-sm text-foreground">Konfirmoni nisjen para shkimit në objekt.</p>
-                <Button type="button" size="sm" variant="outline" className="h-8 rounded-lg text-xs" onClick={() => void start()}>
+              <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border/60 bg-muted/15 px-4 py-3.5">
+                <p className="text-sm text-muted-foreground">
+                  Konfirmoni nisjen para shkimit në objekt.
+                </p>
+                <Button type="button" variant="outline" size="sm" className="rounded-lg" onClick={() => void start()}>
                   Nis në terren
                 </Button>
               </div>
             )}
 
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="space-y-1.5">
-                <Label className="text-xs text-muted-foreground">Data</Label>
-                <Input
-                  type="date"
-                  value={conductedDate}
-                  onChange={(e) => setConductedDate(e.target.value)}
-                  className="h-10 rounded-lg"
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs text-muted-foreground">Rezultati</Label>
-                <select
-                  className={selectClassName()}
-                  value={result}
-                  onChange={(e) => setResult(e.target.value as "PASS" | "FAIL" | "CONDITIONAL")}
-                >
-                  <option value="PASS">Konform</option>
-                  <option value="CONDITIONAL">Me kushte</option>
-                  <option value="FAIL">Jo konform</option>
-                </select>
-              </div>
+            <div className="space-y-1.5">
+              <Label htmlFor={`conducted-${assignment.id}`}>Data e inspektimit</Label>
+              <Input
+                id={`conducted-${assignment.id}`}
+                type="date"
+                value={conductedDate}
+                onChange={(e) => setConductedDate(e.target.value)}
+                className="h-10 max-w-xs rounded-lg"
+              />
             </div>
 
+            <FieldInspectionResultPicker
+              id={`result-${assignment.id}`}
+              value={result}
+              onChange={setResult}
+            />
+
             <div className="space-y-1.5">
-              <Label className="text-xs text-muted-foreground">Vërejtje</Label>
+              <Label htmlFor={`findings-${assignment.id}`}>Vërejtje</Label>
               <textarea
+                id={`findings-${assignment.id}`}
                 value={findings}
                 onChange={(e) => setFindings(e.target.value)}
                 rows={3}
                 className="w-full rounded-lg border border-border/80 bg-background px-3 py-2.5 text-sm"
-                placeholder="Gjendja në objekt, mosputhje, rekomandime…"
+                placeholder="Gjendja në objekt, mospërputhje, rekomandime…"
               />
             </div>
 
             <div className="space-y-1.5">
-              <Label htmlFor={`report-${assignment.id}`} className="text-xs text-muted-foreground">
-                Raporti <span className="text-red-600">*</span>
+              <Label htmlFor={`report-${assignment.id}`}>
+                Raporti i inspektimit <span className="text-destructive">*</span>
               </Label>
-              <Input
-                id={`report-${assignment.id}`}
-                type="file"
-                accept={COMPLIANCE_DOCUMENT_ACCEPT}
-                onChange={(event) => setReportFile(event.target.files?.[0] ?? null)}
-                className="h-10 rounded-lg text-sm"
-              />
-              <p className="text-[11px] text-muted-foreground">{COMPLIANCE_DOCUMENT_HINT}</p>
-              {reportFile && (
-                <p className="flex items-center gap-1.5 text-xs text-foreground">
-                  <FileText className="h-3.5 w-3.5 text-muted-foreground" aria-hidden />
-                  {reportFile.name}
-                </p>
-              )}
+              <div className="rounded-xl border border-dashed border-border/70 bg-muted/10 px-4 py-4">
+                <Input
+                  id={`report-${assignment.id}`}
+                  type="file"
+                  accept={COMPLIANCE_DOCUMENT_ACCEPT}
+                  onChange={(event) => setReportFile(event.target.files?.[0] ?? null)}
+                  className="h-10 rounded-lg border-0 bg-background text-sm file:mr-3 file:rounded-md file:border-0 file:bg-gov-primary file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-white"
+                />
+                <p className="mt-2 text-xs text-muted-foreground">{COMPLIANCE_DOCUMENT_HINT}</p>
+                {reportFile ? (
+                  <p className="mt-2 flex items-center gap-1.5 text-sm text-foreground">
+                    <FileText className="h-4 w-4 shrink-0 text-gov-primary" aria-hidden />
+                    {reportFile.name}
+                  </p>
+                ) : null}
+              </div>
             </div>
 
-            <label className="flex cursor-pointer items-start gap-2.5 rounded-lg border border-border/60 bg-muted/15 px-3.5 py-3 text-sm">
+            <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-border/60 bg-muted/15 px-4 py-3.5 text-sm">
               <input
                 type="checkbox"
                 checked={confirmed}
                 onChange={(e) => setConfirmed(e.target.checked)}
-                className="mt-0.5"
+                className="mt-0.5 h-4 w-4"
               />
-              <span className="text-muted-foreground">
+              <span className="leading-relaxed text-muted-foreground">
                 Konfirmoj saktësinë e të dhënave dhe mbaj përgjegjësi për regjistrimin.
               </span>
             </label>
@@ -723,8 +814,8 @@ function ConductInspectionPanel({
             <div className="flex justify-end border-t border-border/60 pt-4">
               <Button
                 type="button"
-                disabled={submitting}
-                className="h-10 rounded-lg px-5 text-sm font-semibold"
+                disabled={submitting || assignment.status === FieldInspectionAssignmentStatus.SCHEDULED}
+                className="h-10 rounded-lg px-6 text-sm font-semibold"
                 onClick={() => void complete()}
               >
                 {submitting ? "Duke ruajtur…" : "Ruaj rezultatin"}
@@ -732,14 +823,39 @@ function ConductInspectionPanel({
             </div>
           </div>
         </div>
-      )}
+      ) : null}
     </div>
   );
 }
 
-export function MyFieldInspectionsList({ assignments }: { assignments: FieldInspectionAssignmentRow[] }) {
-  const [expandedId, setExpandedId] = useState<string | null>(null);
-  const [filter, setFilter] = useState<"active" | "completed" | "all">("active");
+export function MyFieldInspectionsList({
+  assignments,
+  highlightApplicationId = null,
+}: {
+  assignments: FieldInspectionAssignmentRow[];
+  highlightApplicationId?: string | null;
+}) {
+  const highlightedAssignment = useMemo(() => {
+    if (!highlightApplicationId) return null;
+    return (
+      assignments.find((a) => a.application?.id === highlightApplicationId) ?? null
+    );
+  }, [assignments, highlightApplicationId]);
+
+  const [expandedId, setExpandedId] = useState<string | null>(highlightedAssignment?.id ?? null);
+  const [filter, setFilter] = useState<"active" | "completed" | "all">(
+    highlightedAssignment &&
+      (highlightedAssignment.status === FieldInspectionAssignmentStatus.SCHEDULED ||
+        highlightedAssignment.status === FieldInspectionAssignmentStatus.IN_PROGRESS)
+      ? "active"
+      : "active",
+  );
+
+  useEffect(() => {
+    if (highlightedAssignment) {
+      setExpandedId(highlightedAssignment.id);
+    }
+  }, [highlightedAssignment]);
 
   const counts = useMemo(
     () => ({
@@ -759,26 +875,34 @@ export function MyFieldInspectionsList({ assignments }: { assignments: FieldInsp
   );
 
   const filtered = useMemo(() => {
-    if (filter === "all") return assignments;
+    let rows = assignments;
     if (filter === "completed") {
-      return assignments.filter(
+      rows = assignments.filter(
         (a) =>
           a.status === FieldInspectionAssignmentStatus.COMPLETED ||
           a.status === FieldInspectionAssignmentStatus.CANCELLED,
       );
+    } else if (filter === "active") {
+      rows = assignments.filter(
+        (a) =>
+          a.status === FieldInspectionAssignmentStatus.SCHEDULED ||
+          a.status === FieldInspectionAssignmentStatus.IN_PROGRESS,
+      );
     }
-    return assignments.filter(
-      (a) =>
-        a.status === FieldInspectionAssignmentStatus.SCHEDULED ||
-        a.status === FieldInspectionAssignmentStatus.IN_PROGRESS,
-    );
-  }, [assignments, filter]);
+    if (highlightApplicationId) {
+      const match = rows.filter((a) => a.application?.id === highlightApplicationId);
+      if (match.length > 0) return match;
+    }
+    return rows;
+  }, [assignments, filter, highlightApplicationId]);
 
   if (assignments.length === 0) {
     return (
-      <PortalEmptyState>
-        Nuk keni detyra të caktuara. Caktimet bëhen nga shefi i sektorit, drejtori ose kryeinspektori ISHMT.
-      </PortalEmptyState>
+      <div className="px-4 py-10 sm:px-6">
+        <PortalEmptyState>
+          Nuk keni detyra të caktuara. Caktimet bëhen nga shefi i sektorit, drejtori ose kryeinspektori IQMT.
+        </PortalEmptyState>
+      </div>
     );
   }
 
@@ -789,68 +913,86 @@ export function MyFieldInspectionsList({ assignments }: { assignments: FieldInsp
   ];
 
   return (
-    <div className="space-y-4">
-      <PortalTabBar tabs={tabs} active={filter} onChange={setFilter} counts={counts} />
+    <div>
+      <div className="border-b border-border/60 px-4 py-4 sm:px-6">
+        <PortalTabBar tabs={tabs} active={filter} onChange={setFilter} counts={counts} />
+      </div>
 
       {filtered.length === 0 ? (
-        <PortalEmptyState>Nuk ka detyra në këtë kategori.</PortalEmptyState>
+        <div className="px-4 py-10 sm:px-6">
+          <PortalEmptyState>Nuk ka detyra në këtë kategori.</PortalEmptyState>
+        </div>
       ) : (
-        <div className="portal-surface overflow-hidden">
-          <PortalTableWrap>
-            <thead>
-              <tr>
-                <th className="w-12">#</th>
-                <th>Regjistri</th>
-                <th>Vendndodhja</th>
-                <th>Data</th>
-                <th>Statusi</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map((a, index) => (
-                <Fragment key={a.id}>
-                  <tr>
-                    <td className="tabular-nums text-muted-foreground">{index + 1}</td>
-                    <td>
-                      {assignmentDetailHref(a) ? (
-                        <Link href={assignmentDetailHref(a)!} className="portal-table-link">
-                          <RegistryNumber>{assignmentLabel(a)}</RegistryNumber>
-                        </Link>
-                      ) : (
-                        <RegistryNumber>{assignmentLabel(a)}</RegistryNumber>
-                      )}
-                    </td>
-                    <td className="max-w-[14rem] text-muted-foreground">
-                      <span className="line-clamp-2">{assignmentAddress(a)}</span>
-                    </td>
-                    <td className="whitespace-nowrap tabular-nums">{assignmentDisplayDate(a)}</td>
-                    <td>
-                      <AssignmentStatusCell assignment={a} />
-                    </td>
-                    <td className="text-right">
-                      <Button
-                        type="button"
-                        variant={expandedId === a.id ? "default" : "outline"}
-                        size="sm"
-                        className={cn("rounded-lg text-xs", expandedId === a.id && "shadow-sm")}
-                        onClick={() => setExpandedId(expandedId === a.id ? null : a.id)}
-                      >
-                        {expandedId === a.id ? "Mbyll" : "Dosja"}
-                      </Button>
-                    </td>
-                  </tr>
-                  {expandedId === a.id && (
-                    <tr>
-                      <td colSpan={6} className="!p-0">
-                        <ConductInspectionPanel assignment={a} onDone={() => setExpandedId(null)} />
-                      </td>
-                    </tr>
-                  )}
-                </Fragment>
-              ))}
-            </tbody>
-          </PortalTableWrap>
+        <div className="space-y-3 px-4 py-4 sm:px-6">
+          {filtered.map((assignment, index) => {
+            const expanded = expandedId === assignment.id;
+            const detailHref = assignmentDetailHref(assignment);
+            const isActive =
+              assignment.status === FieldInspectionAssignmentStatus.SCHEDULED ||
+              assignment.status === FieldInspectionAssignmentStatus.IN_PROGRESS;
+
+            return (
+              <article
+                key={assignment.id}
+                className={cn(
+                  "overflow-hidden rounded-xl border bg-card transition-all",
+                  expanded
+                    ? "border-gov-primary/30 shadow-sm ring-1 ring-gov-primary/10"
+                    : "border-border/70 hover:border-border",
+                )}
+              >
+                <div className="flex flex-col gap-3 px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-5">
+                  <div className="flex min-w-0 flex-1 items-start gap-3">
+                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-gov-primary/10 text-sm font-semibold tabular-nums text-gov-primary">
+                      {index + 1}
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        {detailHref ? (
+                          <Link href={detailHref} className="portal-table-link">
+                            <RegistryNumber>{assignmentLabel(assignment)}</RegistryNumber>
+                          </Link>
+                        ) : (
+                          <RegistryNumber>{assignmentLabel(assignment)}</RegistryNumber>
+                        )}
+                        <AssignmentStatusCell assignment={assignment} />
+                      </div>
+                      <p className="mt-1.5 flex items-start gap-1.5 text-sm text-muted-foreground">
+                        <MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
+                        <span className="line-clamp-2">{assignmentAddress(assignment)}</span>
+                      </p>
+                      <p className="mt-1 text-xs tabular-nums text-muted-foreground">
+                        {assignment.status === FieldInspectionAssignmentStatus.COMPLETED
+                          ? "Inspektuar"
+                          : "Planifikuar"}
+                        {": "}
+                        {assignmentDisplayDate(assignment)}
+                      </p>
+                    </div>
+                  </div>
+                  <Button
+                    type="button"
+                    variant={expanded ? "secondary" : isActive ? "default" : "outline"}
+                    size="sm"
+                    className="h-9 shrink-0 rounded-lg px-4 text-xs font-semibold"
+                    onClick={() => setExpandedId(expanded ? null : assignment.id)}
+                  >
+                    {expanded
+                      ? "Mbyll"
+                      : assignment.status === FieldInspectionAssignmentStatus.COMPLETED
+                        ? "Shiko"
+                        : "Hap detyrën"}
+                  </Button>
+                </div>
+                {expanded ? (
+                  <ConductInspectionPanel
+                    assignment={assignment}
+                    onDone={() => setExpandedId(null)}
+                  />
+                ) : null}
+              </article>
+            );
+          })}
           <OfficialTableFooter total={filtered.length} label="detyra" />
         </div>
       )}

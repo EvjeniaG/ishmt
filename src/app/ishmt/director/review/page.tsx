@@ -34,7 +34,7 @@ export default async function DirectorReviewPage() {
   return (
     <AppShell>
       <StandardPageLayout
-        eyebrow="ISHMT · Drejtor i Drejtorisë"
+        eyebrow="IQMT · Drejtor i Drejtorisë"
         title="Shqyrtimi i aplikimeve"
         description="Delegoni te përgjegjësi i sektorit ose dërgoni dosjen te kryeinspektori pas raportit."
       >

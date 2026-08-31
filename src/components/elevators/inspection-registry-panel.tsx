@@ -4,37 +4,38 @@ import { SectionCard } from "@/components/shared/institutional";
 import { InspectionContractsSection } from "@/components/elevators/inspection-contracts-section";
 import { InspectionHistoryList } from "@/components/elevators/inspection-history-list";
 import { fmtDateSq } from "@/components/elevators/registry-shared";
+import type { DossierViewerKind } from "@/lib/elevators/dossier-viewer";
+import {
+  LAST_PERIODIC_INSPECTION_LABEL,
+  PERIODIC_INSPECTION_CONTRACTS_LABEL,
+  PERIODIC_INSPECTION_HISTORY_LABEL,
+} from "@/lib/constants/periodic-inspection-labels";
 
-function resultTone(item: InspectionRegistryView["items"][number]) {
-  if (item.isPass) return "success" as const;
-  if (item.isFail) return "danger" as const;
+function nextDueAccent(data: InspectionRegistryView) {
+  const nextOverdue = data.nextDue ? new Date(data.nextDue) < new Date() : false;
+  if (nextOverdue) return "danger" as const;
+  if (data.nextDue) return "success" as const;
   return "warning" as const;
 }
-
-function overallStatus(data: InspectionRegistryView) {
-  const latest = data.items[0];
-  const nextOverdue = data.nextDue ? new Date(data.nextDue) < new Date() : false;
-  if (nextOverdue) return { label: "Afati i kaluar", tone: "danger" as const };
-  if (latest?.isFail) return { label: "Jo kalues", tone: "danger" as const };
-  if (latest?.isPass) return { label: "Kalues", tone: "success" as const };
-  return { label: "Në proces", tone: "warning" as const };
-}
-
-import type { DossierViewerKind } from "@/lib/elevators/dossier-viewer";
 
 function nextDueSubtitle(data: InspectionRegistryView, audience: DossierViewerKind) {
   const nextOverdue = data.nextDue ? new Date(data.nextDue) < new Date() : false;
   if (audience === "ishmt_staff") {
     if (data.nextDue) return nextOverdue ? "Afati ka kaluar" : "Sipas regjistrit";
-    return "Sipas historikut të inspektimeve";
+    return "Sipas historikut të inspektimeve periodike";
   }
   if (nextOverdue) {
     return audience === "certifier"
-      ? "Afati ka kaluar - regjistroni inspektimin"
-      : "Afati ka kaluar - kontaktoni OMI-n";
+      ? "Afati ka kaluar - regjistroni inspektimin periodik"
+      : "Afati ka kaluar - kontaktoni OM-n";
   }
   if (data.intervalMonths) return `Intervali: ${data.intervalMonths} muaj`;
   return "Pa datë të planifikuar";
+}
+
+function lastInspectionSubtitle(latest: InspectionRegistryView["items"][number] | undefined) {
+  if (!latest) return "Pa inspektim të regjistruar";
+  return latest.resultLabel;
 }
 
 export function InspectionRegistryPanel({
@@ -47,36 +48,45 @@ export function InspectionRegistryPanel({
   elevatorId?: string;
 }) {
   const latest = data.items[0];
-  const nextOverdue = data.nextDue ? new Date(data.nextDue) < new Date() : false;
-  const status = overallStatus(data);
+  const activeContract = data.contracts.find((c) => c.isActive && c.statusLabel === "Aktive");
+  const lastInspectionDate = latest?.conductedDate ?? latest?.scheduledDate ?? null;
 
   return (
     <div className="space-y-6">
+      {data.certifierOrg && audience !== "owner" && (
+        <p className="text-sm text-muted-foreground">
+          <span className="font-medium text-foreground">{data.certifierOrg.name}</span>
+          {data.certifierOrg.nipt && (
+            <span className="ml-2 font-mono text-xs">NIPT {data.certifierOrg.nipt}</span>
+          )}
+        </p>
+      )}
+
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <MetricCard
           compact
-          label="Inspektimi i radhës"
+          label={LAST_PERIODIC_INSPECTION_LABEL}
+          value={fmtDateSq(lastInspectionDate)}
+          accent="primary"
+          subtitle={lastInspectionSubtitle(latest)}
+        />
+        <MetricCard
+          compact
+          label="Afati i radhës"
           value={fmtDateSq(data.nextDue)}
-          accent={nextOverdue ? "danger" : data.nextDue ? "success" : "warning"}
+          accent={nextDueAccent(data)}
           subtitle={nextDueSubtitle(data, audience)}
         />
         <MetricCard
           compact
-          label="Rezultati i fundit"
-          value={latest?.resultLabel ?? "-"}
-          accent={latest ? resultTone(latest) : "primary"}
-          subtitle={latest ? fmtDateSq(latest.conductedDate ?? latest.scheduledDate) : "Pa inspektim"}
+          label="Kontrata"
+          value={data.contracts.length}
+          accent={activeContract ? "success" : "warning"}
+          subtitle={activeContract?.contractNumber ?? "Pa kontratë aktive"}
         />
         <MetricCard
           compact
-          label="Gjendja"
-          value={status.label}
-          accent={status.tone}
-          subtitle="Bazuar në inspektimin e fundit"
-        />
-        <MetricCard
-          compact
-          label="Total inspektime"
+          label="Inspektime"
           value={data.items.length}
           accent="primary"
           subtitle="Historiku në regjistër"
@@ -84,22 +94,28 @@ export function InspectionRegistryPanel({
       </div>
 
       <SectionCard
-        title="Regjistri i kontratave të inspektimit"
+        title={PERIODIC_INSPECTION_CONTRACTS_LABEL}
         subtitle={
           audience === "certifier"
-            ? "Kontratat e inspektimit periodik - ngarkoni dokumentin pas pranimit"
-            : "Kontratat me OMI-n - dokumenti ngarkohet nga kompania; i dukshëm për personin përgjegjës të ashensorit dhe ISHMT-n"
+            ? "Pranoni ftesën, pastaj ngarkoni kontratën e nënshkruar. Historiku mbetet i dukshëm për personin përgjegjës dhe IQMT-n."
+            : "Kontratat me organizatën OM. Dokumenti i nënshkruar ngarkohet nga OM pas pranimit."
         }
         meta={
-          <span className="portal-badge-neutral tabular-nums">{data.contracts.length} kontrata</span>
+          <span className="portal-badge-neutral tabular-nums">
+            {data.contracts.length === 1 ? "1 kontratë" : `${data.contracts.length} kontrata`}
+          </span>
         }
       >
-        <InspectionContractsSection contracts={data.contracts} />
+        <InspectionContractsSection contracts={data.contracts} showUploadHint={audience === "certifier"} />
       </SectionCard>
 
       <SectionCard
-        title="Historiku i inspektimeve"
-        subtitle="Inspektimet periodike (OMI) dhe jashtëzakonshme (ISHMT) - me dokument nga kompania/inspektori"
+        title={PERIODIC_INSPECTION_HISTORY_LABEL}
+        subtitle={
+          audience === "certifier"
+            ? "Inspektimet që regjistron OM pas kontratës aktive"
+            : "Inspektimet periodike regjistrohen nga OM pas kontratës aktive të inspektimit periodik"
+        }
         meta={
           <span className="portal-badge-neutral tabular-nums">{data.items.length} regjistrime</span>
         }

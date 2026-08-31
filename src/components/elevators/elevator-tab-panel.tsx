@@ -1,9 +1,20 @@
+import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { AppLink } from "@/components/shared/app-link";
 import type { DossierField } from "@/lib/registration/build-dossier";
 import type { ElevatorTabGroup } from "@/lib/elevators/build-tab-dossier";
 
 function hasVisibleFields(fields: DossierField[]) {
   return fields.some((f) => f.value && f.value !== "-");
+}
+
+function DossierFieldLink({ field }: { field: DossierField & { href: string } }) {
+  const className = "font-medium text-gov-primary hover:underline";
+  return (
+    <AppLink href={field.href} className={className}>
+      {field.value}
+    </AppLink>
+  );
 }
 
 export function ElevatorTabPanel({ groups }: { groups: ElevatorTabGroup[] }) {
@@ -26,7 +37,13 @@ export function ElevatorTabPanel({ groups }: { groups: ElevatorTabGroup[] }) {
                 .map((f) => (
                   <div key={`${group.title}-${f.label}`} className="workflow-data-cell">
                     <dt className="workflow-data-label">{f.label}</dt>
-                    <dd className="workflow-data-value break-words">{f.value}</dd>
+                    <dd className="workflow-data-value break-words">
+                      {f.href ? (
+                        <DossierFieldLink field={{ ...f, href: f.href }} />
+                      ) : (
+                        f.value
+                      )}
+                    </dd>
                   </div>
                 ))}
             </dl>

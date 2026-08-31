@@ -7,6 +7,7 @@ import {
   UsagePurpose,
 } from "@prisma/client";
 import { getApplicationStatusLabel } from "@/lib/registration/status-presentation";
+import { formatWorkflowHistoryLine } from "@/lib/constants/display-labels";
 import { APPLICATION_STATUS_LABELS } from "@/lib/workflows/application-workflow";
 import {
   annexBuildingTypeCode,
@@ -39,7 +40,7 @@ import {
   LEGACY_REGISTRY_ATTRIBUTION,
 } from "@/lib/migration/legacy-display";
 
-export type DossierField = { label: string; value: string };
+export type DossierField = { label: string; value: string; href?: string };
 export type DossierSection = { id: string; title: string; fields: DossierField[] };
 
 type RegistrationExtended = {
@@ -88,7 +89,7 @@ const BUILDING_TYPE_FROM_PRISMA: Record<BuildingType, string> = {
   WORKPLACE: REGISTRATION_BUILDING_TYPE_LABELS.VEND_PUNE_QENDER_TREGTARE,
   CO_OWNERSHIP_BUILDING: REGISTRATION_BUILDING_TYPE_LABELS.NDERTESA_NE_BASHKEPRONESI,
   RESIDENTIAL: REGISTRATION_BUILDING_TYPE_LABELS.MJEDISE_SHTEPIAKE,
-  PUBLIC_BUILDING: REGISTRATION_BUILDING_TYPE_LABELS.NDERTESE_PUBLIKE,
+  PUBLIC_BUILDING: "Ndërtesë publike",
   SHOPPING_CENTER: "Qendër tregtare",
   OTHER: "Tjetër",
 };
@@ -115,19 +116,6 @@ const DELEGATION_STATUS_LABELS: Record<DelegationStatus, string> = {
   REJECTED: "Refuzuar",
   EXPIRED: "Skaduar",
   REVOKED: "Revokuar",
-};
-
-const WORKFLOW_ACTION_LABELS: Record<string, string> = {
-  SAVE_BASIC_DATA: "Ruajtja e të dhënave bazë",
-  INSTALLER_DELEGATED: "Caktimi i instaluesit",
-  INSTALLER_ACCEPTED: "Pranimi i ftesës nga instaluesi",
-  INSTALLER_REJECTED: "Refuzimi i ftesës nga instaluesi",
-  TECHNICAL_DATA_COMPLETED: "Përfundimi i të dhënave teknike",
-  CERTIFIER_DELEGATED: "Caktimi i certifikuesit",
-  CERTIFIER_ACCEPTED: "Pranimi i ftesës nga certifikuesi",
-  CERTIFIER_REJECTED: "Refuzimi i ftesës nga certifikuesi",
-  CERTIFICATION_COMPLETED: "Përfundimi i certifikimit",
-  APPLICATION_SUBMITTED_TO_ISHMT: "Parashtrimi tek ISHMT",
 };
 
 function fmt(value: unknown): string {
@@ -205,6 +193,7 @@ function splitAdditionalTechnical(raw: unknown): { technical: TechnicalExtended;
 }
 
 export type RegistrationDossierApplication = {
+  id: string;
   applicationNumber: string;
   type: string;
   status: ApplicationStatus;
@@ -289,7 +278,7 @@ export function buildRegistrationSubmissionChecklist(
   const technicalFieldKeys = ["numri serial", "prodhuesi", "katet"];
   const certificationFieldKeys = [
     "certifikuesi",
-    "numri OMI",
+    "numri OM",
     "data e ekzaminimit",
     "referenca e certifikatës",
     "data e certifikatës",
@@ -371,6 +360,14 @@ export function buildRegistrationDossier(application: RegistrationDossierApplica
           ? [{ label: "Burimi", value: LEGACY_REGISTRY_ATTRIBUTION }]
           : []),
         { label: "Data e aplikimit", value: fmtDate(data?.applicationDate) },
+        {
+          label: "Data e instalimit / vënies në shërbim",
+          value: fmtDate(
+            (ext.elevatorInServiceDate as string | undefined) ??
+              technical.installationDate ??
+              technical.commissioningDate,
+          ),
+        },
         { label: "Data e krijimit", value: fmtDate(application.createdAt) },
         { label: "Data e parashtrimit", value: fmtDate(application.submittedAt) },
         { label: "Organizata e personit përgjegjës", value: application.ownerOrg.name },
@@ -406,7 +403,6 @@ export function buildRegistrationDossier(application: RegistrationDossierApplica
           label: "NID / NIPT",
           value: fmt(data?.responsibleEntityIdentifier ?? application.ownerOrg.nipt),
         },
-        { label: "Adresa", value: fmt(ext.responsibleAddress) },
         { label: "Telefoni", value: fmt(data?.responsibleEntityPhone) },
         { label: "Email", value: fmt(data?.responsibleEntityEmail) },
         { label: "Përfaqësuar nga", value: fmt(ext.representedBy) },
@@ -488,7 +484,7 @@ export function buildRegistrationDossier(application: RegistrationDossierApplica
     },
     {
       id: "certifier",
-      title: "F. Certifikuesi (OMI)",
+      title: "F. Certifikuesi (OM)",
       fields: [
         {
           label: certifierOrganizationFieldLabel(certifierOrgName),
@@ -539,7 +535,12 @@ export function buildRegistrationDossier(application: RegistrationDossierApplica
 
   const workflow = (application.workflowHistory ?? []).map((h) => ({
     id: h.id,
-    label: `${h.fromStatus ? APPLICATION_STATUS_LABELS[h.fromStatus] : "-"} → ${APPLICATION_STATUS_LABELS[h.toStatus]} (${WORKFLOW_ACTION_LABELS[h.action] ?? h.action})`,
+    label: formatWorkflowHistoryLine({
+      fromStatus: h.fromStatus,
+      toStatus: h.toStatus,
+      action: h.action,
+      statusLabels: APPLICATION_STATUS_LABELS,
+    }),
     at: fmtDateTime(h.createdAt),
   }));
 

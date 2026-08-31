@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { getToken } from "next-auth/jwt";
 import { ROLE_CODES, type RoleCode } from "@/lib/constants/roles";
+import type { OrgCapabilities } from "@/lib/organizations/org-capabilities";
+import { canAccessPathWithCapabilities } from "@/lib/organizations/service-provider-nav";
 import {
   getAllowedRolesForPath,
   getDefaultRedirectForRole,
@@ -30,6 +32,18 @@ export async function middleware(request: NextRequest) {
   const allowedRoles = getAllowedRolesForPath(pathname);
 
   if (allowedRoles && !allowedRoles.includes(roleCode)) {
+    if (pathname === "/unauthorized") {
+      return NextResponse.next();
+    }
+    return NextResponse.redirect(new URL("/unauthorized", request.url));
+  }
+
+  const orgCapabilities = token.orgCapabilities as OrgCapabilities | null | undefined;
+  if (
+    orgCapabilities &&
+    pathname.startsWith("/portal") &&
+    !canAccessPathWithCapabilities(pathname, orgCapabilities)
+  ) {
     if (pathname === "/unauthorized") {
       return NextResponse.next();
     }

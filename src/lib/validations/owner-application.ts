@@ -1,5 +1,10 @@
 import { z } from "zod";
 
+export {
+  ownerContactProfileSchema as ownerUserProfileSchema,
+  ownerOrgProfileSchema,
+} from "@/lib/validations/account-profile";
+
 export const basicApplicationDataSchema = z.object({
   buildingName: z.string().optional(),
   buildingAddress: z.string().min(5, "Adresa e plotë e godinës është e detyrueshme"),
@@ -28,38 +33,6 @@ export const basicApplicationDataSchema = z.object({
   responsibleEntityEmail: z.string().email("Email i pavlefshëm"),
   responsibleEntityPhone: z.string().min(8, "Telefoni është i detyrueshëm"),
   notes: z.string().optional(),
-});
-
-export const ownerOrgProfileSchema = z.object({
-  name: z.string().min(2, "Emri është i detyrueshëm"),
-  nipt: z.string().min(5, "NIPT / NID është i detyrueshëm"),
-  legalForm: z.string().optional(),
-  address: z.string().min(5, "Adresa është e detyrueshme"),
-  municipalityId: z.string().uuid("Zgjidhni bashkinë"),
-  email: z.string().email("Email i pavlefshëm"),
-  phone: z.string().min(8, "Telefoni është i detyrueshëm"),
-  representativeName: z.string().optional(),
-  representativeNid: z.string().optional(),
-  representativePhone: z.string().optional(),
-  representativeEmail: z.string().email().optional().or(z.literal("")),
-  ownerBuildingRole: z
-    .enum([
-      "ADMINISTRATOR",
-      "OWNERS_ASSEMBLY_REP",
-      "PHYSICAL_PERSON",
-      "LEGAL_PERSON",
-      "CONSTRUCTOR",
-      "CONSTRUCTION_COMPANY",
-      "OTHER",
-    ])
-    .optional(),
-});
-
-export const ownerUserProfileSchema = z.object({
-  firstName: z.string().min(2, "Emri është i detyrueshëm"),
-  lastName: z.string().min(2, "Mbiemri është i detyrueshëm"),
-  phone: z.string().optional(),
-  nid: z.string().optional(),
 });
 
 export const deregistrationApplicationSchema = z.object({

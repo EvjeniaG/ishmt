@@ -1,6 +1,8 @@
 import Link from "next/link";
-import { ArrowUpRight, History } from "lucide-react";
+import { ArrowUpRight, ChevronDown, History } from "lucide-react";
 import { formatWorkflowHistoryLine } from "@/lib/constants/display-labels";
+import { WorkflowSection } from "@/components/applications/workflow-section";
+import { cn } from "@/lib/utils";
 import type { ApplicationStatus } from "@prisma/client";
 
 type HistoryEntry = {
@@ -8,8 +10,50 @@ type HistoryEntry = {
   fromStatus: ApplicationStatus | null;
   toStatus: ApplicationStatus;
   action: string;
+  comment?: string | null;
   createdAt: Date;
 };
+
+function formatHistoryTime(createdAt: Date) {
+  return new Date(createdAt).toLocaleString("sq-AL", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  });
+}
+
+function HistoryEntryRow({
+  entry,
+  statusLabels,
+  emphasized = false,
+}: {
+  entry: HistoryEntry;
+  statusLabels: Record<string, string>;
+  emphasized?: boolean;
+}) {
+  const title = formatWorkflowHistoryLine({
+    fromStatus: entry.fromStatus,
+    toStatus: entry.toStatus,
+    action: entry.action,
+    statusLabels: statusLabels as Record<ApplicationStatus, string>,
+  });
+
+  return (
+    <div
+      className={cn(
+        "workflow-data-cell",
+        emphasized && "border-gov-primary/15 bg-gov-primary/[0.03]",
+      )}
+    >
+      <dt className="workflow-data-label">{title}</dt>
+      {entry.comment?.trim() && (
+        <dd className="mt-1 text-sm text-muted-foreground">Arsye: {entry.comment.trim()}</dd>
+      )}
+      <dd className="workflow-data-value mt-1 tabular-nums">
+        <time dateTime={new Date(entry.createdAt).toISOString()}>{formatHistoryTime(entry.createdAt)}</time>
+      </dd>
+    </div>
+  );
+}
 
 export function ApplicationElevatorCard({
   elevatorId,
@@ -40,41 +84,33 @@ export function ApplicationHistoryTimeline({
 }) {
   if (entries.length === 0) return null;
 
+  const [latest, ...older] = entries;
+
   return (
-    <section className="workflow-section">
-      <div className="workflow-section-header">
-        <div className="flex items-center gap-2">
-          <History className="h-4 w-4 text-gov-primary" aria-hidden />
-          <h2 className="workflow-section-title">Historia</h2>
-        </div>
-        <p className="workflow-section-desc">Çfarë ka ndodhur me aplikimin tuaj</p>
+    <WorkflowSection
+      title="Historia"
+      description={`${entries.length} ${entries.length === 1 ? "ngjarje" : "ngjarje"} në proces`}
+      headerExtra={<History className="h-4 w-4 shrink-0 text-gov-primary" aria-hidden />}
+    >
+      <div className="space-y-3">
+        <HistoryEntryRow entry={latest} statusLabels={statusLabels} emphasized />
+
+        {older.length > 0 && (
+          <details className="group border-t border-border/60 pt-3">
+            <summary className="flex cursor-pointer list-none items-center justify-between gap-2 text-sm font-medium text-gov-primary hover:text-gov-secondary">
+              <span>Shfaq {older.length} ngjarje të mëparshme</span>
+              <ChevronDown className="h-4 w-4 shrink-0 transition-transform group-open:rotate-180" aria-hidden />
+            </summary>
+            <ol className="mt-3 grid gap-3">
+              {older.map((entry) => (
+                <li key={entry.id}>
+                  <HistoryEntryRow entry={entry} statusLabels={statusLabels} />
+                </li>
+              ))}
+            </ol>
+          </details>
+        )}
       </div>
-      <div className="workflow-section-body">
-        <ol className="workflow-timeline">
-          {entries.map((entry, index) => (
-            <li key={entry.id} className="workflow-timeline-item">
-              {index < entries.length - 1 && <span className="workflow-timeline-line" aria-hidden />}
-              <span className="workflow-timeline-dot" aria-hidden />
-              <div className="min-w-0 flex-1 pb-1">
-                <p className="text-sm font-medium text-foreground">
-                  {formatWorkflowHistoryLine({
-                    fromStatus: entry.fromStatus,
-                    toStatus: entry.toStatus,
-                    action: entry.action,
-                    statusLabels,
-                  })}
-                </p>
-                <p className="mt-0.5 text-xs text-muted-foreground">
-                  {new Date(entry.createdAt).toLocaleString("sq-AL", {
-                    dateStyle: "medium",
-                    timeStyle: "short",
-                  })}
-                </p>
-              </div>
-            </li>
-          ))}
-        </ol>
-      </div>
-    </section>
+    </WorkflowSection>
   );
 }
