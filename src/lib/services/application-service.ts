@@ -23,6 +23,12 @@ import { hasPermission } from "@/lib/permissions/guards";
 import { PERMISSIONS } from "@/lib/permissions/codes";
 import { ROLE_CODES, type RoleCode } from "@/lib/constants/roles";
 import { isDirectorateActivityApplication } from "@/lib/directorate/activity-application-access";
+
+/** Miratimi krijon ashensor, certifikatë dhe QR — jashtë limitit default 5s të Prisma. */
+const APPROVAL_TRANSACTION_OPTIONS = {
+  maxWait: 10_000,
+  timeout: 60_000,
+} as const;
 import { hasServiceCapability, canActAsRole } from "@/lib/organizations/org-capabilities";
 import { assertInstallerDistinctFromCertifier } from "@/lib/registration/registration-party-rules";
 import {
@@ -2266,7 +2272,9 @@ export class ApplicationService {
             ? {
                 plannedInspectorIds: inspectorIds,
                 requiredFieldInspectorCount: inspectorIds.length,
-                inspectorAssignmentLockedBy: ROLE_CODES.ISHMT_DIRECTOR,
+                ...(application.inspectorAssignmentLockedBy
+                  ? {}
+                  : { inspectorAssignmentLockedBy: ROLE_CODES.ISHMT_DIRECTOR }),
               }
             : {}),
         },
@@ -3051,7 +3059,7 @@ export class ApplicationService {
         );
 
         return created;
-      });
+      }, APPROVAL_TRANSACTION_OPTIONS);
 
       const assetResult = await PostApprovalAssetService.tryGenerate({
         elevatorId: result.elevator.id,
@@ -3124,7 +3132,7 @@ export class ApplicationService {
       );
 
       return sideEffect;
-    });
+    }, APPROVAL_TRANSACTION_OPTIONS);
 
     await ElevatorLifecycleService.notifyLifecycleComplete(
       application,

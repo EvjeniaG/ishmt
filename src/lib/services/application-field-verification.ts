@@ -57,14 +57,32 @@ export async function applyFieldVerificationRequest(
   });
 }
 
-/** Kush e kërkoi verifikimin — mos e mbishkruaj kur hallkat e poshtme delegojnë më tej. */
-export function resolveFieldVerificationRequestedBy(application: {
-  fieldVerificationRequestedBy?: string | null;
-  inspectorAssignmentLockedBy?: string | null;
-}): string | null {
+/** Kush e kërkoi verifikimin — lexo nga gjurma e workflow kur fusha në DB është e vjetruar. */
+export async function resolveFieldVerificationRequestedBy(
+  applicationId: string,
+  application: {
+    fieldVerificationRequestedBy?: string | null;
+    inspectorAssignmentLockedBy?: string | null;
+  },
+): Promise<string | null> {
+  const chiefDelegation = await db.applicationWorkflowHistory.findFirst({
+    where: {
+      applicationId,
+      action: "DELEGATE_TO_DIRECTOR",
+    },
+    orderBy: { createdAt: "asc" },
+    select: { metadata: true },
+  });
+
+  const chiefMeta = chiefDelegation?.metadata as { requiresFieldVerification?: boolean } | null;
+  if (chiefMeta?.requiresFieldVerification) {
+    return ROLE_CODES.CHIEF_INSPECTOR;
+  }
+
   if (application.inspectorAssignmentLockedBy === ROLE_CODES.CHIEF_INSPECTOR) {
     return ROLE_CODES.CHIEF_INSPECTOR;
   }
+
   return application.fieldVerificationRequestedBy ?? null;
 }
 
@@ -199,7 +217,7 @@ export async function getApplicationFieldVerificationStatus(
 
   return {
     required: true,
-    requestedBy: resolveFieldVerificationRequestedBy(application),
+    requestedBy: await resolveFieldVerificationRequestedBy(applicationId, application),
     canApprove,
     requiredInspectorCount: requiredInspectorIds.length,
     completedCount,
@@ -427,7 +445,7 @@ export function isChiefLockedFieldVerification(application: {
   fieldVerificationRequestedBy?: string | null;
 }): boolean {
   return (
-    resolveFieldVerificationRequestedBy(application) === ROLE_CODES.CHIEF_INSPECTOR ||
+    application.fieldVerificationRequestedBy === ROLE_CODES.CHIEF_INSPECTOR ||
     application.inspectorAssignmentLockedBy === ROLE_CODES.CHIEF_INSPECTOR
   );
 }
