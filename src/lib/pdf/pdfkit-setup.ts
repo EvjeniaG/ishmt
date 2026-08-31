@@ -1,3 +1,4 @@
+import fs from "fs";
 import path from "path";
 
 /** Resolved pdfkit data dir (Helvetica.afm etc.) - works when package is not bundled. */
@@ -12,7 +13,6 @@ export function getPdfkitDataDir(): string {
 export function assertPdfkitFontsAvailable(): void {
   const dataDir = getPdfkitDataDir();
   const helvetica = path.join(dataDir, "Helvetica.afm");
-  const fs = nodeRequire("fs") as typeof import("fs");
   if (!fs.existsSync(helvetica)) {
     throw new Error(`Fontet PDF nuk u gjetën: ${helvetica}`);
   }
