@@ -68,6 +68,10 @@ import {
   DELEGATION_REVOKED_ACTION_LABEL,
   isDelegationRevokedForOrg,
 } from "@/lib/delegation/delegation-revoked";
+import {
+  COMPLETED_APPLICATION_STATUS_LABEL,
+  isSuccessfulTerminalApplicationStatus,
+} from "@/lib/registration/status-presentation";
 import { NotificationService } from "@/lib/services/notification-service";
 import {
   ISHMT_NOTIFICATION_COPY,
@@ -335,6 +339,19 @@ export class ApplicationService {
         return "Në pritje të pranimit nga marrësi";
       }
       if (ownershipDelegation.status === DelegationStatus.ACCEPTED) {
+        if (app.status === ApplicationStatus.REJECTED) {
+          return "E refuzuar";
+        }
+        if (isSuccessfulTerminalApplicationStatus(app.status)) {
+          return COMPLETED_APPLICATION_STATUS_LABEL;
+        }
+        if (
+          app.status === ApplicationStatus.SUBMITTED ||
+          app.status === ApplicationStatus.UNDER_REVIEW ||
+          app.status === ApplicationStatus.PENDING_CHIEF_INSPECTOR
+        ) {
+          return "Në shqyrtim nga IQMT";
+        }
         return "Parashtroni te IQMT";
       }
       if (ownershipDelegation.status === DelegationStatus.REJECTED) {
@@ -377,6 +394,10 @@ export class ApplicationService {
     if (app.status === ApplicationStatus.CERTIFICATION_COMPLETED) return "Rishikoni dhe parashtroni te IQMT";
     if (app.status === ApplicationStatus.PENDING_OWNER_SUBMISSION) return "Dërgo Aplikimin për Registrim";
     if (app.returnToRole === ReturnTargetRole.OWNER) return "Korrigjoni dhe riparashtroni";
+    if (isSuccessfulTerminalApplicationStatus(app.status)) {
+      return COMPLETED_APPLICATION_STATUS_LABEL;
+    }
+    if (app.status === ApplicationStatus.REJECTED) return "E refuzuar";
     if (roleCode === ROLE_CODES.OWNER || roleCode === ROLE_CODES.INSTALLER || roleCode === ROLE_CODES.CERTIFIER) {
       const ishmtLabel = currentPhaseLabel(app.status);
       if (ishmtLabel !== app.status) return ishmtLabel;
@@ -384,8 +405,6 @@ export class ApplicationService {
     if (app.status === ApplicationStatus.SUBMITTED) return "Në pritje të shqyrtimit nga inspektori";
     if (app.status === ApplicationStatus.UNDER_REVIEW) return "Në shqyrtim nga inspektori IQMT";
     if (app.status === ApplicationStatus.PENDING_CHIEF_INSPECTOR) return "Në pritje të miratimit nga kryeinspektori IQMT";
-    if (app.status === ApplicationStatus.APPROVED) return "E miratuar";
-    if (app.status === ApplicationStatus.REJECTED) return "E refuzuar";
     return APPLICATION_STATUS_LABELS[app.status] ?? app.status;
   }
 

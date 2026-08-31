@@ -1,6 +1,7 @@
 import { ApplicationStatus, ApplicationType, CertificateStatus, CertificateType, DataUpdateType, DelegationStatus, DelegationType, ElevatorStatus } from "@prisma/client";
 import { APPLICATION_TYPE_LABELS, OWNERSHIP_TRANSFER_LABEL } from "@/lib/constants/application-labels";
 import { APPLICATION_STATUS_LABELS } from "@/lib/workflows/application-workflow";
+import { getApplicationStatusLabel } from "@/lib/registration/status-presentation";
 
 export const ELEVATOR_STATUS_LABELS: Record<ElevatorStatus, string> = {
   PENDING_REGISTRATION: "Në pritje regjistrimi",
@@ -119,7 +120,10 @@ export const WORKFLOW_ACTION_LABELS: Record<string, string> = {
 
 export function labelApplicationStatus(status: ApplicationStatus | string | null | undefined): string {
   if (!status) return "-";
-  return APPLICATION_STATUS_LABELS[status as ApplicationStatus] ?? status;
+  if (status in APPLICATION_STATUS_LABELS) {
+    return getApplicationStatusLabel(status as ApplicationStatus);
+  }
+  return status;
 }
 
 export function labelDelegationType(type: DelegationType | string | null | undefined): string {

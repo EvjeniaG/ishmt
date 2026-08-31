@@ -5,6 +5,7 @@ import { useRouter } from "@/lib/navigation/use-app-router";
 import { ApplicationStatus, ApplicationType } from "@prisma/client";
 import { APPLICATION_TYPE_LABELS } from "@/lib/constants/application-labels";
 import { APPLICATION_STATUS_LABELS } from "@/lib/workflows/application-workflow";
+import { getApplicationStatusLabel } from "@/lib/registration/status-presentation";
 
 const TYPE_OPTIONS: { value: ApplicationType; label: string }[] = (
   Object.entries(APPLICATION_TYPE_LABELS) as [ApplicationType, string][]
@@ -27,7 +28,10 @@ const STATUS_OPTIONS: { value: ApplicationStatus; label: string }[] = (
     "REJECTED",
     "CLOSED",
   ].includes(value),
-).map(([value, label]) => ({ value, label }));
+).map(([value]) => ({
+  value,
+  label: getApplicationStatusLabel(value),
+}));
 
 type Municipality = { id: string; nameSq: string };
 
@@ -135,7 +139,7 @@ export function ApplicationFilters({ municipalities }: { municipalities: Municip
             checked={params.get("approved") === "1"}
             onChange={(e) => setPreset(e.target.checked ? "approved" : "")}
           />
-          Aplikime të miratuara
+          Aplikime të përfunduara
         </label>
       </div>
     </div>

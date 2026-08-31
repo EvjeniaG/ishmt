@@ -8,6 +8,22 @@ import { QrService } from "@/lib/services/qr-service";
 import { USAGE_PURPOSE_LABELS } from "@/lib/constants/owner-labels";
 import { EXAMINATION_TYPE_LABELS } from "@/lib/registration/labels";
 
+type CertificateApplicationContext = {
+  applicationNumber: string;
+  installerOrg?: { name: string } | null;
+  data:
+    | {
+        usagePurpose?: UsagePurpose | null;
+        serialNumber?: string | null;
+        manufacturer?: string | null;
+        responsibleEntityName?: string | null;
+        responsibleEntityIdentifier?: string | null;
+        omiNumber?: string | null;
+        examinationType?: string | null;
+      }
+    | null;
+};
+
 type CertificateVarInput = {
   certificate: { certificateNumber: string };
   elevator: {
@@ -16,33 +32,28 @@ type CertificateVarInput = {
     ownerOrg: { name: string; nipt?: string | null };
     municipality: { nameSq: string };
     technicalData: { elevatorType?: string | null; manufacturer?: string | null; serialNumber?: string | null } | null;
-  };
-  application: {
-    applicationNumber: string;
     installerOrg?: { name: string } | null;
-    data:
-      | {
-          usagePurpose?: UsagePurpose | null;
-          serialNumber?: string | null;
-          manufacturer?: string | null;
-          responsibleEntityName?: string | null;
-          responsibleEntityIdentifier?: string | null;
-          omiNumber?: string | null;
-          examinationType?: string | null;
-        }
-      | null;
   };
+  application: CertificateApplicationContext;
+  baselineApplication?: CertificateApplicationContext | null;
   issuedDate: string;
   actorId: string;
 };
 
-/** Builds the variable map for the official registration certificate (and forwarding letter). */
-async function buildCertificateVariables(input: CertificateVarInput): Promise<Record<string, string>> {
+/** Ndërton variablat e certifikatës; për lifecycle përdor aplikimin bazë + të dhënat e përditësuara të pronarit. */
+export async function buildCertificatePdfVariables(
+  input: CertificateVarInput,
+): Promise<Record<string, string>> {
   const { certificate, elevator, application, issuedDate } = input;
-  const data = application.data;
+  const baseline = input.baselineApplication ?? application;
+  const lifecycle = input.baselineApplication ? application : null;
+  const baselineData = baseline.data;
+  const lifecycleData = lifecycle?.data;
 
-  const usagePurpose = data?.usagePurpose ? USAGE_PURPOSE_LABELS[data.usagePurpose] : undefined;
-  const rawExamination = data?.examinationType ?? undefined;
+  const usagePurpose = baselineData?.usagePurpose
+    ? USAGE_PURPOSE_LABELS[baselineData.usagePurpose]
+    : undefined;
+  const rawExamination = baselineData?.examinationType ?? undefined;
   const examinationType =
     rawExamination && rawExamination in EXAMINATION_TYPE_LABELS
       ? EXAMINATION_TYPE_LABELS[rawExamination as keyof typeof EXAMINATION_TYPE_LABELS]
@@ -51,25 +62,33 @@ async function buildCertificateVariables(input: CertificateVarInput): Promise<Re
   const variables: Record<string, string> = {
     certificateNumber: certificate.certificateNumber,
     registryNumber: elevator.registryNumber,
-    ownerName: data?.responsibleEntityName ?? elevator.ownerOrg.name,
+    ownerName: lifecycleData?.responsibleEntityName ?? elevator.ownerOrg.name,
     municipality: elevator.municipality.nameSq,
     buildingAddress: elevator.buildingAddress,
-    applicationNumber: application.applicationNumber,
+    applicationNumber: baseline.applicationNumber,
     issuedDate,
   };
 
-  const serialNumber = elevator.technicalData?.serialNumber ?? data?.serialNumber;
-  const manufacturer = elevator.technicalData?.manufacturer ?? data?.manufacturer;
+  const serialNumber = elevator.technicalData?.serialNumber ?? baselineData?.serialNumber;
+  const manufacturer = elevator.technicalData?.manufacturer ?? baselineData?.manufacturer;
   const responsibleIdentifier =
-    data?.responsibleEntityIdentifier ?? elevator.ownerOrg.nipt ?? undefined;
+    lifecycleData?.responsibleEntityIdentifier ??
+    elevator.ownerOrg.nipt ??
+    baselineData?.responsibleEntityIdentifier ??
+    undefined;
+
+  const installerName =
+    baseline.installerOrg?.name ??
+    elevator.installerOrg?.name ??
+    application.installerOrg?.name;
 
   if (elevator.technicalData?.elevatorType) variables.elevatorType = elevator.technicalData.elevatorType;
   if (manufacturer) variables.manufacturer = manufacturer;
   if (serialNumber) variables.serialNumber = serialNumber;
-  if (input.application.installerOrg?.name) variables.installerName = input.application.installerOrg.name;
+  if (installerName) variables.installerName = installerName;
   if (usagePurpose) variables.usagePurpose = usagePurpose;
   if (responsibleIdentifier) variables.responsibleIdentifier = responsibleIdentifier;
-  if (data?.omiNumber) variables.omiNumber = data.omiNumber;
+  if (baselineData?.omiNumber) variables.omiNumber = baselineData.omiNumber;
   if (examinationType) variables.examinationType = examinationType;
   variables.chiefInspectorName = await resolveChiefInspectorDisplayName();
 
@@ -167,6 +186,7 @@ export class PostApprovalAssetService {
         municipality: true,
         ownerOrg: true,
         technicalData: true,
+        installerOrg: true,
       },
     });
 
@@ -177,8 +197,10 @@ export class PostApprovalAssetService {
       throw new Error("Të dhënat për gjenerimin e dokumenteve nuk u gjetën.");
     }
 
-    const issuedDate = new Date().toLocaleDateString("sq-AL");
-    const variables = await buildCertificateVariables({
+    const issuedDate = certificate.issuedDate
+      ? new Date(certificate.issuedDate).toLocaleDateString("sq-AL")
+      : new Date().toLocaleDateString("sq-AL");
+    const variables = await buildCertificatePdfVariables({
       certificate,
       elevator,
       application,
@@ -275,18 +297,35 @@ export class PostApprovalAssetService {
     });
     const elevator = await db.elevator.findUnique({
       where: { id: input.elevatorId },
-      include: { municipality: true, ownerOrg: true, technicalData: true },
+      include: {
+        municipality: true,
+        ownerOrg: true,
+        technicalData: true,
+        installerOrg: true,
+      },
     });
     const certificate = await db.certificate.findUnique({ where: { id: input.certificateId } });
     if (!application || !elevator || !certificate) {
       throw new Error("Të dhënat për gjenerimin e certifikatës nuk u gjetën.");
     }
 
-    const issuedDate = new Date().toLocaleDateString("sq-AL");
-    const variables = await buildCertificateVariables({
+    const baselineApplication =
+      certificate.applicationId && certificate.applicationId !== input.applicationId
+        ? await db.application.findUnique({
+            where: { id: certificate.applicationId },
+            include: { data: { include: { municipality: true } }, ownerOrg: true, installerOrg: true },
+          })
+        : null;
+
+    const issuedDate = certificate.issuedDate
+      ? new Date(certificate.issuedDate).toLocaleDateString("sq-AL")
+      : new Date().toLocaleDateString("sq-AL");
+
+    const variables = await buildCertificatePdfVariables({
       certificate,
       elevator,
       application,
+      baselineApplication,
       issuedDate,
       actorId: input.actorId,
     });
@@ -327,6 +366,15 @@ export class PostApprovalAssetService {
     await db.certificate.update({
       where: { id: certificate.id },
       data: { documentId: certDocument.id },
+    });
+
+    await db.application.update({
+      where: { id: input.applicationId },
+      data: {
+        assetGenerationStatus: AssetGenerationStatus.COMPLETED,
+        assetGenerationError: null,
+        assetGenerationCompletedAt: new Date(),
+      },
     });
 
     await DocumentService.uploadSystemDocument({

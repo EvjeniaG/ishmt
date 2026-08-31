@@ -14,6 +14,7 @@ import {
   isDelegationRevokedForOrg,
 } from "@/lib/delegation/delegation-revoked";
 import { ROLE_CODES } from "@/lib/constants/roles";
+import { COMPLETED_APPLICATION_STATUS_LABEL } from "@/lib/registration/status-presentation";
 
 describe("isDelegationRevokedForOrg", () => {
   const delegations = [
@@ -144,5 +145,43 @@ describe("ApplicationService.getNextRequiredAction for revoked delegation", () =
 
   it("exports stable revoked status label for list badges", () => {
     expect(DELEGATION_REVOKED_STATUS_LABEL).toBe("Ftesa u tërhoq");
+  });
+});
+
+describe("ApplicationService.getNextRequiredAction for ownership transfer", () => {
+  const approvedTransferApp = {
+    id: "app-transfer-1",
+    type: ApplicationType.DATA_UPDATE,
+    status: ApplicationStatus.APPROVED,
+    delegations: [
+      {
+        organizationId: "org-recipient",
+        accessType: DelegationType.OWNERSHIP_RECIPIENT,
+        status: DelegationStatus.ACCEPTED,
+      },
+    ],
+  };
+
+  it("shows completed next step after approved ownership transfer", () => {
+    expect(
+      ApplicationService.getNextRequiredAction(
+        approvedTransferApp,
+        ROLE_CODES.OWNER,
+        "org-sender",
+      ),
+    ).toBe(COMPLETED_APPLICATION_STATUS_LABEL);
+  });
+
+  it("shows submit step when delegation is accepted but not yet submitted", () => {
+    expect(
+      ApplicationService.getNextRequiredAction(
+        {
+          ...approvedTransferApp,
+          status: ApplicationStatus.BASIC_DATA_COMPLETED,
+        },
+        ROLE_CODES.OWNER,
+        "org-sender",
+      ),
+    ).toBe("Parashtroni te IQMT");
   });
 });

@@ -17,7 +17,7 @@ import type { AuthContext } from "@/lib/permissions/guards";
 import { ROLE_CODES } from "@/lib/constants/roles";
 import type { RequiredActionItem } from "@/lib/dashboard/required-actions";
 import { OWNER_TERM } from "@/lib/constants/owner-labels";
-import { APPLICATION_STATUS_LABELS } from "@/lib/workflows/application-workflow";
+import { getApplicationStatusLabel } from "@/lib/registration/status-presentation";
 import { labelElevatorStatus } from "@/lib/constants/display-labels";
 import { registrationPhasePath, resolveRegistrationPhase, buildRegistrationPhaseInput } from "@/lib/registration/phase-router";
 import { isReturnedToRole } from "@/lib/workflows/return-targets";
@@ -338,7 +338,7 @@ export class OwnerDashboardService {
       applicationNumber: app.applicationNumber,
       type: app.type,
       status: app.status,
-      statusLabel: APPLICATION_STATUS_LABELS[app.status],
+      statusLabel: getApplicationStatusLabel(app.status, app.type),
       address: app.data?.buildingAddress ?? "-",
       createdAt: app.createdAt,
       nextAction: ApplicationService.getNextRequiredAction(app, ROLE_CODES.OWNER, orgId),

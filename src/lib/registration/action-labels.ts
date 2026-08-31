@@ -1,4 +1,5 @@
 import type { RegistrationPhase } from "@/lib/registration/phase-router";
+import { COMPLETED_APPLICATION_STATUS_LABEL } from "@/lib/registration/status-presentation";
 
 export const REGISTRATION_PHASE_ACTION_LABELS: Record<RegistrationPhase, string> = {
   "basic-data": "Plotësoni të dhënat bazë",
@@ -17,6 +18,6 @@ export const REGISTRATION_PHASE_ACTION_LABELS: Record<RegistrationPhase, string>
   "final-review": "Rishikoni dhe parashtroni te IQMT",
   submitted: "Në shqyrtim nga IQMT",
   review: "Shqyrtim institucional",
-  completed: "E përfunduar",
+  completed: COMPLETED_APPLICATION_STATUS_LABEL,
   rejected: "E refuzuar",
 };

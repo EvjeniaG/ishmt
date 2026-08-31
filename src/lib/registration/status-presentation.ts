@@ -22,12 +22,18 @@ const ISHMT_ROLES = new Set<RoleCode>([
   ROLE_CODES.ADMIN,
 ]);
 
-const REGISTERED_STATUSES: ApplicationStatus[] = [
+export const COMPLETED_APPLICATION_STATUS_LABEL = "E përfunduar";
+
+export const SUCCESSFUL_TERMINAL_APPLICATION_STATUSES: ApplicationStatus[] = [
   ApplicationStatus.APPROVED,
   ApplicationStatus.ELEVATOR_CREATED,
   ApplicationStatus.ASSETS_GENERATED,
   ApplicationStatus.CLOSED,
 ];
+
+export function isSuccessfulTerminalApplicationStatus(status: ApplicationStatus): boolean {
+  return SUCCESSFUL_TERMINAL_APPLICATION_STATUSES.includes(status);
+}
 
 export function workflowStatusClass(tone: StatusTone): string {
   const map: Record<StatusTone, string> = {
@@ -40,10 +46,10 @@ export function workflowStatusClass(tone: StatusTone): string {
   return map[tone];
 }
 
-/** Etiketa e lexueshme e statusit; regjistrimet e miratuara shfaqen si "I regjistruar". */
-export function getApplicationStatusLabel(status: ApplicationStatus, type?: ApplicationType): string {
-  if (type === ApplicationType.NEW_REGISTRATION && REGISTERED_STATUSES.includes(status)) {
-    return "I regjistruar";
+/** Etiketa e lexueshme e statusit për palët e jashtme; përfundimet shfaqen si "E përfunduar". */
+export function getApplicationStatusLabel(status: ApplicationStatus, _type?: ApplicationType): string {
+  if (isSuccessfulTerminalApplicationStatus(status)) {
+    return COMPLETED_APPLICATION_STATUS_LABEL;
   }
   return APPLICATION_STATUS_LABELS[status];
 }
@@ -190,7 +196,7 @@ function getIshmtStatusPresentation(status: ApplicationStatus, roleCode: RoleCod
       return {
         ...DONE,
         hint: "Aplikimi u miratua dhe regjistrimi u përfundua.",
-        badgeLabel: "E miratuar",
+        badgeLabel: COMPLETED_APPLICATION_STATUS_LABEL,
       };
     case ApplicationStatus.CANCELLED:
     case ApplicationStatus.EXPIRED:
