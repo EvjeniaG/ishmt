@@ -2,6 +2,7 @@ import { ApplicationStatus, ApplicationType } from "@prisma/client";
 import { describe, expect, it } from "vitest";
 import {
   COMPLETED_APPLICATION_STATUS_LABEL,
+  NO_FURTHER_ACTION_LABEL,
   getApplicationStatusLabel,
 } from "@/lib/registration/status-presentation";
 import { ApplicationService } from "@/lib/services/application-service";
@@ -27,7 +28,7 @@ describe("getApplicationStatusLabel", () => {
 });
 
 describe("ApplicationService.getNextRequiredAction completed labels", () => {
-  it("matches status label for approved lifecycle applications", () => {
+  it("does not repeat completed status in the next-step column", () => {
     expect(
       ApplicationService.getNextRequiredAction(
         {
@@ -38,6 +39,6 @@ describe("ApplicationService.getNextRequiredAction completed labels", () => {
         ROLE_CODES.OWNER,
         "org-owner",
       ),
-    ).toBe(COMPLETED_APPLICATION_STATUS_LABEL);
+    ).toBe(NO_FURTHER_ACTION_LABEL);
   });
 });

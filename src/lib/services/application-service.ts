@@ -69,7 +69,7 @@ import {
   isDelegationRevokedForOrg,
 } from "@/lib/delegation/delegation-revoked";
 import {
-  COMPLETED_APPLICATION_STATUS_LABEL,
+  NO_FURTHER_ACTION_LABEL,
   isSuccessfulTerminalApplicationStatus,
 } from "@/lib/registration/status-presentation";
 import { NotificationService } from "@/lib/services/notification-service";
@@ -340,10 +340,10 @@ export class ApplicationService {
       }
       if (ownershipDelegation.status === DelegationStatus.ACCEPTED) {
         if (app.status === ApplicationStatus.REJECTED) {
-          return "E refuzuar";
+          return NO_FURTHER_ACTION_LABEL;
         }
         if (isSuccessfulTerminalApplicationStatus(app.status)) {
-          return COMPLETED_APPLICATION_STATUS_LABEL;
+          return NO_FURTHER_ACTION_LABEL;
         }
         if (
           app.status === ApplicationStatus.SUBMITTED ||
@@ -395,9 +395,9 @@ export class ApplicationService {
     if (app.status === ApplicationStatus.PENDING_OWNER_SUBMISSION) return "Dërgo Aplikimin për Registrim";
     if (app.returnToRole === ReturnTargetRole.OWNER) return "Korrigjoni dhe riparashtroni";
     if (isSuccessfulTerminalApplicationStatus(app.status)) {
-      return COMPLETED_APPLICATION_STATUS_LABEL;
+      return NO_FURTHER_ACTION_LABEL;
     }
-    if (app.status === ApplicationStatus.REJECTED) return "E refuzuar";
+    if (app.status === ApplicationStatus.REJECTED) return NO_FURTHER_ACTION_LABEL;
     if (roleCode === ROLE_CODES.OWNER || roleCode === ROLE_CODES.INSTALLER || roleCode === ROLE_CODES.CERTIFIER) {
       const ishmtLabel = currentPhaseLabel(app.status);
       if (ishmtLabel !== app.status) return ishmtLabel;

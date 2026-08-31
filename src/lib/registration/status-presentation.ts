@@ -23,6 +23,7 @@ const ISHMT_ROLES = new Set<RoleCode>([
 ]);
 
 export const COMPLETED_APPLICATION_STATUS_LABEL = "E përfunduar";
+export const NO_FURTHER_ACTION_LABEL = "-";
 
 export const SUCCESSFUL_TERMINAL_APPLICATION_STATUSES: ApplicationStatus[] = [
   ApplicationStatus.APPROVED,

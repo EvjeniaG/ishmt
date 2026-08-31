@@ -14,7 +14,7 @@ import {
   isDelegationRevokedForOrg,
 } from "@/lib/delegation/delegation-revoked";
 import { ROLE_CODES } from "@/lib/constants/roles";
-import { COMPLETED_APPLICATION_STATUS_LABEL } from "@/lib/registration/status-presentation";
+import { COMPLETED_APPLICATION_STATUS_LABEL, NO_FURTHER_ACTION_LABEL } from "@/lib/registration/status-presentation";
 
 describe("isDelegationRevokedForOrg", () => {
   const delegations = [
@@ -169,7 +169,7 @@ describe("ApplicationService.getNextRequiredAction for ownership transfer", () =
         ROLE_CODES.OWNER,
         "org-sender",
       ),
-    ).toBe(COMPLETED_APPLICATION_STATUS_LABEL);
+    ).toBe(NO_FURTHER_ACTION_LABEL);
   });
 
   it("shows submit step when delegation is accepted but not yet submitted", () => {
