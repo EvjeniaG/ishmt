@@ -32,6 +32,7 @@ import {
 } from "@/lib/organizations/service-provider-nav";
 import { PERIODIC_INSPECTION_CONTRACTS_LABEL, PERIODIC_INSPECTIONS_LABEL } from "@/lib/constants/periodic-inspection-labels";
 import type { OrgCapabilities } from "@/lib/organizations/org-capabilities";
+import type { PortalNavBadges } from "@/lib/services/portal-nav-badge-service";
 
 export type PortalNavItem = {
   href: string;
@@ -252,12 +253,14 @@ export function PortalSidebar({
   role,
   items,
   orgCapabilities,
+  navBadges,
   onNavigate,
   className,
 }: {
   role?: string;
   items?: PortalNavItem[];
   orgCapabilities?: OrgCapabilities | null;
+  navBadges?: PortalNavBadges;
   onNavigate?: () => void;
   className?: string;
 }) {
@@ -309,6 +312,7 @@ export function PortalSidebar({
               {group.items.map((item) => {
                 const Icon = item.icon;
                 const active = isActive(item.href);
+                const badgeCount = navBadges?.[item.href] ?? 0;
                 return (
                   <Link
                     key={`${item.href}-${item.label}`}
@@ -323,7 +327,15 @@ export function PortalSidebar({
                     >
                       <Icon className="h-4 w-4 shrink-0" strokeWidth={active ? 2 : 1.75} />
                     </span>
-                    <span className="leading-snug">{item.label}</span>
+                    <span className="min-w-0 flex-1 leading-snug">{item.label}</span>
+                    {badgeCount > 0 && (
+                      <span
+                        className="ml-auto flex h-5 min-w-[1.25rem] shrink-0 items-center justify-center rounded-full bg-red-600 px-1.5 text-[11px] font-bold tabular-nums text-white ring-2 ring-card"
+                        aria-label={`${badgeCount} në pritje`}
+                      >
+                        {badgeCount > 99 ? "99+" : badgeCount}
+                      </span>
+                    )}
                   </Link>
                 );
               })}

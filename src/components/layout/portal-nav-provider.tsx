@@ -6,6 +6,7 @@ import { Menu, PanelLeft, PanelLeftClose, X } from "lucide-react";
 import { PortalSidebar } from "@/components/layout/portal-sidebar";
 import type { OrgCapabilities } from "@/lib/organizations/org-capabilities";
 import { cn } from "@/lib/utils";
+import type { PortalNavBadges } from "@/lib/services/portal-nav-badge-service";
 
 const SIDEBAR_COLLAPSED_KEY = "portal-sidebar-collapsed";
 
@@ -130,9 +131,11 @@ export function PortalMain({ children }: { children: ReactNode }) {
 export function PortalSidebarLayout({
   role,
   orgCapabilities,
+  navBadges,
 }: {
   role?: string;
   orgCapabilities?: OrgCapabilities | null;
+  navBadges?: PortalNavBadges;
 }) {
   const { open, close, desktopCollapsed } = usePortalNav();
 
@@ -148,6 +151,7 @@ export function PortalSidebarLayout({
         <PortalSidebar
           role={role}
           orgCapabilities={orgCapabilities}
+          navBadges={navBadges}
           className="h-full"
         />
       </div>
@@ -170,6 +174,7 @@ export function PortalSidebarLayout({
         <PortalSidebar
           role={role}
           orgCapabilities={orgCapabilities}
+          navBadges={navBadges}
           onNavigate={close}
           className="h-full max-h-screen shadow-xl"
         />

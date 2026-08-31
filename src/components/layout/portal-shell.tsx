@@ -13,6 +13,8 @@ import {
 import { PortalUserMenu } from "@/components/layout/portal-user-menu";
 import { NotificationAutoRead } from "@/components/layout/notification-auto-read";
 import { NotificationService } from "@/lib/services/notification-service";
+import { PortalNavBadgeService } from "@/lib/services/portal-nav-badge-service";
+import type { AuthContext } from "@/lib/permissions/guards";
 import { SYSTEM_NAME, OWNER_TERM } from "@/lib/constants/owner-labels";
 import type { OrgCapabilities } from "@/lib/organizations/org-capabilities";
 import { capabilityLabels } from "@/lib/organizations/org-capabilities";
@@ -43,6 +45,22 @@ export async function PortalShell({
 }) {
   const session = await getAuthSession();
   const orgCapabilities = orgCapabilitiesProp ?? session?.user?.orgCapabilities ?? null;
+  const authContext: AuthContext | null = session?.user
+    ? {
+        userId: session.user.id,
+        email: session.user.email ?? "",
+        firstName: session.user.firstName,
+        lastName: session.user.lastName,
+        activeOrgId: session.user.activeOrgId,
+        activeOrgType: session.user.activeOrgType,
+        activeOrgName: session.user.activeOrgName,
+        roleCode: session.user.roleCode,
+        permissions: session.user.permissions,
+        orgCapabilities,
+      }
+    : null;
+  const navBadges =
+    authContext != null ? await PortalNavBadgeService.getForContext(authContext) : {};
   const capabilityLabel =
     orgCapabilities && capabilityLabels(orgCapabilities).length > 0
       ? `KOMPANI SHËRBIMI · ${capabilityLabels(orgCapabilities).join(" · ")}`
@@ -121,7 +139,7 @@ export async function PortalShell({
         </header>
 
         <div className="relative flex min-h-0 flex-1 overflow-hidden print:block print:overflow-visible">
-          <PortalSidebarLayout role={role} orgCapabilities={orgCapabilities} />
+          <PortalSidebarLayout role={role} orgCapabilities={orgCapabilities} navBadges={navBadges} />
 
           <PortalMain>{children}</PortalMain>
         </div>
