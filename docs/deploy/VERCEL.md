@@ -113,10 +113,13 @@ Kjo bën: `prisma db push` → seed → demo i plotë (përdorues, ashensorë, a
 
 Projekti ka `vercel.json`:
 
-- **05:00 UTC** - të gjitha job-et (përmbledhje ditore, compliance, etj.)
-- **Çdo 15 min** - `ASSET_GENERATION_RETRY` (certifikata PDF + QR)
+- **05:00 UTC** - të gjitha job-et (përmbledhje ditore, compliance, riprovim PDF/QR)
 
 Vercel dërgon automatikisht `Authorization: Bearer <CRON_SECRET>` kur `CRON_SECRET` është vendosur.
+
+**Plan Hobby (falas):** lejohet vetëm **1 cron ditor** — riprovimi i PDF/QR bëhet çdo ditë në 05:00 UTC (përfshihet në `/api/cron/jobs`). Riprovim i menjëhershëm: hap dosjen e ashensorit ose «Riprovo gjenerimin» te aplikimi.
+
+**Plan Pro:** mund të shtosh cron çdo 15 min te `vercel.json` (`/api/cron/asset-generation`, `*/15 * * * *`).
 
 **Test manual** (pas deploy):
 

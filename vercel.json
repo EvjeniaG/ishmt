@@ -3,10 +3,6 @@
     {
       "path": "/api/cron/jobs",
       "schedule": "0 5 * * *"
-    },
-    {
-      "path": "/api/cron/asset-generation",
-      "schedule": "*/15 * * * *"
     }
   ]
 }
