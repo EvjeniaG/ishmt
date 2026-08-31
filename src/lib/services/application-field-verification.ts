@@ -42,13 +42,30 @@ export async function applyFieldVerificationRequest(
 ) {
   if (!input.requiresFieldVerification) return;
 
+  const existing = await tx.application.findUnique({
+    where: { id: input.applicationId },
+    select: { fieldVerificationRequestedBy: true },
+  });
+
   await tx.application.update({
     where: { id: input.applicationId },
     data: {
       requiresFieldVerification: true,
-      fieldVerificationRequestedBy: input.roleCode,
+      fieldVerificationRequestedBy:
+        existing?.fieldVerificationRequestedBy ?? input.roleCode,
     },
   });
+}
+
+/** Kush e kërkoi verifikimin — mos e mbishkruaj kur hallkat e poshtme delegojnë më tej. */
+export function resolveFieldVerificationRequestedBy(application: {
+  fieldVerificationRequestedBy?: string | null;
+  inspectorAssignmentLockedBy?: string | null;
+}): string | null {
+  if (application.inspectorAssignmentLockedBy === ROLE_CODES.CHIEF_INSPECTOR) {
+    return ROLE_CODES.CHIEF_INSPECTOR;
+  }
+  return application.fieldVerificationRequestedBy ?? null;
 }
 
 export async function getApplicationFieldVerificationStatus(
@@ -59,6 +76,7 @@ export async function getApplicationFieldVerificationStatus(
     select: {
       requiresFieldVerification: true,
       fieldVerificationRequestedBy: true,
+      inspectorAssignmentLockedBy: true,
       plannedInspectorIds: true,
     },
   });
@@ -181,7 +199,7 @@ export async function getApplicationFieldVerificationStatus(
 
   return {
     required: true,
-    requestedBy: application.fieldVerificationRequestedBy,
+    requestedBy: resolveFieldVerificationRequestedBy(application),
     canApprove,
     requiredInspectorCount: requiredInspectorIds.length,
     completedCount,
@@ -404,13 +422,12 @@ export function fieldVerificationRequestedByLabel(roleCode: string | null) {
   return roleLabelSq(roleCode as RoleCode);
 }
 
-/** Verifikimi/inspektorët e bllokuar nga kryeinspektori - hallkat e poshtme nuk i ndryshojnë. */
 export function isChiefLockedFieldVerification(application: {
   inspectorAssignmentLockedBy?: string | null;
   fieldVerificationRequestedBy?: string | null;
 }): boolean {
   return (
-    application.fieldVerificationRequestedBy === ROLE_CODES.CHIEF_INSPECTOR ||
+    resolveFieldVerificationRequestedBy(application) === ROLE_CODES.CHIEF_INSPECTOR ||
     application.inspectorAssignmentLockedBy === ROLE_CODES.CHIEF_INSPECTOR
   );
 }

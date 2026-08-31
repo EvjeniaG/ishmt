@@ -464,7 +464,7 @@ export default async function ReviewDetailPage({
               plannedInspectorIds={plannedInspectorIds}
               inspectorAssignmentLockedBy={application.inspectorAssignmentLockedBy}
               initialRequiresFieldVerification={application.requiresFieldVerification}
-              fieldVerificationRequestedBy={application.fieldVerificationRequestedBy}
+              fieldVerificationRequestedBy={fieldVerificationStatus.requestedBy}
               fieldVerificationCanApprove={fieldVerificationStatus.canApprove}
               fieldVerificationCompletedCount={fieldVerificationStatus.completedCount}
               fieldVerificationRequiredCount={fieldVerificationStatus.requiredInspectorCount}
