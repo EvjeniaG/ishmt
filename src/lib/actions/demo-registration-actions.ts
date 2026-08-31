@@ -28,6 +28,8 @@ export async function fillApplicationDemoStepAction(
       prefilledOrgField: result.prefilledOrgField,
       prefilledOrgId: result.prefilledOrgId,
       prefilledOrgQuery: result.prefilledOrgQuery,
+      prefilledRecipientNipt: result.prefilledRecipientNipt,
+      prefilledTransferReason: result.prefilledTransferReason,
     };
   } catch (error) {
     return {

@@ -7,6 +7,7 @@ import { PortalEmptyState } from "@/components/shared/portal-table";
 import { SectionCard } from "@/components/shared/institutional";
 import { getAuthSession } from "@/lib/auth";
 import { OwnerPortalService } from "@/lib/services/owner-portal-service";
+import { PERIODIC_INSPECTIONS_LABEL } from "@/lib/constants/periodic-inspection-labels";
 import { ROLE_CODES } from "@/lib/constants/roles";
 
 const RESULT_STYLES: Record<string, string> = {
@@ -41,11 +42,11 @@ export default async function OwnerInspectionsPage() {
     <AppShell>
       <StandardPageLayout
         eyebrow="Portali · Personi përgjegjës i ashensorit"
-        title="Kontrollet periodike"
-        description="Historiku i kontrolleve periodike të regjistruara nga organizata OM/certifikuese."
+        title={PERIODIC_INSPECTIONS_LABEL}
+        description="Historiku i inspektimeve periodike të regjistruara nga organizata OM/certifikuese."
       >
         {inspections.length === 0 ? (
-          <PortalEmptyState>Nuk ka kontrolle të regjistruara.</PortalEmptyState>
+          <PortalEmptyState>Nuk ka inspektime të regjistruara.</PortalEmptyState>
         ) : (
           <div className="grid gap-4">
             {inspections.map((insp) => {
@@ -90,7 +91,7 @@ export default async function OwnerInspectionsPage() {
                       </p>
                     </div>
                     <div>
-                      <p className="text-xs text-muted-foreground">Kontrolli i radhës</p>
+                      <p className="text-xs text-muted-foreground">Inspektimi i radhës</p>
                       <p className="font-medium">
                         {insp.nextInspectionDate
                           ? new Date(insp.nextInspectionDate).toLocaleDateString("sq-AL")

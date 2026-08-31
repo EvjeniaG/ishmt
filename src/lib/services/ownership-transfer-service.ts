@@ -13,6 +13,39 @@ import type { FieldChange } from "@/lib/services/elevator-lifecycle-service";
 const INVITE_STATUSES: DelegationStatus[] = [DelegationStatus.PENDING, DelegationStatus.INVITED];
 
 export class OwnershipTransferService {
+  /** Gjen subjektin e personit përgjegjës nga NIPT i organizatës ose NID i përdoruesit. */
+  static async resolveRecipientOwnerOrganization(identifier: string) {
+    const normalized = identifier.trim().toUpperCase();
+    if (normalized.length < 5) return null;
+
+    const byNipt = await db.organization.findFirst({
+      where: {
+        type: OrgType.OWNER,
+        nipt: normalized,
+        deletedAt: null,
+        status: "ACTIVE",
+      },
+    });
+    if (byNipt) return byNipt;
+
+    const user = await db.authUser.findFirst({
+      where: { nid: normalized, deletedAt: null, isActive: true },
+      select: {
+        memberships: {
+          where: {
+            deactivatedAt: null,
+            organization: { type: OrgType.OWNER, deletedAt: null, status: "ACTIVE" },
+          },
+          include: { organization: true },
+          orderBy: [{ isPrimary: "desc" }, { joinedAt: "asc" }],
+          take: 1,
+        },
+      },
+    });
+
+    return user?.memberships[0]?.organization ?? null;
+  }
+
   static recipientDelegation(
     delegations: { accessType: DelegationType; organizationId: string; status: DelegationStatus; organization?: { name: string; nipt: string | null } }[],
   ) {
@@ -55,14 +88,7 @@ export class OwnershipTransferService {
       throw new Error("Marrësi nuk mund të jetë i njëjti subjekt përgjegjës.");
     }
 
-    const recipientOrg = await db.organization.findFirst({
-      where: {
-        type: OrgType.OWNER,
-        nipt,
-        deletedAt: null,
-        status: "ACTIVE",
-      },
-    });
+    const recipientOrg = await this.resolveRecipientOwnerOrganization(nipt);
     if (!recipientOrg) {
       throw new Error("Nuk u gjet subjekt i personit përgjegjës të ashensorit aktiv me këtë NIPT/NID në regjistr.");
     }
@@ -79,13 +105,14 @@ export class OwnershipTransferService {
       throw new Error("Marrësi ka pranuar tashmë - krijoni aplikim të ri për marrës tjetër.");
     }
 
+    const storedIdentifier = recipientOrg.nipt?.toUpperCase() ?? nipt;
     const oldValue = application.ownerOrg.nipt ?? application.ownerOrg.name;
     const changes: FieldChange[] = [
       {
         field: "responsibleEntityIdentifier",
         label: "NIPT/NID i marrësit",
         oldValue,
-        newValue: nipt,
+        newValue: storedIdentifier,
         reason: reason.trim(),
       },
     ];
@@ -98,7 +125,7 @@ export class OwnershipTransferService {
         where: { applicationId },
         data: {
           updateFields: changes,
-          responsibleEntityIdentifier: nipt,
+          responsibleEntityIdentifier: storedIdentifier,
           responsibleEntityName: recipientOrg.name,
         },
       });

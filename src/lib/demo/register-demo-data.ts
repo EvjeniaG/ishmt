@@ -1,6 +1,6 @@
 import type { RegisterOwnerEntityType } from "@/lib/registration/owner-entity-role";
 import { ownerSubjectNameRequired } from "@/lib/registration/owner-entity-role";
-import { REGISTER_OWNER_PRESETS } from "@/lib/demo/demo-seed-profiles";
+import { REGISTER_OWNER_PRESETS, DEMO_OWNER_ADMINISTRATOR, DEMO_OWNER_CONSTRUCTION } from "@/lib/demo/demo-seed-profiles";
 import { nextRegisterDemoInstallClaim } from "@/lib/demo/demo-install-claim-pool";
 import { nextRegisterDemoOmClaim } from "@/lib/demo/demo-om-claim-pool";
 
@@ -29,6 +29,11 @@ function demoDigits(length = 7): string {
 
 const OWNER_DEMO_BY_ROLE = REGISTER_OWNER_PRESETS;
 
+const OWNER_DEMO_PROFILES = {
+  ADMINISTRATOR: DEMO_OWNER_ADMINISTRATOR,
+  CONSTRUCTION_COMPANY: DEMO_OWNER_CONSTRUCTION,
+} as const;
+
 /** Të dhëna fiktive unike për testimin e regjistrimit dhe pipeline-it. */
 export function buildRegisterDemoData(input: {
   level: RegisterDemoLevel;
@@ -48,17 +53,20 @@ export function buildRegisterDemoData(input: {
     case "OWNER": {
       const role = input.ownerBuildingRole ?? "ADMINISTRATOR";
       const preset = OWNER_DEMO_BY_ROLE[role];
+      const profile = OWNER_DEMO_PROFILES[role];
       return {
         ...shared,
+        email: profile.email,
+        phone: profile.phone,
         ownerBuildingRole: role,
-        personalNumber: `I9${digits}D`,
+        personalNumber: profile.nid,
         firstName: preset.firstName,
         fatherName: preset.fatherName,
         lastName: preset.lastName,
-        birthDate: "1985-06-15",
-        ...(preset.nipt ? { nipt: `L${digits}A` } : { nipt: "" }),
+        birthDate: profile.birthDate,
+        ...(preset.nipt ? { nipt: preset.nipt } : { nipt: "" }),
         ...(ownerSubjectNameRequired(role)
-          ? { organizationName: `${preset.orgName} ${suffix}` }
+          ? { organizationName: preset.orgName }
           : {}),
       };
     }

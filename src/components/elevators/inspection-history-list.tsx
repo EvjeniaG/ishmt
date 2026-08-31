@@ -13,6 +13,10 @@ import {
   RegistryFilterBar,
   StatusPill,
 } from "@/components/elevators/registry-shared";
+import {
+  NEXT_PERIODIC_INSPECTION_LABEL,
+  PERIODIC_INSPECTION_DATE_LABEL,
+} from "@/lib/constants/periodic-inspection-labels";
 import { PeriodicInspectionEnrichForm } from "@/components/elevators/periodic-inspection-enrich-form";
 import { cn } from "@/lib/utils";
 
@@ -55,7 +59,7 @@ function buildDetailRows(item: InspectionItem) {
     { label: "Lloji", value: item.typeLabel },
     { label: "Rezultati", value: item.resultLabel },
     {
-      label: isPeriodic ? "Data e kontrollit" : "Data e kryerjes",
+      label: isPeriodic ? PERIODIC_INSPECTION_DATE_LABEL : "Data e kryerjes",
       value: fmtDateSq(item.conductedDate),
     },
   ];
@@ -65,7 +69,7 @@ function buildDetailRows(item: InspectionItem) {
   }
 
   if (nextDate !== "-") {
-    rows.push({ label: "Kontrolli i radhës", value: nextDate });
+    rows.push({ label: NEXT_PERIODIC_INSPECTION_LABEL, value: nextDate });
   }
 
   if (
@@ -164,7 +168,7 @@ function InspectionCard({
         {item.hasReport && (
           <DocumentDownload
             documentId={item.reportDocumentId}
-            label="Shkarko dokumentin e kontrollit"
+            label="Shkarko dokumentin e inspektimit"
           />
         )}
         {showOmiEnrich && item.canOmiEnrich && elevatorId && (
@@ -268,7 +272,7 @@ export function InspectionHistoryList({
 
       {filtered.length === 0 ? (
         <p className="px-4 py-8 text-center text-sm text-muted-foreground sm:px-5">
-          Asnjë kontroll për filtrat e zgjedhur.
+          Asnjë inspektim për filtrat e zgjedhur.
         </p>
       ) : (
         <ul className="space-y-2 p-4 sm:p-5">

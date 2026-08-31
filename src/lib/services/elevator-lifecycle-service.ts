@@ -1,6 +1,7 @@
 import {
   AuditAction,
   CertificateStatus,
+  CertificateType,
   DataUpdateType,
   DelegationStatus,
   DelegationType,
@@ -358,12 +359,30 @@ export class ElevatorLifecycleService {
         ["responsibleEntityPhone", "responsibleEntityEmail"].includes(c.field),
       );
 
+    /** Transferim pronësie / ndryshim personi përgjegjës: e njëjta CR, vetëm PDF i përditësuar. */
+    const certificateInPlaceUpdate =
+      updateType === DataUpdateType.OWNERSHIP_TRANSFER ||
+      updateType === DataUpdateType.RESPONSIBLE_ENTITY_CHANGE;
+
     const affectsCertificate =
       !contactOnly &&
+      !certificateInPlaceUpdate &&
       (changesAffectCertificate(changes) || changes.length > 0);
 
     let newCertNumber: string | undefined;
-    if (affectsCertificate) {
+    let updatedCertificateId: string | undefined;
+    if (certificateInPlaceUpdate) {
+      const activeCert = await tx.certificate.findFirst({
+        where: {
+          elevatorId: elevator.id,
+          status: CertificateStatus.ACTIVE,
+          type: CertificateType.REGISTRATION,
+        },
+      });
+      if (activeCert) {
+        updatedCertificateId = activeCert.id;
+      }
+    } else if (affectsCertificate) {
       const newCert = await this.issueReplacementCertificate(
         elevator.id,
         application.id,
@@ -385,7 +404,9 @@ export class ElevatorLifecycleService {
           updateType: application.data?.updateType,
           changes,
           ...(newCertNumber ? { newCertificate: newCertNumber } : {}),
+          ...(updatedCertificateId ? { updatedCertificateId } : {}),
           certificateReissued: affectsCertificate,
+          certificateUpdatedInPlace: Boolean(updatedCertificateId),
         },
         metadata: { applicationId: application.id, lifecycle: "DATA_UPDATE" },
       },
@@ -396,6 +417,7 @@ export class ElevatorLifecycleService {
       elevatorId: elevator.id,
       decision,
       ...(newCertNumber ? { newCertificateNumber: newCertNumber } : {}),
+      ...(updatedCertificateId ? { updatedCertificateId } : {}),
     };
   }
 

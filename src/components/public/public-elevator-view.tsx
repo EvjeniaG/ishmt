@@ -1,6 +1,7 @@
 import type { PublicAlert, PublicQrProfile } from "@/lib/services/qr-service";
 import { ComplianceService } from "@/lib/services/compliance-service";
 import { labelElevatorStatus } from "@/lib/constants/display-labels";
+import { PERIODIC_INSPECTIONS_LABEL } from "@/lib/constants/periodic-inspection-labels";
 
 const ELEVATOR_TYPE_LABELS: Record<string, string> = {
   PASSENGER: "Ashensor pasagjerësh",
@@ -126,20 +127,20 @@ export function PublicElevatorView({ profile, code }: { profile: PublicQrProfile
           </dl>
         </Section>
 
-        <Section title="Kontrolle periodike">
+        <Section title={PERIODIC_INSPECTIONS_LABEL}>
           {!profile.lastInspectionDate && (
             <p className="mb-4 rounded-md border border-red-300 bg-red-50 p-3 text-sm font-medium text-red-900">
-              Nuk ka asnjë kontroll periodik të regjistruar për këtë ashensor.
+              Nuk ka asnjë inspektim periodik të regjistruar për këtë ashensor.
             </p>
           )}
           <dl className="grid gap-4 text-sm md:grid-cols-2">
             <DataRow
-              label="Kontrolli i fundit"
+              label="Inspektimi i fundit"
               value={fmtDate(profile.lastInspectionDate)}
               missing={!profile.lastInspectionDate}
             />
             <DataRow
-              label="Lloji i kontrollit"
+              label="Lloji i inspektimit"
               value={
                 profile.lastInspectionType
                   ? INSPECTION_TYPE_LABELS[profile.lastInspectionType] ?? profile.lastInspectionType
@@ -156,13 +157,13 @@ export function PublicElevatorView({ profile, code }: { profile: PublicQrProfile
               }
               missing={!profile.lastInspectionResult}
             />
-            <DataRow label="Kontrolli i radhës deri më" value={fmtDate(profile.nextInspectionDate)} />
+            <DataRow label="Inspektimi i radhës deri më" value={fmtDate(profile.nextInspectionDate)} />
             <DataRow
-              label="Gjendja e kontrollit periodik"
+              label="Gjendja e inspektimit periodik"
               missing={!profile.lastInspectionDate || !profile.compliance.inspectionValid}
               value={
                 !profile.lastInspectionDate
-                  ? "Mungon - nuk ka kontroll të regjistruar"
+                  ? "Mungon - nuk ka inspektim të regjistruar"
                   : !profile.compliance.inspectionValid
                     ? "Jo në përputhje"
                     : profile.compliance.inspectionExpiring

@@ -2,6 +2,7 @@ import {
   ApplicationStatus,
   ApplicationType,
   ApplicationFieldReviewAssignmentStatus,
+  AssetGenerationStatus,
   FieldInspectorReportStatus,
   FieldInspectionAssignmentStatus,
   AuditAction,
@@ -80,6 +81,8 @@ import {
   hasIshmtApplicationParticipation,
   setActiveAssigneeParticipation,
   buildRegistrationPipelineWhere,
+  buildChiefApplicationsQueueWhere,
+  buildIshmtApplicationRegistryWhere,
   upsertParticipation,
   type ReviewQueueBucket,
   currentPhaseLabel,
@@ -106,7 +109,12 @@ import {
   annexBuildingTypeCode,
   annexUsagePurposeCode,
 } from "@/lib/registration/anneks-codes";
+import {
+  chiefDecisionStatuses,
+  usesDirectChiefReview,
+} from "@/lib/workflows/ishmt-direct-chief-review";
 import type { BuildingType, UsagePurpose } from "@prisma/client";
+import { formatSubmittedApplicationNotificationTitle } from "@/lib/constants/display-labels";
 
 /**
  * Thrown when an application is missing or the caller is not allowed to see it.
@@ -140,7 +148,7 @@ export const applicationInclude = {
   returnedBy: true,
   delegations: { include: { organization: true } },
   workflowHistory: { orderBy: { createdAt: "desc" as const }, take: 20 },
-  targetElevator: { include: { technicalData: true } },
+  targetElevator: { include: { technicalData: true, ownerOrg: true } },
   originElevator: { select: { id: true, registryNumber: true, status: true, buildingAddress: true } },
 } satisfies Prisma.ApplicationInclude;
 
@@ -704,7 +712,7 @@ export class ApplicationService {
     return fieldReviewProgress(assignments);
   }
 
-  /** Dosjet e regjistrimit në proces - deri te miratimi/refuzimi nga kryeinspektori. */
+  /** Dosjet e regjistrimit (NEW_REGISTRATION) në proces. */
   static async listRegistrationPipeline(ctx: AuthContext) {
     const chiefView = ctx.roleCode === ROLE_CODES.CHIEF_INSPECTOR;
     const where = buildRegistrationPipelineWhere(chiefView ? undefined : ctx.userId);
@@ -721,6 +729,42 @@ export class ApplicationService {
         },
       },
       orderBy: [{ submittedAt: "asc" }, { updatedAt: "desc" }],
+    });
+  }
+
+  /** Radha e kryeinspektorit - të gjitha llojet e aplikimeve në proces. */
+  static async listChiefApplicationsQueue(ctx: AuthContext) {
+    return this.listIshmtApplicationRegistry(ctx, { activeOnly: true });
+  }
+
+  /** Regjistri IQMT - të gjitha llojet e aplikimeve të parashtruara (aktive ose historike). */
+  static async listIshmtApplicationRegistry(
+    ctx: AuthContext,
+    options?: { activeOnly?: boolean },
+  ) {
+    if (!hasPermission(ctx, PERMISSIONS.APPLICATIONS_VIEW_ALL)) {
+      throw new Error("Nuk keni leje për regjistrin e aplikimeve.");
+    }
+    if (!isIshmtInternalRole(ctx.roleCode as RoleCode) && ctx.roleCode !== ROLE_CODES.ADMIN) {
+      throw new Error("Regjistri i aplikimeve vlen vetëm për stafin IQMT.");
+    }
+
+    const where = buildIshmtApplicationRegistryWhere(options);
+
+    return db.application.findMany({
+      where,
+      include: {
+        data: { include: { municipality: true } },
+        ownerOrg: true,
+        currentAssignee: { select: { id: true, firstName: true, lastName: true } },
+        fieldReviewAssignments: {
+          where: { status: { not: ApplicationFieldReviewAssignmentStatus.REPLACED } },
+          select: { id: true, status: true, inspectorId: true },
+        },
+      },
+      orderBy: options?.activeOnly
+        ? [{ submittedAt: "asc" }, { updatedAt: "desc" }]
+        : [{ submittedAt: "desc" }, { updatedAt: "desc" }],
     });
   }
 
@@ -1717,7 +1761,10 @@ export class ApplicationService {
     const ishmtOrg = await db.organization.findFirst({ where: { type: OrgType.ISHMT, deletedAt: null } });
     if (ishmtOrg) {
       await NotificationService.notifyIshmtOperationsStaff(ishmtOrg.id, {
-        title: `Aplikim i ri: ${application.type}`,
+        title: formatSubmittedApplicationNotificationTitle(
+          application.type,
+          application.data?.updateType,
+        ),
         body: `${application.applicationNumber} u parashtrua për shqyrtim.`,
         entityType: "application",
         entityId: application.id,
@@ -2976,9 +3023,17 @@ export class ApplicationService {
       throw new Error("Vetëm kryeinspektori mund të miratojë aplikimin.");
     }
 
-    await this.getMutableApplication(ctx, applicationId, [ApplicationStatus.PENDING_CHIEF_INSPECTOR]);
+    const preview = await db.application.findFirst({
+      where: { id: applicationId, deletedAt: null },
+      select: { type: true },
+    });
+    if (!preview) throw new Error("Aplikimi nuk u gjet.");
 
-    await assertFieldVerificationCompleteForApproval(applicationId);
+    await this.getMutableApplication(ctx, applicationId, chiefDecisionStatuses(preview.type));
+
+    if (!usesDirectChiefReview(preview.type)) {
+      await assertFieldVerificationCompleteForApproval(applicationId);
+    }
 
     const forwardMeta = await this.getInspectorReviewMetadata(applicationId);
     const physicalFlag = options?.requiresPhysicalInspection ?? forwardMeta.requiresPhysicalInspection;
@@ -3147,7 +3202,36 @@ export class ApplicationService {
         ? (lifecycleResult as { newCertificateNumber?: string }).newCertificateNumber
         : null;
 
+    const updatedCertificateId =
+      typeof lifecycleResult === "object" &&
+      lifecycleResult !== null &&
+      "updatedCertificateId" in lifecycleResult
+        ? (lifecycleResult as { updatedCertificateId?: string }).updatedCertificateId
+        : null;
+
     if (
+      updatedCertificateId &&
+      (application.type === ApplicationType.DATA_UPDATE ||
+        application.type === ApplicationType.DATA_CORRECTION)
+    ) {
+      try {
+        await PostApprovalAssetService.generateReplacementCertificatePdf({
+          applicationId,
+          certificateId: updatedCertificateId,
+          elevatorId: application.elevatorId!,
+          actorId: ctx.userId,
+        });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Gjenerimi i PDF dështoi";
+        await db.application.update({
+          where: { id: applicationId },
+          data: {
+            assetGenerationStatus: AssetGenerationStatus.FAILED,
+            assetGenerationError: message,
+          },
+        });
+      }
+    } else if (
       newCertNumber &&
       (application.type === ApplicationType.DATA_CORRECTION ||
         application.type === ApplicationType.DATA_UPDATE ||
@@ -3157,12 +3241,23 @@ export class ApplicationService {
         where: { certificateNumber: newCertNumber, elevatorId: application.elevatorId! },
       });
       if (cert) {
-        await PostApprovalAssetService.generateReplacementCertificatePdf({
-          applicationId,
-          certificateId: cert.id,
-          elevatorId: application.elevatorId!,
-          actorId: ctx.userId,
-        });
+        try {
+          await PostApprovalAssetService.generateReplacementCertificatePdf({
+            applicationId,
+            certificateId: cert.id,
+            elevatorId: application.elevatorId!,
+            actorId: ctx.userId,
+          });
+        } catch (error) {
+          const message = error instanceof Error ? error.message : "Gjenerimi i PDF dështoi";
+          await db.application.update({
+            where: { id: applicationId },
+            data: {
+              assetGenerationStatus: AssetGenerationStatus.FAILED,
+              assetGenerationError: message,
+            },
+          });
+        }
       }
     }
 
@@ -3174,9 +3269,13 @@ export class ApplicationService {
       throw new Error("Vetëm kryeinspektori mund të refuzojë aplikimin.");
     }
 
-    const application = await this.getMutableApplication(ctx, applicationId, [
-      ApplicationStatus.PENDING_CHIEF_INSPECTOR,
-    ]);
+    const preview = await db.application.findFirst({
+      where: { id: applicationId, deletedAt: null },
+      select: { type: true },
+    });
+    if (!preview) throw new Error("Aplikimi nuk u gjet.");
+
+    const application = await this.getMutableApplication(ctx, applicationId, chiefDecisionStatuses(preview.type));
     const toStatus = assertTransition(
       application.type,
       application.status,
@@ -3308,12 +3407,20 @@ export class ApplicationService {
     });
     if (!application) throw new Error("Aplikimi nuk u gjet.");
     if (!(await this.canViewApplication(ctx, application))) throw new Error("Nuk keni leje.");
-    if (application.status !== ApplicationStatus.PENDING_CHIEF_INSPECTOR) {
+
+    const directLifecycle = usesDirectChiefReview(application.type);
+    if (
+      application.status !== ApplicationStatus.PENDING_CHIEF_INSPECTOR &&
+      !(directLifecycle && application.status === ApplicationStatus.SUBMITTED)
+    ) {
       throw new Error(`Veprimi nuk lejohet në statusin '${application.status}'.`);
     }
 
     const returnToRole = pickPrimaryReturnToRole(input.returnToRoles);
-    const nextStatus = resolveReturnStatus(returnToRole);
+    const nextStatus =
+      directLifecycle && application.status === ApplicationStatus.SUBMITTED
+        ? ApplicationStatus.RETURNED
+        : resolveReturnStatus(returnToRole);
 
     assertTransition(application.type, application.status, "RETURN", ctx.roleCode, {
       returnTarget: returnToRole,

@@ -9,7 +9,8 @@ import { db } from "@/lib/db";
 import { DocumentService } from "@/lib/services/document-service";
 import { minimalDemoPdfBuffer } from "@/lib/demo/minimal-pdf";
 import { RegistrationDemoService } from "@/lib/demo/registration-demo-service";
-import { resolveDemoCertifierOrganization, resolveDemoInstallerOrganization } from "@/lib/demo/demo-seed-orgs";
+import { resolveDemoCertifierOrganization, resolveDemoInstallerOrganization, resolveDemoOwnershipRecipientOrganization } from "@/lib/demo/demo-seed-orgs";
+import { DEMO_OWNER_CONSTRUCTION } from "@/lib/demo/demo-seed-profiles";
 import type { ApplicationDemoStep } from "@/lib/demo/application-demo-steps";
 import { isDemoToolsEnabled } from "@/lib/demo/application-demo-steps";
 import type { RegistrationDemoStep } from "@/lib/demo/registration-demo-steps";
@@ -23,6 +24,8 @@ export type ApplicationDemoFillResult = {
   prefilledOrgField?: "installerOrgId" | "certifierOrgId";
   prefilledOrgId?: string;
   prefilledOrgQuery?: string;
+  prefilledRecipientNipt?: string;
+  prefilledTransferReason?: string;
 };
 
 function isRegistrationStep(step: ApplicationDemoStep): step is RegistrationDemoStep {
@@ -167,15 +170,18 @@ export class ApplicationDemoService {
       }
 
       case "ownership-recipient": {
-        await db.applicationData.update({
-          where: { applicationId },
-          data: {
-            updateType: DataUpdateType.OWNERSHIP_TRANSFER,
-            responsibleEntityName: "Subjekt Demo Marrës",
-            responsibleEntityIdentifier: "L98765432B",
-          },
-        });
-        return { step, refreshPage: true };
+        const recipient = await resolveDemoOwnershipRecipientOrganization();
+        if (!recipient?.nipt) {
+          throw new Error(
+            "Nuk u gjet marrësi demo (Kompani Ndërtimi) - ekzekutoni seed-demo me përdoruesin e dytë të pronarit.",
+          );
+        }
+        return {
+          step,
+          prefilledRecipientNipt: DEMO_OWNER_CONSTRUCTION.nid ?? recipient.nipt,
+          prefilledTransferReason:
+            "Transferim demo te kompania e ndërtimit për testim të pipeline-it të IQMT.",
+        };
       }
 
       case "lifecycle-documents": {

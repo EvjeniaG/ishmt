@@ -345,6 +345,50 @@ function certificateRecordFields(cert: Certificate): DossierField[] {
   ];
 }
 
+function partitionRegistrationCertificates(certificates: Certificate[]) {
+  const registration = certificates.filter((cert) => cert.type === "REGISTRATION");
+  return {
+    active: registration.filter((cert) => cert.status === "ACTIVE"),
+    historical: registration.filter((cert) => cert.status !== "ACTIVE"),
+  };
+}
+
+function buildCertificateTabGroups(
+  certificates: Certificate[],
+  sections: ReturnType<typeof buildElevatorCompleteDossier>,
+  compactSummary: boolean,
+): ElevatorTabGroup[] {
+  const { active, historical } = partitionRegistrationCertificates(certificates);
+
+  if (compactSummary) {
+    return active.map((cert) => ({
+      title: `Certifikata ${cert.certificateNumber}`,
+      fields: certificateRecordFields(cert),
+    }));
+  }
+
+  const groups: ElevatorTabGroup[] = [
+    { title: "F. Certifikuesi (OM)", fields: pickSectionFields(sections, "certifier") },
+    { title: "G. Certifikimi dhe konformiteti", fields: pickSectionFields(sections, "certification") },
+    ...active.map((cert) => ({
+      title: `Certifikata aktive e regjistrimit (${cert.certificateNumber})`,
+      fields: certificateRecordFields(cert),
+    })),
+  ];
+
+  if (historical.length > 0) {
+    groups.push({
+      title: "Historiku i certifikatave të zëvendësuara",
+      fields: historical.flatMap((cert) => [
+        { label: `Certifikata ${cert.certificateNumber}`, value: labelCertificateStatus(cert.status) },
+        ...certificateRecordFields(cert),
+      ]),
+    });
+  }
+
+  return groups;
+}
+
 function buildCompactQrFields(qr: QrCode | null | undefined): DossierField[] {
   if (!qr) {
     return [{ label: "Statusi", value: "Kodi QR nuk është gjeneruar" }];
@@ -678,6 +722,17 @@ export function buildElevatorTabDossier(input: {
     ...orgFields("Mirëmbajtja", elevator.maintenanceOrg),
   ];
 
+  const ownershipTransferred = elevator.ownershipHistory.length > 0;
+  const responsibleSectionTitle = ownershipTransferred
+    ? "B. Personi / subjekti përgjegjës (regjistrimi fillestar)"
+    : "B. Personi / subjekti përgjegjës";
+  const currentOwnerSection: ElevatorTabGroup | null = ownershipTransferred
+    ? {
+        title: "Personi përgjegjës aktual i ashensorit",
+        fields: orgFields("Regjistri aktual", elevator.ownerOrg),
+      }
+    : null;
+
   const summary: ElevatorTabGroup[] = [
     {
       title: "Regjistri",
@@ -696,9 +751,10 @@ export function buildElevatorTabDossier(input: {
       ),
     },
     {
-      title: "B. Personi / subjekti përgjegjës",
+      title: responsibleSectionTitle,
       fields: pickSectionFields(sections, "responsible"),
     },
+    ...(currentOwnerSection ? [currentOwnerSection] : []),
     {
       title: "C. Godina dhe vendndodhja",
       fields: pickSectionFields(sections, "building"),
@@ -709,7 +765,8 @@ export function buildElevatorTabDossier(input: {
   const fullSummary: ElevatorTabGroup[] = [
     { title: "Regjistri dhe statusi", fields: registryFields },
     { title: "A. Të dhënat e aplikimit", fields: pickSectionFields(sections, "application") },
-    { title: "B. Personi / subjekti përgjegjës", fields: pickSectionFields(sections, "responsible") },
+    { title: responsibleSectionTitle, fields: pickSectionFields(sections, "responsible") },
+    ...(currentOwnerSection ? [currentOwnerSection] : []),
     { title: "C. Godina dhe vendndodhja", fields: pickSectionFields(sections, "building") },
     { title: "Palët e lidhura (regjistri aktual)", fields: partiesFields },
   ];
@@ -752,19 +809,11 @@ export function buildElevatorTabDossier(input: {
           })),
         ];
 
-  const certificate: ElevatorTabGroup[] = compactSummary
-    ? elevator.certificates.map((cert) => ({
-        title: `Certifikata ${cert.certificateNumber}`,
-        fields: certificateRecordFields(cert),
-      }))
-    : [
-        { title: "F. Certifikuesi (OM)", fields: pickSectionFields(sections, "certifier") },
-        { title: "G. Certifikimi dhe konformiteti", fields: pickSectionFields(sections, "certification") },
-        ...elevator.certificates.map((cert) => ({
-          title: `Certifikata ${cert.certificateNumber}`,
-          fields: certificateRecordFields(cert),
-        })),
-      ];
+  const certificate: ElevatorTabGroup[] = buildCertificateTabGroups(
+    elevator.certificates,
+    sections,
+    compactSummary,
+  );
 
   const qr: ElevatorTabGroup[] = compactSummary
     ? [{ title: "Regjistri QR", fields: buildCompactQrFields(elevator.qrCodes[0]) }]

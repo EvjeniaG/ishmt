@@ -14,6 +14,7 @@ import {
   isLegacyImportFindings,
 } from "@/lib/elevators/format-inspection-findings";
 import { displayOmBody, formatOmBodyNumber } from "@/lib/elevators/format-om-body";
+import { computeMaintenanceComplianceMetrics } from "@/lib/elevators/maintenance-compliance-snapshot";
 import type { ContractTerminationMeta } from "@/lib/services/maintenance-contract-service";
 
 const MONTHLY_REPORT = "RAPORT_MUJOR";
@@ -22,7 +23,7 @@ const CONTRACT_STATUS_LABELS: Record<string, string> = {
   PENDING: "Në pritje",
   ACTIVE: "Aktive",
   REJECTED: "Refuzuar",
-  TERMINATED: "Përfunduar",
+  TERMINATED: "Të ndërprera",
   EXPIRED: "Skaduar",
 };
 
@@ -193,6 +194,11 @@ export type InspectionRegistryView = {
     documentId: string | null;
     documentName: string | null;
     createdAt: string;
+    termination: {
+      partyLabel: string;
+      actorName: string | null;
+      terminatedAt: string;
+    } | null;
   }>;
   items: Array<{
     id: string;
@@ -237,18 +243,38 @@ export function buildMaintenanceRegistryView(input: {
   const sortedRecords = [...input.maintenanceRecords].sort(
     (a, b) => new Date(b.performedDate).getTime() - new Date(a.performedDate).getTime(),
   );
+  const complianceFromRow = input.maintenanceCompliance
+    ? {
+        lastMaintenanceDate: input.maintenanceCompliance.lastMaintenanceDate?.toISOString() ?? null,
+        nextDueDate: input.maintenanceCompliance.nextDueDate?.toISOString() ?? null,
+        isCompliant: input.maintenanceCompliance.isCompliant,
+        daysOverdue: input.maintenanceCompliance.daysOverdue,
+      }
+    : null;
+  const complianceFromRecords = !complianceFromRow
+    ? computeMaintenanceComplianceMetrics(
+        sortedRecords.map((r) => ({
+          interventionType: r.interventionType,
+          performedDate: r.performedDate,
+        })),
+      )
+    : null;
+  const compliance =
+    complianceFromRow ??
+    (complianceFromRecords
+      ? {
+          lastMaintenanceDate: complianceFromRecords.lastMaintenanceDate.toISOString(),
+          nextDueDate: complianceFromRecords.nextDueDate.toISOString(),
+          isCompliant: complianceFromRecords.isCompliant,
+          daysOverdue: complianceFromRecords.daysOverdue,
+        }
+      : null);
+
   return {
     maintenanceOrg: input.maintenanceOrg
       ? { name: input.maintenanceOrg.name, nipt: input.maintenanceOrg.nipt }
       : null,
-    compliance: input.maintenanceCompliance
-      ? {
-          lastMaintenanceDate: input.maintenanceCompliance.lastMaintenanceDate?.toISOString() ?? null,
-          nextDueDate: input.maintenanceCompliance.nextDueDate?.toISOString() ?? null,
-          isCompliant: input.maintenanceCompliance.isCompliant,
-          daysOverdue: input.maintenanceCompliance.daysOverdue,
-        }
-      : null,
+    compliance,
     contracts: maintContracts
       .sort((a, b) => new Date(b.startDate).getTime() - new Date(a.startDate).getTime())
       .map((c) => ({
@@ -308,6 +334,7 @@ export function buildInspectionRegistryView(input: {
   intervalMonths?: number | null;
   registrationDate?: Date | null;
   buildingType?: BuildingType | null;
+  terminationMeta?: Map<string, ContractTerminationMeta>;
 }): InspectionRegistryView {
   const sorted = [...input.inspections].sort(
     (a, b) =>
@@ -349,6 +376,15 @@ export function buildInspectionRegistryView(input: {
       documentId: c.documentId,
       documentName: c.document?.originalFilename ?? null,
       createdAt: c.createdAt.toISOString(),
+      termination: (() => {
+        const meta = input.terminationMeta?.get(c.id);
+        if (!meta) return null;
+        return {
+          partyLabel: meta.partyLabel,
+          actorName: meta.actorName,
+          terminatedAt: meta.terminatedAt.toISOString(),
+        };
+      })(),
     })),
     nextDue,
     intervalMonths: input.intervalMonths ?? null,

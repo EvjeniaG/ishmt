@@ -52,6 +52,7 @@ import { FormDocumentsSection } from "@/components/applications/form-documents-s
 import { RETURN_TARGET_LABELS } from "@/lib/workflows/return-targets";
 import { fieldVerificationRequestedByLabel } from "@/lib/services/application-field-verification";
 import { chiefShowsInspectorReassignPanel } from "@/lib/ishmt/review-actions-visibility";
+import { usesDirectChiefReview } from "@/lib/workflows/ishmt-direct-chief-review";
 import type { ReturnTargetRole } from "@prisma/client";
 
 const REVIEW_TEXTAREA_CLASS =
@@ -913,6 +914,7 @@ export function CancelApplicationButton({ applicationId }: { applicationId: stri
 
 export function IshmtReviewActions({
   applicationId,
+  applicationType,
   status,
   roleCode,
   requiredInspectorCount,
@@ -929,6 +931,7 @@ export function IshmtReviewActions({
   fieldVerificationRequiredCount,
 }: {
   applicationId: string;
+  applicationType: ApplicationType;
   status: ApplicationStatus;
   roleCode: string;
   requiredInspectorCount?: number | null;
@@ -953,6 +956,7 @@ export function IshmtReviewActions({
   };
 }) {
   const role = roleCode as RoleCode;
+  const directLifecycle = usesDirectChiefReview(applicationType);
 
   if (canApproveApplications(role) && status === ApplicationStatus.PENDING_CHIEF_INSPECTOR) {
     return (
@@ -960,9 +964,25 @@ export function IshmtReviewActions({
         applicationId={applicationId}
         status={status}
         upstreamReview={directorReview}
-        fieldVerificationCanApprove={fieldVerificationCanApprove ?? true}
+        fieldVerificationCanApprove={directLifecycle ? true : (fieldVerificationCanApprove ?? true)}
         fieldVerificationCompletedCount={fieldVerificationCompletedCount}
         fieldVerificationRequiredCount={fieldVerificationRequiredCount}
+        lifecycleDirect={directLifecycle}
+      />
+    );
+  }
+
+  if (
+    (canChiefHandleApplications(role) || canApproveApplications(role)) &&
+    status === ApplicationStatus.SUBMITTED &&
+    directLifecycle
+  ) {
+    return (
+      <AdminReviewActions
+        applicationId={applicationId}
+        status={status}
+        lifecycleDirect
+        allowSubmitted
       />
     );
   }
@@ -1732,6 +1752,8 @@ export function AdminReviewActions({
   fieldVerificationCanApprove = true,
   fieldVerificationCompletedCount = 0,
   fieldVerificationRequiredCount = 0,
+  lifecycleDirect = false,
+  allowSubmitted = false,
 }: {
   applicationId: string;
   status: ApplicationStatus;
@@ -1741,6 +1763,8 @@ export function AdminReviewActions({
   fieldVerificationCanApprove?: boolean;
   fieldVerificationCompletedCount?: number;
   fieldVerificationRequiredCount?: number;
+  lifecycleDirect?: boolean;
+  allowSubmitted?: boolean;
 }) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
@@ -1757,7 +1781,7 @@ export function AdminReviewActions({
           ? `Aplikimi u miratua. Numri i regjistrit: ${result.registryNumber}`
           : "Aplikimi u miratua. Kartela e ashensorit u përditësua.",
       );
-      router.refresh();
+      router.push("/ishmt/chief/applications");
     }
   }
 
@@ -1765,21 +1789,23 @@ export function AdminReviewActions({
     e.preventDefault();
     const result = await rejectApplicationAction(applicationId, new FormData(e.currentTarget));
     if (!result.success) setError(result.error);
-    else router.refresh();
+    else router.push("/ishmt/chief/applications");
   }
 
   async function returnApp(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const result = await returnApplicationAction(applicationId, new FormData(e.currentTarget));
     if (!result.success) setError(result.error);
-    else router.refresh();
+    else router.push("/ishmt/chief/applications");
   }
 
   if (status !== ApplicationStatus.PENDING_CHIEF_INSPECTOR) {
-    return null;
+    if (!(allowSubmitted && status === ApplicationStatus.SUBMITTED)) {
+      return null;
+    }
   }
 
-  const fieldVerificationRequired = fieldVerificationRequiredCount > 0;
+  const fieldVerificationRequired = !lifecycleDirect && fieldVerificationRequiredCount > 0;
   const allFieldVerificationsCompleted =
     !fieldVerificationRequired ||
     fieldVerificationCompletedCount >= fieldVerificationRequiredCount;
@@ -1795,12 +1821,16 @@ export function AdminReviewActions({
     <Card className={REVIEW_ACTIONS_CARD_CLASS}>
       <CardHeader className={cn(REVIEW_ACTIONS_HEADER_CLASS, "space-y-3 !pb-0")}>
         <div className="space-y-2">
-          <CardTitle className="workflow-section-title !text-base font-semibold leading-tight tracking-tight">Vendimi final</CardTitle>
+          <CardTitle className="workflow-section-title !text-base font-semibold leading-tight tracking-tight">
+            {lifecycleDirect ? "Kryeinspektor" : "Vendimi final"}
+          </CardTitle>
           <CardDescription className="workflow-section-desc mt-1">
-            Zinxhiri i shqyrtimit hierarkik u përfundua. Merrni vendimin final të miratimit, refuzimit ose kthimit.
+            {lifecycleDirect
+              ? "Miratoni ose refuzoni aplikimin. Certifikata e re CR gjenerohet automatikisht pas miratimit."
+              : "Zinxhiri i shqyrtimit hierarkik u përfundua. Merrni vendimin final të miratimit, refuzimit ose kthimit."}
           </CardDescription>
         </div>
-        {upstreamReview?.comment && (
+        {!lifecycleDirect && upstreamReview?.comment && (
           <p className="rounded-lg border bg-muted/40 px-3 py-2 text-sm">
             Raporti i drejtorit: {upstreamReview.comment}
           </p>
@@ -1811,7 +1841,9 @@ export function AdminReviewActions({
         {mode === "approve" && (
           <div role="tabpanel" className="space-y-4">
             <p className="text-sm leading-relaxed text-muted-foreground">
-              Pas miratimit gjenerohen numri i regjistrit dhe certifikata.
+              {lifecycleDirect
+                ? "Pas miratimit përditësohet regjistri dhe lëshohet certifikata e re CR."
+                : "Pas miratimit gjenerohen numri i regjistrit dhe certifikata."}
             </p>
             {!fieldVerificationCanApprove ? (
               <p className="text-sm text-muted-foreground">{fieldVerificationApproveHint}</p>

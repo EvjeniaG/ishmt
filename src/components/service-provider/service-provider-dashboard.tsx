@@ -128,7 +128,7 @@ export function ServiceProviderDashboard({
               <Link href="/portal/applications">Aplikime certifikimi</Link>
             </Button>
             <Button asChild variant="outline" size="sm">
-              <Link href="/portal/omi/kontratat-kontrolli">Kontratat e kontrollit</Link>
+              <Link href="/portal/omi/kontratat-kontrolli">Kontratat e inspektimit</Link>
             </Button>
             <Button asChild variant="outline" size="sm">
               <Link href="/portal/omi/inspektim-periodik">Inspektimet</Link>

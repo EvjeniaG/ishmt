@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { AlertTriangle, ArrowUpRight, CheckCircle2 } from "lucide-react";
+import { AlertTriangle, CheckCircle2 } from "lucide-react";
 import { WorkflowSection } from "@/components/applications/workflow-section";
 import { Button } from "@/components/ui/button";
 
@@ -9,14 +9,12 @@ export function DelegationCompletePanel({
   description,
   approved = false,
   registryNumber,
-  elevatorId,
 }: {
   roleLabel: "instalues" | "certifikues";
   applicationNumber: string;
   description: string;
   approved?: boolean;
   registryNumber?: string | null;
-  elevatorId?: string | null;
 }) {
   return (
     <WorkflowSection
@@ -48,19 +46,9 @@ export function DelegationCompletePanel({
             ? "Ashensori është regjistruar në regjistrin kombëtar. Më poshtë gjeni të dhënat teknike dhe dokumentacionin e dorëzuar."
             : "Procesi vazhdon te personi përgjegjës i ashensorit. Do të njoftoheni nëse kërkohet korrigjim."}
         </p>
-        <div className="flex flex-wrap gap-2">
-          {approved && elevatorId ? (
-            <Button asChild className="rounded-lg">
-              <Link href={`/portal/elevators/${elevatorId}`}>
-                Hap dosjen e ashensorit
-                <ArrowUpRight className="ml-1.5 h-4 w-4" aria-hidden />
-              </Link>
-            </Button>
-          ) : null}
-          <Button asChild variant="outline" className="rounded-lg border-border text-gov-primary hover:bg-gov-primary/[0.04]">
-            <Link href="/portal/applications">Kthehu te aplikimet</Link>
-          </Button>
-        </div>
+        <Button asChild variant="outline" className="rounded-lg border-border text-gov-primary hover:bg-gov-primary/[0.04]">
+          <Link href="/portal/applications">Kthehu te aplikimet</Link>
+        </Button>
       </div>
     </WorkflowSection>
   );

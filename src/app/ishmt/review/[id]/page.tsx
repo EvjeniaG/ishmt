@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-import { ApplicationType, ApplicationStatus } from "@prisma/client";
+import { ApplicationType, ApplicationStatus, DataUpdateType } from "@prisma/client";
 import { AppShell } from "@/components/layout/app-shell";
 import { StandardPageLayout } from "@/components/layout/standard-page-layout";
 import { PortalTableWrap } from "@/components/shared/portal-table";
@@ -34,14 +34,14 @@ import { getFieldInspectionTasksHref } from "@/lib/permissions/nav-paths";
 import { ishmtReviewHasActionPanel } from "@/lib/ishmt/review-actions-visibility";
 import { FieldInspectorWorkloadService } from "@/lib/services/field-inspector-workload-service";
 import { cn } from "@/lib/utils";
-
-const TYPE_LABELS: Record<string, string> = {
-  NEW_REGISTRATION: "Regjistrim i ri",
-  DEREGISTRATION: "Çregjistrim",
-  DATA_CORRECTION: "Ndryshim të dhënash",
-  DATA_UPDATE: "Përditësim të dhënash",
-  MODERNIZATION: "Modernizim",
-};
+import { labelApplicationType } from "@/lib/constants/display-labels";
+import { DATA_UPDATE_SUBTYPE_LABELS } from "@/lib/constants/application-type-guide";
+import {
+  OwnershipTransferReviewSections,
+  ownershipRecipientFromApplication,
+  ownershipTransferReasonFromChanges,
+} from "@/components/applications/ownership-transfer-review-sections";
+import { OwnershipTransferService } from "@/lib/services/ownership-transfer-service";
 
 function FieldChangesTable({ changes }: { changes: FieldChange[] }) {
   if (changes.length === 0) return null;
@@ -129,6 +129,7 @@ export default async function ReviewDetailPage({
     ? await FieldInspectorWorkloadService.getApplicationContextForInspector(ctx, id)
     : null;
   const data = application.data;
+  const isOwnershipTransfer = data?.updateType === DataUpdateType.OWNERSHIP_TRANSFER;
   const isRegistration = application.type === ApplicationType.NEW_REGISTRATION;
   const registrationDossierSections = isRegistration
     ? buildRegistrationDossier(application).sections
@@ -216,6 +217,21 @@ export default async function ReviewDetailPage({
     ? (data.updateFields as FieldChange[])
     : [];
 
+  const ownershipRecipientDelegation = isOwnershipTransfer
+    ? OwnershipTransferService.recipientDelegation(application.delegations)
+    : null;
+  const ownershipRecipient = isOwnershipTransfer
+    ? ownershipRecipientFromApplication({
+        responsibleEntityName: data?.responsibleEntityName,
+        responsibleEntityIdentifier: data?.responsibleEntityIdentifier,
+        organization: ownershipRecipientDelegation?.organization,
+        delegationStatus: ownershipRecipientDelegation?.status,
+      })
+    : null;
+  const ownershipTransferReason = isOwnershipTransfer
+    ? ownershipTransferReasonFromChanges(updateChanges)
+    : null;
+
   const certifierDisplayName = displayCertifierOrganizationName(
     application.certifierOrg?.name,
     data?.omiNumber,
@@ -257,7 +273,7 @@ export default async function ReviewDetailPage({
       <StandardPageLayout
         eyebrow="IQMT · Shqyrtim administrativ"
         title={application.applicationNumber}
-        description={TYPE_LABELS[application.type] ?? application.type}
+        description={labelApplicationType(application.type, data?.updateType)}
         actions={
           <div className="flex flex-wrap items-center gap-3">
             <ApplicationStatusBadge
@@ -320,6 +336,17 @@ export default async function ReviewDetailPage({
                   />
                 </div>
               </div>
+            ) : isOwnershipTransfer ? (
+              <OwnershipTransferReviewSections
+                currentOwnerName={application.ownerOrg.name}
+                currentOwnerNipt={application.ownerOrg.nipt}
+                recipient={ownershipRecipient}
+                elevatorRegistry={application.targetElevator?.registryNumber}
+                elevatorAddress={
+                  application.targetElevator?.buildingAddress ?? data?.buildingAddress
+                }
+                transferReason={ownershipTransferReason}
+              />
             ) : (
               <>
                 <WorkflowSection
@@ -354,10 +381,17 @@ export default async function ReviewDetailPage({
                           <p className="workflow-data-label">Ashensori</p>
                           <p className="workflow-data-value">{application.targetElevator?.registryNumber ?? "-"}</p>
                         </div>
-                        {application.type === ApplicationType.DATA_UPDATE && (
+                        {application.type === ApplicationType.DATA_UPDATE && !isOwnershipTransfer && (
                           <div className="workflow-data-cell">
                             <p className="workflow-data-label">Lloji përditësimi</p>
-                            <p className="workflow-data-value">{data?.updateType ?? "-"}</p>
+                            <p className="workflow-data-value">
+                              {data?.updateType &&
+                              data.updateType in DATA_UPDATE_SUBTYPE_LABELS
+                                ? DATA_UPDATE_SUBTYPE_LABELS[
+                                    data.updateType as keyof typeof DATA_UPDATE_SUBTYPE_LABELS
+                                  ]
+                                : (data?.updateType ?? "-")}
+                            </p>
                           </div>
                         )}
                       </>
@@ -421,7 +455,9 @@ export default async function ReviewDetailPage({
               </WorkflowSection>
             )}
 
-            {application.type === ApplicationType.DATA_UPDATE && updateChanges.length > 0 && (
+            {application.type === ApplicationType.DATA_UPDATE &&
+              !isOwnershipTransfer &&
+              updateChanges.length > 0 && (
               <WorkflowSection title="Ndryshimet e kërkuara" description="Përditësime të dhënash">
                 <FieldChangesTable changes={updateChanges} />
               </WorkflowSection>
@@ -458,6 +494,7 @@ export default async function ReviewDetailPage({
             <div className="min-h-0 flex-1 overflow-hidden">
               <IshmtReviewActions
               applicationId={id}
+              applicationType={application.type}
               status={application.status}
               roleCode={session.user.roleCode}
               requiredInspectorCount={application.requiredFieldInspectorCount}

@@ -323,6 +323,10 @@ export function getApplicationDocumentSpecs(input: {
       ];
     }
 
+    if (data?.updateType === DataUpdateType.OWNERSHIP_TRANSFER) {
+      return [];
+    }
+
     return [
       spec({
         purpose: "DATA_UPDATE_REQUEST",

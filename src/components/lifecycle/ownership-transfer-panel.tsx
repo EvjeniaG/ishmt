@@ -1,17 +1,17 @@
 "use client";
 
 import { useRouter } from "@/lib/navigation/use-app-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { DelegationStatus } from "@prisma/client";
 import { inviteOwnershipRecipientAction } from "@/lib/actions/ownership-transfer-actions";
 import { revokeOwnershipDelegationAction } from "@/lib/actions/delegation-actions";
 import { DELEGATION_STATUS_LABELS } from "@/lib/constants/display-labels";
 import { RevokeDelegationForm } from "@/components/delegation/revoke-delegation-form";
 import { WorkflowStatusChip } from "@/components/applications/application-status-badge";
-import type { StatusTone } from "@/lib/registration/status-presentation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import type { OwnershipTransferPrefill } from "@/components/lifecycle/ownership-transfer-invite-section";
 
 const INVITE_STATUS_LABELS: Partial<Record<DelegationStatus, string>> = {
   PENDING: "Në pritje",
@@ -22,12 +22,15 @@ const INVITE_STATUS_LABELS: Partial<Record<DelegationStatus, string>> = {
 
 export function OwnershipTransferPanel({
   applicationId,
+  elevatorLabel,
   currentOwnerName,
   currentOwnerNipt,
   targetNipt,
   targetName,
   delegationStatus,
   canInvite,
+  demoPrefill,
+  onDemoPrefillApplied,
 }: {
   applicationId: string;
   elevatorLabel: string;
@@ -37,12 +40,22 @@ export function OwnershipTransferPanel({
   targetName?: string | null;
   delegationStatus?: DelegationStatus | null;
   canInvite: boolean;
+  demoPrefill?: OwnershipTransferPrefill | null;
+  onDemoPrefillApplied?: () => void;
 }) {
   const router = useRouter();
   const [nipt, setNipt] = useState(targetNipt ?? "");
   const [reason, setReason] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (!demoPrefill) return;
+    setNipt(demoPrefill.nipt.toUpperCase());
+    setReason(demoPrefill.reason);
+    setError(null);
+    onDemoPrefillApplied?.();
+  }, [demoPrefill, onDemoPrefillApplied]);
 
   async function sendInvite(e: React.FormEvent) {
     e.preventDefault();
@@ -65,11 +78,6 @@ export function OwnershipTransferPanel({
     <div className="space-y-4">
       <div className="rounded-md border bg-muted/30 p-3 text-sm">
         <p><strong>Personi përgjegjës aktual i ashensorit:</strong> {currentOwnerName}{currentOwnerNipt ? ` (${currentOwnerNipt})` : ""}</p>
-        {targetName && (
-          <p className="mt-1">
-            <strong>Marrësi i synuar:</strong> {targetName}{targetNipt ? ` (${targetNipt})` : ""}
-          </p>
-        )}
         {delegationStatus && statusLabel && (
           <p className="mt-2 flex flex-wrap items-center gap-2">
             <strong>Statusi i ftesës:</strong>
@@ -98,7 +106,10 @@ export function OwnershipTransferPanel({
               placeholder="p.sh. K12345678A"
               required
             />
-            <p className="text-xs text-muted-foreground">Marrësi duhet të jetë i regjistruar në sistem si subjekt i personit përgjegjës të ashensorit.</p>
+            <p className="text-xs text-muted-foreground">
+              Marrësi duhet të jetë i regjistruar në sistem si subjekt i personit përgjegjës të ashensorit.
+              Përdorni NIPT-in e subjektit (p.sh. L6040406A) ose Numrin Personal të përdoruesit (p.sh. I90404006F).
+            </p>
           </div>
           <div className="space-y-1">
             <Label htmlFor="transfer-reason">Arsyeja e transferimit *</Label>
@@ -133,7 +144,7 @@ export function OwnershipTransferPanel({
       )}
       {delegationStatus === DelegationStatus.ACCEPTED && (
         <p className="text-sm text-green-700">
-          Marrësi pranoi transferimin. Vazhdo poshtë - ngarko dokumentet dhe parashtro te IQMT.
+          Marrësi pranoi transferimin. Parashtro aplikimin te IQMT më poshtë.
         </p>
       )}
     </div>

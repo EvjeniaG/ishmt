@@ -13,9 +13,11 @@ const MIN_REASON_LENGTH = 10;
 
 function TerminateContractModal({
   contractId,
+  serviceType,
   onClose,
 }: {
   contractId: string;
+  serviceType: string;
   onClose: () => void;
 }) {
   const router = useRouter();
@@ -25,6 +27,7 @@ function TerminateContractModal({
 
   const trimmedLength = reason.trim().length;
   const reasonReady = trimmedLength >= MIN_REASON_LENGTH;
+  const isInspection = serviceType === "PERIODIC_INSPECTION";
 
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
@@ -81,7 +84,7 @@ function TerminateContractModal({
             </span>
             <div className="min-w-0">
               <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                Kontratë mirëmbajtjeje
+                {isInspection ? "Kontratë inspektimi periodik" : "Kontratë mirëmbajtjeje"}
               </p>
               <h2 id="terminate-contract-title" className="mt-1 text-lg font-semibold text-foreground">
                 Ndërprerja e kontratës
@@ -95,8 +98,9 @@ function TerminateContractModal({
 
         <div className="space-y-4 px-5 py-5 sm:px-6">
           <p className="text-sm leading-relaxed text-muted-foreground">
-            Personi përgjegjës i ashensorit do të njoftohet. Pas ndërprerjes nuk mund të regjistroni ndërhyrje
-            për këtë ashensor pa kontratë të re.
+            {isInspection
+              ? "Personi përgjegjës i ashensorit do të njoftohet. Pas ndërprerjes nuk mund të regjistroni inspektime periodike për këtë ashensor pa kontratë të re."
+              : "Personi përgjegjës i ashensorit do të njoftohet. Pas ndërprerjes nuk mund të regjistroni ndërhyrje për këtë ashensor pa kontratë të re."}
           </p>
 
           <div className="space-y-1.5">
@@ -153,6 +157,8 @@ export function ServiceContractRowActions({
   effectiveStatus,
   serviceType,
   dossierLabel = "Dosja e plotë",
+  showDossierLink = true,
+  showDownloadLink = true,
 }: {
   contractId: string;
   elevatorId: string;
@@ -160,22 +166,28 @@ export function ServiceContractRowActions({
   effectiveStatus: string;
   serviceType: string;
   dossierLabel?: string;
+  showDossierLink?: boolean;
+  showDownloadLink?: boolean;
 }) {
   const [showTerminateModal, setShowTerminateModal] = useState(false);
 
   const dossierTab = serviceType === "PERIODIC_INSPECTION" ? "inspections" : "maintenance";
-  const canTerminate = serviceType === "MAINTENANCE" && effectiveStatus === "ACTIVE";
+  const canTerminate =
+    (serviceType === "MAINTENANCE" || serviceType === "PERIODIC_INSPECTION") &&
+    effectiveStatus === "ACTIVE";
 
   return (
     <>
       <div className="flex flex-wrap justify-end gap-x-3 gap-y-1 text-sm">
-        <Link
-          href={`/portal/elevators/${elevatorId}?tab=${dossierTab}`}
-          className="font-medium text-gov-primary hover:underline"
-        >
-          {dossierLabel}
-        </Link>
-        {documentId ? (
+        {showDossierLink ? (
+          <Link
+            href={`/portal/elevators/${elevatorId}?tab=${dossierTab}`}
+            className="font-medium text-gov-primary hover:underline"
+          >
+            {dossierLabel}
+          </Link>
+        ) : null}
+        {showDownloadLink && documentId ? (
           <a
             href={`/api/documents/${documentId}/download`}
             className="font-medium text-gov-primary hover:underline"
@@ -195,7 +207,11 @@ export function ServiceContractRowActions({
       </div>
 
       {showTerminateModal ? (
-        <TerminateContractModal contractId={contractId} onClose={() => setShowTerminateModal(false)} />
+        <TerminateContractModal
+          contractId={contractId}
+          serviceType={serviceType}
+          onClose={() => setShowTerminateModal(false)}
+        />
       ) : null}
     </>
   );

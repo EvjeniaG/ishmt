@@ -7,6 +7,7 @@ import { fmtDateSq } from "@/components/elevators/registry-shared";
 import type { DossierViewerKind } from "@/lib/elevators/dossier-viewer";
 import {
   LAST_PERIODIC_INSPECTION_LABEL,
+  NEXT_PERIODIC_INSPECTION_LABEL,
   PERIODIC_INSPECTION_CONTRACTS_LABEL,
   PERIODIC_INSPECTION_HISTORY_LABEL,
 } from "@/lib/constants/periodic-inspection-labels";
@@ -72,7 +73,7 @@ export function InspectionRegistryPanel({
         />
         <MetricCard
           compact
-          label="Afati i radhës"
+          label={NEXT_PERIODIC_INSPECTION_LABEL}
           value={fmtDateSq(data.nextDue)}
           accent={nextDueAccent(data)}
           subtitle={nextDueSubtitle(data, audience)}
@@ -95,18 +96,18 @@ export function InspectionRegistryPanel({
 
       <SectionCard
         title={PERIODIC_INSPECTION_CONTRACTS_LABEL}
-        subtitle={
-          audience === "certifier"
-            ? "Pranoni ftesën, pastaj ngarkoni kontratën e nënshkruar. Historiku mbetet i dukshëm për personin përgjegjës dhe IQMT-n."
-            : "Kontratat me organizatën OM. Dokumenti i nënshkruar ngarkohet nga OM pas pranimit."
-        }
+        subtitle="Kontratat me organizatën OM. Dokumenti i nënshkruar ngarkohet nga OM pas pranimit."
         meta={
           <span className="portal-badge-neutral tabular-nums">
             {data.contracts.length === 1 ? "1 kontratë" : `${data.contracts.length} kontrata`}
           </span>
         }
       >
-        <InspectionContractsSection contracts={data.contracts} showUploadHint={audience === "certifier"} />
+        <InspectionContractsSection
+          contracts={data.contracts}
+          elevatorId={elevatorId}
+          showTerminateAction={audience === "certifier"}
+        />
       </SectionCard>
 
       <SectionCard

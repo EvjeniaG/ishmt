@@ -1,6 +1,10 @@
 import { ApplicationStatus, ApplicationType, ReturnTargetRole } from "@prisma/client";
 import { ROLE_CODES, type RoleCode } from "@/lib/constants/roles";
 import { roleMatchesTransition } from "@/lib/permissions/ishmt-roles";
+import {
+  ISHMT_DIRECT_CHIEF_REVIEW_TYPES,
+  ishmtDirectChiefReviewTransitions,
+} from "@/lib/workflows/ishmt-direct-chief-review";
 
 export type WorkflowAction =
   | "SAVE_BASIC_DATA"
@@ -57,11 +61,8 @@ export class WorkflowError extends Error {
   }
 }
 
-const ISHMT_REVIEW_TYPES: ApplicationType[] = [
+const ISHMT_HIERARCHICAL_REVIEW_TYPES: ApplicationType[] = [
   ApplicationType.NEW_REGISTRATION,
-  ApplicationType.DEREGISTRATION,
-  ApplicationType.DATA_CORRECTION,
-  ApplicationType.DATA_UPDATE,
   ApplicationType.MODERNIZATION,
 ];
 
@@ -396,7 +397,8 @@ export const APPLICATION_TRANSITIONS: TransitionRule[] = [
   ...lifecycleSubmitTransitions(ApplicationType.DATA_CORRECTION),
   ...lifecycleSubmitTransitions(ApplicationType.DATA_UPDATE),
   ...MODERNIZATION_TRANSITIONS,
-  ...ISHMT_REVIEW_TYPES.flatMap((t) => ishmtHierarchicalReviewTransitions(t)),
+  ...ISHMT_HIERARCHICAL_REVIEW_TYPES.flatMap((t) => ishmtHierarchicalReviewTransitions(t)),
+  ...ISHMT_DIRECT_CHIEF_REVIEW_TYPES.flatMap((t) => ishmtDirectChiefReviewTransitions(t)),
   ...ishmtRegistrationChiefReturnTransitions(),
   ...ishmtModernizationChiefReturnTransitions(),
 ];

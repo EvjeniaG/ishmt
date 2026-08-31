@@ -26,7 +26,6 @@ import { DelegateWorkflowProgress } from "@/components/registration/delegate-wor
 import { DelegationCompletePanel, RevokedDelegationPanel } from "@/components/registration/delegation-complete-panel";
 import { ApplicationPageBanner } from "@/components/applications/application-page-banner";
 import {
-  ApplicationElevatorCard,
   ApplicationHistoryTimeline,
 } from "@/components/applications/application-detail-extras";
 import {
@@ -410,6 +409,43 @@ export default async function ApplicationDetailPage({
       : null;
   const lifecycleBlockSubmit = ownershipBlockSubmit ?? documentBlockSubmit;
 
+  const ownershipTransferReason = (
+    Array.isArray(data?.updateFields)
+      ? (data.updateFields as Array<{ field?: string; reason?: string | null } | null>)
+      : []
+  )
+    .filter((change): change is { field: string; reason?: string | null } => change?.field != null)
+    .find((change) => change.field === "responsibleEntityIdentifier")?.reason ?? null;
+  const ownershipPreviousOwnerName =
+    application.ownerOrg.representativeName ?? application.ownerOrg.name;
+  const ownershipNewOwnerName =
+    application.targetElevator?.ownerOrg?.name ??
+    data?.responsibleEntityName ??
+    ownershipDelegation?.organization?.name ??
+    null;
+  const ownershipNewOwnerNipt =
+    application.targetElevator?.ownerOrg?.nipt ??
+    data?.responsibleEntityIdentifier ??
+    ownershipDelegation?.organization?.nipt ??
+    null;
+  const ownershipTransferApproved =
+    application.status === ApplicationStatus.APPROVED ||
+    application.status === ApplicationStatus.ELEVATOR_CREATED ||
+    application.status === ApplicationStatus.ASSETS_GENERATED ||
+    application.status === ApplicationStatus.CLOSED;
+  const ownershipCurrentOwnerName = ownershipTransferApproved
+    ? (ownershipNewOwnerName ?? ownershipPreviousOwnerName)
+    : ownershipPreviousOwnerName;
+  const ownershipCurrentOwnerNipt = ownershipTransferApproved
+    ? (ownershipNewOwnerNipt ?? application.ownerOrg.nipt)
+    : application.ownerOrg.nipt;
+  const lifecycleTerminal =
+    application.status === ApplicationStatus.APPROVED ||
+    application.status === ApplicationStatus.REJECTED ||
+    application.status === ApplicationStatus.CLOSED ||
+    application.status === ApplicationStatus.ELEVATOR_CREATED ||
+    application.status === ApplicationStatus.ASSETS_GENERATED;
+
   const correctionChanges =
     Array.isArray(data?.correctionFields) && data.correctionFields.length > 0;
   const updateChanges = Array.isArray(data?.updateFields) && data.updateFields.length > 0;
@@ -765,7 +801,6 @@ export default async function ApplicationDetailPage({
                   }
                   approved={registrationPhase === "completed"}
                   registryNumber={application.targetElevator?.registryNumber}
-                  elevatorId={application.targetElevator?.id}
                 />
                 {applicationSummaryData && (
                   <ApplicationDataSummary
@@ -811,7 +846,6 @@ export default async function ApplicationDetailPage({
                   }
                   approved={registrationPhase === "completed"}
                   registryNumber={application.targetElevator?.registryNumber}
-                  elevatorId={application.targetElevator?.id}
                 />
                 {applicationSummaryData && (
                   <ApplicationDataSummary
@@ -891,14 +925,18 @@ export default async function ApplicationDetailPage({
                   applicationId={id}
                   applicationNumber={application.applicationNumber}
                   status={application.status}
-                  returnReason={application.returnReason}
-                  requiredCorrection={application.requiredCorrection}
                   elevatorRegistry={application.targetElevator.registryNumber}
                   elevatorAddress={application.targetElevator.buildingAddress}
-                  ownerName={application.ownerOrg.name}
-                  ownerNipt={application.ownerOrg.nipt}
+                  elevatorId={application.targetElevator.id}
+                  previousOwnerName={ownershipPreviousOwnerName}
+                  previousOwnerNipt={application.ownerOrg.nipt}
+                  currentOwnerName={ownershipCurrentOwnerName}
+                  currentOwnerNipt={ownershipCurrentOwnerNipt}
+                  newOwnerName={ownershipNewOwnerName}
+                  newOwnerNipt={ownershipNewOwnerNipt}
                   targetNipt={data?.responsibleEntityIdentifier}
                   targetName={data?.responsibleEntityName}
+                  transferReason={ownershipTransferReason}
                   delegationStatus={ownershipDelegation?.status}
                   isSender={isTransferSender}
                   isRecipient={isTransferRecipient}
@@ -989,9 +1027,12 @@ export default async function ApplicationDetailPage({
           )
         )}
 
-        {((showLifecycleSubmit && lifecycleContentReady) || (isOwnerModernization && modernizationReady)) && (
+        {!lifecycleTerminal &&
+          ((showLifecycleSubmit && lifecycleContentReady) || (isOwnerModernization && modernizationReady)) && (
           <ApplicationWorkflowFooter>
-            {!documentsEmbeddedInForm && application.type !== ApplicationType.DATA_CORRECTION && (
+            {!documentsEmbeddedInForm &&
+              application.type !== ApplicationType.DATA_CORRECTION &&
+              !(isOwnershipTransfer && isTransferSender) && (
               <ApplicationDocuments
                 applicationId={id}
                 documents={documents}
@@ -1055,13 +1096,6 @@ export default async function ApplicationDetailPage({
               }}
             />
           )}
-
-        {application.targetElevator && (
-          <ApplicationElevatorCard
-            elevatorId={application.targetElevator.id}
-            registryNumber={application.targetElevator.registryNumber}
-          />
-        )}
 
         {application.workflowHistory.length > 0 && (
           <ApplicationHistoryTimeline

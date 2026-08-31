@@ -7,6 +7,16 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { logPeriodicInspectionAction } from "@/lib/actions/certifier-inspection-actions";
 import { COMPLIANCE_DOCUMENT_ACCEPT, COMPLIANCE_DOCUMENT_HINT } from "@/lib/constants/document-upload";
+import {
+  NEXT_PERIODIC_INSPECTION_LABEL,
+  PERIODIC_INSPECTION_DATE_LABEL,
+  PERIODIC_INSPECTION_REPORT_LABEL,
+  REGISTER_PERIODIC_INSPECTION_LABEL,
+} from "@/lib/constants/periodic-inspection-labels";
+import {
+  PERIODIC_INSPECTION_ALARM_DAYS_BEFORE,
+  PERIODIC_INSPECTION_LOG_WINDOW_DAYS,
+} from "@/lib/elevators/periodic-inspection-window";
 
 export type InspectionElevatorOption = {
   id: string;
@@ -37,10 +47,12 @@ export function PeriodicInspectionForm({
   elevators,
   defaultConductedDate,
   defaultApprovedBodyNumber,
+  approvedBodyReadOnly = false,
 }: {
   elevators: InspectionElevatorOption[];
   defaultConductedDate?: string;
   defaultApprovedBodyNumber?: string;
+  approvedBodyReadOnly?: boolean;
 }) {
   const router = useRouter();
   const [elevatorId, setElevatorId] = useState("");
@@ -48,22 +60,35 @@ export function PeriodicInspectionForm({
     defaultConductedDate ?? new Date().toISOString().slice(0, 10),
   );
   const [approvedBodyNumber, setApprovedBodyNumber] = useState(defaultApprovedBodyNumber ?? "");
-  const [examinationType, setExaminationType] = useState("EKZAMINIM I PLOTË");
+  const [examinationType, setExaminationType] = useState("EKZAMINIM PERIODIK");
   const [result, setResult] = useState<"PASS" | "FAIL">("PASS");
   const [findings, setFindings] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [formKey, setFormKey] = useState(0);
 
   const selected = useMemo(
     () => elevators.find((e) => e.id === elevatorId) ?? null,
     [elevators, elevatorId],
   );
 
+  function resetForm() {
+    setElevatorId("");
+    setConductedDate(defaultConductedDate ?? new Date().toISOString().slice(0, 10));
+    setApprovedBodyNumber(defaultApprovedBodyNumber ?? "");
+    setExaminationType("EKZAMINIM PERIODIK");
+    setResult("PASS");
+    setFindings("");
+    setFile(null);
+    setError(null);
+    setFormKey((key) => key + 1);
+  }
+
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!elevatorId) return setError("Zgjidhni ashensorin.");
-    if (!file) return setError("Ngarkoni raportin e kontrollit.");
+    if (!file) return setError(`Ngarkoni ${PERIODIC_INSPECTION_REPORT_LABEL.toLowerCase()}.`);
     if (result === "FAIL" && findings.trim().length === 0)
       return setError("Specifikoni defektet e konstatuara.");
     setLoading(true);
@@ -80,9 +105,8 @@ export function PeriodicInspectionForm({
         reportDocumentId,
       });
       if (!res.success) throw new Error(res.error);
+      resetForm();
       router.refresh();
-      setFile(null);
-      setFindings("");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Veprimi dështoi");
     } finally {
@@ -119,19 +143,27 @@ export function PeriodicInspectionForm({
           className={`rounded-md border p-3 text-sm ${
             selected.overdue
               ? "border-red-300 bg-red-50 text-red-700"
-              : "border-blue-200 bg-blue-50 text-blue-800"
+              : selected.daysRemaining <= PERIODIC_INSPECTION_ALARM_DAYS_BEFORE
+                ? "border-amber-300 bg-amber-50 text-amber-900"
+                : "border-blue-200 bg-blue-50 text-blue-800"
           }`}
         >
           {selected.overdue ? (
             <p className="font-medium">
-              ⛔ KONTROLLI PERIODIK ËSHTË VONUAR - duhej bërë më{" "}
+              ⛔ INSPEKTIMI PERIODIK ËSHTË VONUAR - duhej bërë më{" "}
               {new Date(selected.nextDue).toLocaleDateString("sq-AL")}
+            </p>
+          ) : selected.daysRemaining <= PERIODIC_INSPECTION_ALARM_DAYS_BEFORE ? (
+            <p className="font-medium">
+              ⚠️ Alarm: inspektimi periodik duhet kryer brenda {selected.daysRemaining} ditëve (afati:{" "}
+              {new Date(selected.nextDue).toLocaleDateString("sq-AL")})
             </p>
           ) : (
             <p>
-              Kontrolli i ardhshëm periodik:{" "}
+              {NEXT_PERIODIC_INSPECTION_LABEL}:{" "}
               <strong>{new Date(selected.nextDue).toLocaleDateString("sq-AL")}</strong> -{" "}
-              {selected.daysRemaining} ditë mbetur (çdo {selected.intervalMonths} muaj)
+              {selected.daysRemaining} ditë mbetur (çdo {selected.intervalMonths} muaj). Regjistrimi
+              hapet {PERIODIC_INSPECTION_LOG_WINDOW_DAYS} ditë para afatit.
             </p>
           )}
         </div>
@@ -139,7 +171,7 @@ export function PeriodicInspectionForm({
 
       <div className="grid gap-3 md:grid-cols-2">
         <div className="space-y-1">
-          <Label htmlFor="conductedDate" className="text-xs">Data e kontrollit *</Label>
+          <Label htmlFor="conductedDate" className="text-xs">{PERIODIC_INSPECTION_DATE_LABEL} *</Label>
           <Input
             id="conductedDate"
             type="date"
@@ -154,11 +186,17 @@ export function PeriodicInspectionForm({
           <Input
             id="approvedBodyNumber"
             required
+            readOnly={approvedBodyReadOnly}
             placeholder="p.sh. OM 013"
             value={approvedBodyNumber}
             onChange={(e) => setApprovedBodyNumber(e.target.value)}
-            className={inputClass}
+            className={`${inputClass}${approvedBodyReadOnly ? " bg-muted text-foreground" : ""}`}
           />
+          {approvedBodyReadOnly && (
+            <p className="text-[11px] text-muted-foreground">
+              Plotësuar automatikisht nga licenca aktive OM e organizatës suaj.
+            </p>
+          )}
         </div>
       </div>
 
@@ -207,8 +245,9 @@ export function PeriodicInspectionForm({
       )}
 
       <div className="space-y-1">
-        <Label htmlFor="report" className="text-xs">Raporti i kontrollit *</Label>
+        <Label htmlFor="report" className="text-xs">{PERIODIC_INSPECTION_REPORT_LABEL} *</Label>
         <Input
+          key={`report-${formKey}`}
           id="report"
           type="file"
           accept={COMPLIANCE_DOCUMENT_ACCEPT}
@@ -221,7 +260,7 @@ export function PeriodicInspectionForm({
       {error && <p className="text-sm text-destructive">{error}</p>}
 
       <Button type="submit" disabled={loading}>
-        {loading ? "Duke ruajtur…" : "Regjistro kontrollin periodik"}
+        {loading ? "Duke ruajtur…" : REGISTER_PERIODIC_INSPECTION_LABEL}
       </Button>
     </form>
   );

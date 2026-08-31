@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { AppShell } from "@/components/layout/app-shell";
 import { StandardPageLayout } from "@/components/layout/standard-page-layout";
 import { UserAdminSearchForm, UserAdminTable } from "@/components/ishmt/user-admin-table";
+import { CreateStaffUserForm } from "@/components/ishmt/create-staff-user-form";
 import { OfficialTableFooter, SectionCard } from "@/components/shared/institutional";
 import { getAuthSession } from "@/lib/auth";
 import { UserAdminService } from "@/lib/services/user-admin-service";
@@ -19,19 +20,31 @@ export default async function UserManagementPage({
 
   const params = await searchParams;
   const page = parseInt(params.page ?? "1", 10) || 1;
-  const result = await UserAdminService.listUsers({
-    query: params.q,
-    page,
-    activeOnly: false,
-  });
+  const [result, staffOrganizations] = await Promise.all([
+    UserAdminService.listUsers({
+      query: params.q,
+      page,
+      activeOnly: false,
+    }),
+    UserAdminService.listStaffOrganizations(),
+  ]);
 
   return (
     <AppShell title="Menaxhimi i përdoruesve">
       <StandardPageLayout
         eyebrow="IQMT · Administrim"
         title="Menaxhimi i përdoruesve"
-        description="Aktivizim, bllokim dhe rivendosje fjalëkalimi"
+        description="Shtim përdoruesish IQMT dhe Drejtoria e Politikave, aktivizim, bllokim dhe rivendosje fjalëkalimi"
       >
+        <SectionCard
+          title="Shto përdorues stafi"
+          subtitle="Krijoni llogari për IQMT ose Drejtorinë e Politikave me rolin e duhur të aksesit."
+        >
+          <div className="p-5 sm:p-6">
+            <CreateStaffUserForm organizations={staffOrganizations} />
+          </div>
+        </SectionCard>
+
         <SectionCard
           title="Regjistri i përdoruesve"
           meta={<span className="portal-badge-neutral tabular-nums">{result.total} përdorues</span>}

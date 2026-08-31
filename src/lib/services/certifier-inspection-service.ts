@@ -19,18 +19,19 @@ import { hasPermission } from "@/lib/permissions/guards";
 import { PERMISSIONS, type PermissionCode } from "@/lib/permissions/codes";
 import { ROLE_CODES } from "@/lib/constants/roles";
 import { hasServiceCapability } from "@/lib/organizations/org-capabilities";
-
-const MS_PER_DAY = 1000 * 60 * 60 * 24;
+import { displayOmBody, formatOmBodyNumber } from "@/lib/elevators/format-om-body";
+import {
+  isPeriodicInspectionLogWindowOpen,
+  PERIODIC_INSPECTION_LOG_WINDOW_DAYS,
+  resolvePeriodicInspectionNextDue,
+} from "@/lib/elevators/periodic-inspection-window";
+import { ReminderSchedulerService } from "@/lib/services/reminder-scheduler-service";
 
 function inspectionIntervalMonths(buildingType: BuildingType | null | undefined): number {
   if (buildingType === BuildingType.WORKPLACE || buildingType === BuildingType.PUBLIC_BUILDING) {
     return 6;
   }
   return 12;
-}
-
-function daysBetween(from: Date, to: Date): number {
-  return Math.round((to.getTime() - from.getTime()) / MS_PER_DAY);
 }
 
 function addMonths(date: Date, months: number): Date {
@@ -52,7 +53,7 @@ export class CertifierInspectionService {
     permission: PermissionCode = PERMISSIONS.CERTIFIER_VIEW_INSPECTION_ASSIGNMENTS,
   ) {
     if (!hasServiceCapability(ctx, "om") || !hasPermission(ctx, permission)) {
-      throw new Error("Nuk keni leje për kontrollin periodik OM.");
+      throw new Error("Nuk keni leje për inspektimin periodik OM.");
     }
   }
 
@@ -93,7 +94,7 @@ export class CertifierInspectionService {
     }
 
     throw new Error(
-      "Kontrolli periodik kërkon organizatë OM/certifikuese të licencuar. Zgjidhni kompaninë e kontrollit.",
+      "Inspektimi periodik kërkon organizatë OM/certifikuese të licencuar. Zgjidhni kompaninë e inspektimit.",
     );
   }
 
@@ -107,7 +108,7 @@ export class CertifierInspectionService {
       },
     });
     if (!contract) {
-      throw new Error("Ky ashensor nuk ka kontratë aktive kontrolli periodik me organizatën tuaj OM.");
+      throw new Error("Ky ashensor nuk ka kontratë aktive inspektimi periodik me organizatën tuaj OM.");
     }
     return contract;
   }
@@ -136,7 +137,7 @@ export class CertifierInspectionService {
       },
       include: { elevator: true },
     });
-    if (!contract) throw new Error("Kontrata e kontrollit periodik nuk u gjet.");
+    if (!contract) throw new Error("Kontrata e inspektimit periodik nuk u gjet.");
     if (contract.status !== MaintenanceContractStatus.PENDING) {
       throw new Error("Vetëm kontratat në pritje mund të pranohen.");
     }
@@ -225,8 +226,65 @@ export class CertifierInspectionService {
     });
 
     await NotificationService.notifyOrgMembers(contract.elevator.ownerOrgId, {
-      title: "Kontrata e kontrollit periodik u pranua",
-      body: `Organizata OM pranoi kontratën e kontrollit periodik për ashensorin ${contract.elevator.registryNumber}.`,
+      title: "Kontrata e inspektimit periodik u pranua",
+      body: `Organizata OM pranoi kontratën e inspektimit periodik për ashensorin ${contract.elevator.registryNumber}.`,
+      entityType: "elevator",
+      entityId: contract.elevatorId,
+    });
+
+    return { ok: true };
+  }
+
+  static async terminateInspectionContract(ctx: AuthContext, contractId: string, reason: string) {
+    if (reason.trim().length < 10) {
+      throw new Error("Arsyeja e ndërprerjes duhet të ketë të paktën 10 karaktere.");
+    }
+
+    const contract = await db.maintenanceContract.findFirst({
+      where: {
+        id: contractId,
+        maintenanceOrgId: ctx.activeOrgId,
+        serviceType: "PERIODIC_INSPECTION",
+      },
+      include: { elevator: true },
+    });
+    if (!contract) throw new Error("Kontrata e inspektimit periodik nuk u gjet.");
+    this.assertCertifier(ctx, PERMISSIONS.CERTIFIER_ACCEPT_INSPECTION_CONTRACT);
+    if (contract.status !== MaintenanceContractStatus.ACTIVE || !contract.isActive) {
+      throw new Error("Vetëm kontratat aktive mund të ndërprehen.");
+    }
+
+    const trimmedReason = reason.trim();
+
+    await db.$transaction(async (tx) => {
+      await tx.maintenanceContract.update({
+        where: { id: contract.id },
+        data: {
+          status: MaintenanceContractStatus.TERMINATED,
+          isActive: false,
+          rejectionReason: trimmedReason,
+          respondedAt: new Date(),
+        },
+      });
+      await AuditService.log(
+        {
+          actorId: ctx.userId,
+          action: AuditAction.UPDATE,
+          entityType: "maintenance_contract",
+          entityId: contract.id,
+          afterState: {
+            action: "INSPECTION_CONTRACT_TERMINATED_BY_PROVIDER",
+            elevatorId: contract.elevatorId,
+            reason: trimmedReason,
+          },
+        },
+        tx,
+      );
+    });
+
+    await NotificationService.notifyOrgMembers(contract.elevator.ownerOrgId, {
+      title: "Kontrata e inspektimit periodik u ndërpre",
+      body: `Organizata OM ndërpreu kontratën e inspektimit periodik për ashensorin ${contract.elevator.registryNumber}. Arsye: ${trimmedReason}`,
       entityType: "elevator",
       entityId: contract.elevatorId,
     });
@@ -254,8 +312,6 @@ export class CertifierInspectionService {
       orderBy: { startDate: "desc" },
     });
 
-    const now = new Date();
-
     return Promise.all(
       contracts
         .filter((c) => c.elevator && !c.elevator.deletedAt)
@@ -275,8 +331,9 @@ export class CertifierInspectionService {
             contractNumber: c.contractNumber,
             contractEndDate: c.endDate,
             ...info,
-            inspectionOverdue: info.nextDue < now,
-            daysRemaining: daysBetween(now, info.nextDue),
+            canLogNow: info.canLogNow,
+            inspectionOverdue: info.overdue,
+            daysRemaining: info.daysRemaining,
           };
         }),
     );
@@ -295,13 +352,38 @@ export class CertifierInspectionService {
       orderBy: { conductedDate: "desc" },
     });
 
-    const base = lastInspection?.conductedDate ?? elevator.registrationDate;
-    const nextDue = addMonths(base, intervalMonths);
+    const nextDue =
+      resolvePeriodicInspectionNextDue({
+        lastInspection: lastInspection
+          ? {
+              conductedDate: lastInspection.conductedDate,
+              result: lastInspection.result,
+              nextInspectionDate: lastInspection.nextInspectionDate,
+            }
+          : null,
+        registrationDate: elevator.registrationDate,
+        intervalMonths,
+      }) ?? addMonths(lastInspection?.conductedDate ?? elevator.registrationDate, intervalMonths);
+
+    const window = isPeriodicInspectionLogWindowOpen({
+      lastInspection: lastInspection
+        ? {
+            conductedDate: lastInspection.conductedDate,
+            result: lastInspection.result,
+            nextInspectionDate: lastInspection.nextInspectionDate,
+          }
+        : null,
+      registrationDate: elevator.registrationDate,
+      intervalMonths,
+    });
 
     return {
       intervalMonths,
       lastInspectionDate: lastInspection?.conductedDate ?? null,
       nextDue,
+      canLogNow: window.open,
+      daysRemaining: window.daysRemaining,
+      overdue: window.overdue,
     };
   }
 
@@ -322,18 +404,64 @@ export class CertifierInspectionService {
       orderBy: { conductedDate: "desc" },
     });
 
-    const base = lastInspection?.conductedDate ?? elevator.registrationDate;
-    const nextDue = addMonths(base, intervalMonths);
-    const now = new Date();
+    const nextDue =
+      resolvePeriodicInspectionNextDue({
+        lastInspection: lastInspection
+          ? {
+              conductedDate: lastInspection.conductedDate,
+              result: lastInspection.result,
+              nextInspectionDate: lastInspection.nextInspectionDate,
+            }
+          : null,
+        registrationDate: elevator.registrationDate,
+        intervalMonths,
+      }) ?? addMonths(lastInspection?.conductedDate ?? elevator.registrationDate, intervalMonths);
+
+    const window = isPeriodicInspectionLogWindowOpen({
+      lastInspection: lastInspection
+        ? {
+            conductedDate: lastInspection.conductedDate,
+            result: lastInspection.result,
+            nextInspectionDate: lastInspection.nextInspectionDate,
+          }
+        : null,
+      registrationDate: elevator.registrationDate,
+      intervalMonths,
+    });
 
     return {
       buildingType,
       intervalMonths,
       lastInspectionDate: lastInspection?.conductedDate ?? null,
       nextDue,
-      daysRemaining: daysBetween(now, nextDue),
-      overdue: nextDue < now,
+      canLogNow: window.open,
+      daysRemaining: window.daysRemaining,
+      overdue: window.overdue,
     };
+  }
+
+  static async resolveApprovedBodyNumber(orgId: string): Promise<string | null> {
+    const org = await db.organization.findFirst({
+      where: { id: orgId, deletedAt: null },
+      include: {
+        licenses: {
+          where: {
+            status: OrgStatus.ACTIVE,
+            licenseType: "CERTIFICATION",
+            expiryDate: { gte: new Date() },
+          },
+          orderBy: { expiryDate: "desc" },
+          take: 1,
+        },
+      },
+    });
+    if (!org) return null;
+
+    const licenseNumber = org.licenses[0]?.licenseNumber?.trim();
+    if (licenseNumber) return licenseNumber;
+
+    const fromName = formatOmBodyNumber(org.name) ?? displayOmBody(null, org.name);
+    return fromName && fromName !== "OM" ? fromName : null;
   }
 
   static async logPeriodicInspection(
@@ -351,6 +479,14 @@ export class CertifierInspectionService {
     this.assertCertifier(ctx, PERMISSIONS.CERTIFIER_LOG_PERIODIC_INSPECTION);
     await this.assertPeriodicInspectionContract(ctx, input.elevatorId);
 
+    const approvedBodyNumber =
+      input.approvedBodyNumber?.trim() ||
+      (await this.resolveApprovedBodyNumber(ctx.activeOrgId)) ||
+      "";
+    if (!approvedBodyNumber) {
+      throw new Error("Numri i organit të miratuar (OM) mungon në licencën e organizatës.");
+    }
+
     if (input.result === "FAIL" && (!input.findings || input.findings.trim().length === 0)) {
       throw new Error("Për rezultat JO KALUES duhet të specifikoni defektet e konstatuara.");
     }
@@ -358,9 +494,15 @@ export class CertifierInspectionService {
     const document = await db.document.findFirst({
       where: { id: input.reportDocumentId, uploadedById: ctx.userId, deletedAt: null },
     });
-    if (!document) throw new Error("Raporti i kontrollit nuk u gjet. Ngarkojeni përsëri.");
+    if (!document) throw new Error("Raporti i inspektimit nuk u gjet. Ngarkojeni përsëri.");
 
     const info = await this.getInspectionInfo(ctx, input.elevatorId);
+    if (!info.canLogNow) {
+      throw new Error(
+        `Regjistrimi hapet ${PERIODIC_INSPECTION_LOG_WINDOW_DAYS} ditë para afatit të inspektimit periodik (${info.nextDue.toLocaleDateString("sq-AL")}).`,
+      );
+    }
+
     const result = input.result === "PASS" ? InspectionResult.PASS : InspectionResult.FAIL;
     const nextInspectionDate =
       result === InspectionResult.PASS ? addMonths(input.conductedDate, info.intervalMonths) : null;
@@ -375,7 +517,7 @@ export class CertifierInspectionService {
           result,
           scheduledDate: input.conductedDate,
           conductedDate: input.conductedDate,
-          approvedBodyNumber: input.approvedBodyNumber,
+          approvedBodyNumber,
           examinationType: input.examinationType,
           findings: input.findings || null,
           nextInspectionDate,
@@ -411,12 +553,19 @@ export class CertifierInspectionService {
       const resultLabel = result === InspectionResult.PASS ? "KALUES" : "JO KALUES";
       await OperationalEventNotificationService.broadcastForElevator({
         elevatorId: input.elevatorId,
-        title: `Kontroll periodik ${resultLabel}`,
+        title: `Inspektim periodik ${resultLabel}`,
         body: `Ashensori ${elevator.registryNumber} · ${input.examinationType} më ${input.conductedDate.toLocaleDateString("sq-AL")}.`,
       });
     }
 
     await ComplianceService.recalculateForElevator(input.elevatorId);
+
+    if (nextInspectionDate) {
+      await ReminderSchedulerService.schedulePeriodicInspectionReminders(
+        input.elevatorId,
+        nextInspectionDate,
+      );
+    }
 
     return inspection;
   }
@@ -446,7 +595,7 @@ export class CertifierInspectionService {
       where: { id: input.inspectionId, type: InspectionType.PERIODIC },
       include: { elevator: { include: { originatingApplication: { include: { data: true } } } } },
     });
-    if (!inspection) throw new Error("Kontrolli periodik nuk u gjet.");
+    if (!inspection) throw new Error("Inspektimi periodik nuk u gjet.");
 
     await this.assertCertifierForElevator(ctx, inspection.elevatorId);
 
@@ -476,12 +625,18 @@ export class CertifierInspectionService {
       findings = `${prefix}Shënime OM: ${input.notes.trim()}`;
     }
 
+    const approvedBodyNumber =
+      input.approvedBodyNumber?.trim() ||
+      inspection.approvedBodyNumber ||
+      (await this.resolveApprovedBodyNumber(ctx.activeOrgId)) ||
+      null;
+
     await db.$transaction(async (tx) => {
       await tx.inspection.update({
         where: { id: inspection.id },
         data: {
           reportDocumentId: input.reportDocumentId,
-          approvedBodyNumber: input.approvedBodyNumber?.trim() || inspection.approvedBodyNumber,
+          approvedBodyNumber,
           findings,
           result,
           status: result,

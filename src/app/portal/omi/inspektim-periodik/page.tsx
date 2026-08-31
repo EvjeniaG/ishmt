@@ -15,25 +15,32 @@ import {
   PERIODIC_INSPECTION_LABEL,
   PERIODIC_INSPECTIONS_LABEL,
 } from "@/lib/constants/periodic-inspection-labels";
+import {
+  PERIODIC_INSPECTION_ALARM_DAYS_BEFORE,
+  PERIODIC_INSPECTION_LOG_WINDOW_DAYS,
+} from "@/lib/elevators/periodic-inspection-window";
 import { db } from "@/lib/db";
 
 export default async function CertifierPeriodicInspectionPage() {
   const ctx = await requireServiceCapabilityForPage("om");
-  const [elevators, inspections, pending] = await Promise.all([
+  const [elevators, inspections, pending, orgApprovedBody] = await Promise.all([
     CertifierInspectionService.listAssignedElevators(ctx),
     CertifierInspectionService.listInspections(ctx),
     CertifierInspectionService.listPendingContracts(ctx),
+    CertifierInspectionService.resolveApprovedBodyNumber(ctx.activeOrgId),
   ]);
 
-  const options: InspectionElevatorOption[] = elevators.map((e) => ({
-    id: e.elevatorId,
-    registryNumber: e.registryNumber,
-    address: e.address,
-    intervalMonths: e.intervalMonths,
-    nextDue: e.nextDue.toISOString(),
-    daysRemaining: e.daysRemaining,
-    overdue: e.inspectionOverdue,
-  }));
+  const options: InspectionElevatorOption[] = elevators
+    .filter((e) => e.canLogNow)
+    .map((e) => ({
+      id: e.elevatorId,
+      registryNumber: e.registryNumber,
+      address: e.address,
+      intervalMonths: e.intervalMonths,
+      nextDue: e.nextDue.toISOString(),
+      daysRemaining: e.daysRemaining,
+      overdue: e.inspectionOverdue,
+    }));
 
   const lastInspection = await db.inspection.findFirst({
     where: {
@@ -51,7 +58,8 @@ export default async function CertifierPeriodicInspectionPage() {
     select: { approvedBodyNumber: true },
   });
 
-  const defaultApprovedBodyNumber = lastInspection?.approvedBodyNumber ?? undefined;
+  const defaultApprovedBodyNumber = orgApprovedBody ?? lastInspection?.approvedBodyNumber ?? undefined;
+  const approvedBodyReadOnly = Boolean(orgApprovedBody);
   const defaultConductedDate = new Date().toISOString().slice(0, 10);
 
   return (
@@ -77,11 +85,21 @@ export default async function CertifierPeriodicInspectionPage() {
         }
       >
         <SectionCard title={`Regjistro ${PERIODIC_INSPECTION_LABEL.toLowerCase()}`} padded>
-          <PeriodicInspectionForm
-            elevators={options}
-            defaultConductedDate={defaultConductedDate}
-            defaultApprovedBodyNumber={defaultApprovedBodyNumber}
-          />
+          {options.length === 0 ? (
+            <p className="text-sm leading-relaxed text-muted-foreground">
+              Asnjë ashensor nuk ka afat inspektimi brenda {PERIODIC_INSPECTION_LOG_WINDOW_DAYS} ditëve.
+              Regjistrimi hapet automatikisht {PERIODIC_INSPECTION_LOG_WINDOW_DAYS} ditë para afatit;{" "}
+              {PERIODIC_INSPECTION_ALARM_DAYS_BEFORE} ditë para afatit vjen alarm për personin përgjegjës,
+              OM-n dhe IQMT-n.
+            </p>
+          ) : (
+            <PeriodicInspectionForm
+              elevators={options}
+              defaultConductedDate={defaultConductedDate}
+              defaultApprovedBodyNumber={defaultApprovedBodyNumber}
+              approvedBodyReadOnly={approvedBodyReadOnly}
+            />
+          )}
         </SectionCard>
 
         <SectionCard

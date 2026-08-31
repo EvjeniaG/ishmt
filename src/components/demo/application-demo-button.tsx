@@ -28,6 +28,7 @@ export function ApplicationDemoButton({
   ownershipAccepted,
   onlyStep,
   className = "mb-4",
+  onOwnershipPrefill,
 }: {
   applicationId: string;
   type: ApplicationType;
@@ -46,6 +47,7 @@ export function ApplicationDemoButton({
   /** Shfaq vetëm kur hapi aktual demo përputhet (p.sh. dokumentet). */
   onlyStep?: ApplicationDemoStep;
   className?: string;
+  onOwnershipPrefill?: (prefill: { nipt: string; reason: string }) => void;
 }) {
   let step: ApplicationDemoStep | null = null;
 
@@ -68,5 +70,12 @@ export function ApplicationDemoButton({
 
   if (!step) return null;
   if (onlyStep && step !== onlyStep) return null;
-  return <DemoStepFillButton applicationId={applicationId} step={step} className={className} />;
+  return (
+    <DemoStepFillButton
+      applicationId={applicationId}
+      step={step}
+      className={className}
+      onOwnershipPrefill={onOwnershipPrefill}
+    />
+  );
 }

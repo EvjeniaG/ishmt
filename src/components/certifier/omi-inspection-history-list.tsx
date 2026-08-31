@@ -82,8 +82,8 @@ export function OmiInspectionHistoryList({ items }: { items: OmiInspectionHistor
   if (items.length === 0) {
     return (
       <RegistryEmpty
-        title="Pa kontrolle"
-        description="Kontrollet periodike shfaqen këtu pas regjistrimit nga OM."
+        title="Pa inspektime"
+        description="Inspektimet periodike shfaqen këtu pas regjistrimit nga OM."
       />
     );
   }
@@ -116,7 +116,7 @@ export function OmiInspectionHistoryList({ items }: { items: OmiInspectionHistor
 
       {filtered.length === 0 ? (
         <p className="px-4 py-10 text-center text-sm text-muted-foreground sm:px-5">
-          Asnjë kontroll për filtrat e zgjedhur.
+          Asnjë inspektim për filtrat e zgjedhur.
         </p>
       ) : (
         <ul className="divide-y divide-border/70">

@@ -18,7 +18,7 @@ const EXTRA_PURPOSE_LABELS: Record<string, string> = {
   QR_IMAGE: "Imazh kodi QR",
   EXTRAORDINARY_INSPECTION: "Raport inspektimi të jashtëzakonshëm",
   FIELD_VERIFICATION_REPORT: "Raport verifikimi në terren",
-  PERIODIC_INSPECTION_REPORT: "Raport kontrolli periodik",
+  PERIODIC_INSPECTION_REPORT: "Raport inspektimi periodik",
   INSTALLATION_DOCUMENT: "Dokumentacion i instalimit",
   TECHNICAL_DOSSIER: "Dosje teknike e instalimit",
   OTHER: "Dokument shtesë",

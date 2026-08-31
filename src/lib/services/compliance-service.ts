@@ -11,6 +11,7 @@ import {
 import { db } from "@/lib/db";
 import { withDemoDataElevatorScope } from "@/lib/demo/demo-data-mode";
 import { getNationalComplianceAggregate } from "@/lib/elevators/elevator-compliance-stats";
+import { computeMaintenanceComplianceMetrics } from "@/lib/elevators/maintenance-compliance-snapshot";
 import { SystemConfigService, type ComplianceRulesConfig } from "@/lib/services/system-config-service";
 
 export type ComplianceSnapshot = {
@@ -312,15 +313,47 @@ export class ComplianceService {
     };
   }
 
+  static async recalculateMaintenanceComplianceForElevator(
+    elevatorId: string,
+    tx?: Prisma.TransactionClient,
+  ) {
+    const client = tx ?? db;
+    const rules = await SystemConfigService.getComplianceRules();
+    const records = await client.maintenanceRecord.findMany({
+      where: { elevatorId },
+      select: { interventionType: true, performedDate: true },
+    });
+
+    const metrics = computeMaintenanceComplianceMetrics(records, {
+      maintenanceReportMaxDays: rules.maintenanceReportMaxDays,
+    });
+
+    if (!metrics) {
+      await client.maintenanceComplianceStatus.deleteMany({ where: { elevatorId } });
+      return null;
+    }
+
+    return client.maintenanceComplianceStatus.upsert({
+      where: { elevatorId },
+      update: { ...metrics, lastCalculatedAt: new Date() },
+      create: { elevatorId, ...metrics },
+    });
+  }
+
   static async recalculateForElevator(elevatorId: string, tx?: Prisma.TransactionClient) {
     const client = tx ?? db;
     const snapshot = await this.computeSnapshotForElevator(elevatorId);
 
-    return client.elevatorComplianceStatus.upsert({
-      where: { elevatorId },
-      update: { ...snapshot, lastCalculatedAt: new Date() },
-      create: { elevatorId, ...snapshot },
-    });
+    const [elevatorCompliance] = await Promise.all([
+      client.elevatorComplianceStatus.upsert({
+        where: { elevatorId },
+        update: { ...snapshot, lastCalculatedAt: new Date() },
+        create: { elevatorId, ...snapshot },
+      }),
+      this.recalculateMaintenanceComplianceForElevator(elevatorId, tx),
+    ]);
+
+    return elevatorCompliance;
   }
 
   static async recalculateAll(options?: { batchSize?: number }) {

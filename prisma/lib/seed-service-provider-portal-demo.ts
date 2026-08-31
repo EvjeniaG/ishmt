@@ -431,16 +431,82 @@ async function seedMaintenanceDemo(
   }
 
   if (el3) {
-    await prisma.maintenanceContract.create({
-      data: {
+    const existingActive = await prisma.maintenanceContract.findFirst({
+      where: {
         elevatorId: el3.id,
         maintenanceOrgId: orgId,
         serviceType: "MAINTENANCE",
+        contractNumber: `${SERVICE_PROVIDER_DEMO_CONTRACT_PREFIX}-${year}-003`,
+      },
+    });
+    if (!existingActive) {
+      await prisma.maintenanceContract.create({
+        data: {
+          elevatorId: el3.id,
+          maintenanceOrgId: orgId,
+          serviceType: "MAINTENANCE",
+          contractNumber: `${SERVICE_PROVIDER_DEMO_CONTRACT_PREFIX}-${year}-003`,
+          startDate: daysAgo(90),
+          endDate: addMonths(new Date(), 9),
+          status: MaintenanceContractStatus.ACTIVE,
+          isActive: true,
+        },
+      });
+    }
+
+    const existingRecord = await prisma.maintenanceRecord.findFirst({
+      where: { elevatorId: el3.id, maintenanceOrgId: orgId },
+    });
+    if (!existingRecord) {
+      const interventionDate = daysAgo(14);
+      await prisma.maintenanceRecord.create({
+        data: {
+          elevatorId: el3.id,
+          maintenanceOrgId: orgId,
+          type: MaintenanceType.ROUTINE,
+          interventionType: "Rutinë",
+          performedDate: interventionDate,
+          startTime: "10:00",
+          endTime: "11:30",
+          technicianName: "Bledar Shehu",
+          description: "Demo SP: Kontroll rutinë për ashensorin 000903.",
+          createdById: userId,
+        },
+      });
+      await prisma.maintenanceRecord.create({
+        data: {
+          elevatorId: el3.id,
+          maintenanceOrgId: orgId,
+          type: MaintenanceType.ROUTINE,
+          interventionType: "RAPORT_MUJOR",
+          performedDate: monthStart(),
+          technicianName: "Bledar Shehu",
+          description: "Demo SP: Kontroll periodik mujor i regjistruar.",
+          createdById: userId,
+        },
+      });
+      await prisma.maintenanceComplianceStatus.upsert({
+        where: { elevatorId: el3.id },
+        update: {
+          lastMaintenanceDate: interventionDate,
+          nextDueDate: addMonths(interventionDate, 1),
+          isCompliant: true,
+          daysOverdue: 0,
+        },
+        create: {
+          elevatorId: el3.id,
+          lastMaintenanceDate: interventionDate,
+          nextDueDate: addMonths(interventionDate, 1),
+          isCompliant: true,
+          daysOverdue: 0,
+        },
+      });
+    }
+
+    await prisma.maintenanceContract.deleteMany({
+      where: {
+        elevatorId: el3.id,
         contractNumber: `${SERVICE_PROVIDER_DEMO_CONTRACT_PREFIX}-${year}-PENDING`,
-        startDate: new Date(),
-        endDate: addMonths(new Date(), 12),
-        status: MaintenanceContractStatus.PENDING,
-        isActive: false,
       },
     });
   }

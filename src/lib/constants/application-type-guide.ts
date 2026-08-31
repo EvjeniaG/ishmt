@@ -82,7 +82,7 @@ export const APPLICATION_TYPE_GUIDE: Record<ApplicationGuideKey, ApplicationGuid
       "Zgjidhni ashensorin",
       "Shkruani NIPT/NID e marrësit dhe arsyen - dërgohet ftesë",
       "Marrësi pranon ose refuzon në portal",
-      "Parashtroni te IQMT me aktin e kalimit",
+      "Parashtroni te IQMT",
       "IQMT miraton - përgjegjësia kalon te marrësi",
     ],
     approvers: "Marrësi · IQMT",

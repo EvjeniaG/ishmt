@@ -4,6 +4,7 @@ import {
   DEMO_CERTIFIER_PROFILES,
   DEMO_INSTALLER_PROFILES,
   DEMO_MAINTENANCE_PROFILES,
+  DEMO_OWNER_CONSTRUCTION,
   type DemoCompanySeedProfile,
 } from "@/lib/demo/demo-seed-profiles";
 
@@ -70,4 +71,20 @@ export async function resolveDemoMaintenanceOrganization() {
   }
 
   return null;
+}
+
+/** Marrësi i transferimit pronësie - kompania e ndërtimit demo (login i dytë i pronarit). */
+export async function resolveDemoOwnershipRecipientOrganization() {
+  const nipt = DEMO_OWNER_CONSTRUCTION.nipt?.trim().toUpperCase();
+  if (!nipt) return null;
+
+  return db.organization.findFirst({
+    where: {
+      type: OrgType.OWNER,
+      nipt,
+      deletedAt: null,
+      status: { in: [OrgStatus.ACTIVE, OrgStatus.ACTIVE_AUTHORIZED] },
+    },
+    select: { id: true, name: true, nipt: true },
+  });
 }

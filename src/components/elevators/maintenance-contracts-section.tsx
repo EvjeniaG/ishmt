@@ -22,7 +22,7 @@ const STATUS_FILTERS = [
   { value: "all", label: "Të gjitha" },
   { value: "Aktive", label: "Aktive" },
   { value: "Në pritje", label: "Në pritje" },
-  { value: "Përfunduar", label: "Të ndërprera" },
+  { value: "Të ndërprera", label: "Të ndërprera" },
   { value: "Skaduar", label: "Skaduar" },
   { value: "Refuzuar", label: "Refuzuar" },
 ] as const;

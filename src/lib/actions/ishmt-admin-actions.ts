@@ -80,6 +80,41 @@ export async function adminCreatePasswordResetLinkAction(
   }
 }
 
+export async function adminCreateStaffUserAction(input: {
+  organizationId: string;
+  roleCode: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+  nid: string;
+  phone?: string;
+}): Promise<
+  ActionResult<{
+    email: string;
+    nid: string;
+    temporaryPassword: string;
+    organizationName: string;
+    roleCode: string;
+  }>
+> {
+  try {
+    const ctx = await requirePermission(PERMISSIONS.USERS_MANAGE_ALL);
+    const data = await UserAdminService.createStaffUser(ctx, {
+      organizationId: input.organizationId,
+      roleCode: input.roleCode as import("@/lib/constants/roles").RoleCode,
+      firstName: input.firstName,
+      lastName: input.lastName,
+      email: input.email,
+      nid: input.nid,
+      phone: input.phone,
+    });
+    revalidatePath("/ishmt/admin/users");
+    return { success: true, data };
+  } catch (error) {
+    return fail(error);
+  }
+}
+
 export async function recalculateComplianceAction(elevatorId?: string): Promise<ActionResult<{ processed: number }>> {
   try {
     const ctx = await requireAuth();

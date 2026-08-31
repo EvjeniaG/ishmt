@@ -9,6 +9,17 @@ export type OperationalEventTargets = {
   ishmt?: boolean;
 };
 
+export type OperationalEventBroadcastInput = {
+  elevatorId: string;
+  title: string;
+  body: string;
+  entityType?: string;
+  entityId?: string;
+  targets?: OperationalEventTargets;
+  /** Organizata shtesë (p.sh. OM nga kontrata e kontrollit periodik). */
+  extraOrgIds?: string[];
+};
+
 const DEFAULT_TARGETS: OperationalEventTargets = {
   owner: true,
   maintenance: true,
@@ -18,14 +29,7 @@ const DEFAULT_TARGETS: OperationalEventTargets = {
 
 /** Njoftim simultan për të gjithë aktorët e lidhur me një ashensor. */
 export class OperationalEventNotificationService {
-  static async broadcastForElevator(input: {
-    elevatorId: string;
-    title: string;
-    body: string;
-    entityType?: string;
-    entityId?: string;
-    targets?: OperationalEventTargets;
-  }) {
+  static async broadcastForElevator(input: OperationalEventBroadcastInput) {
     const elevator = await db.elevator.findFirst({
       where: { id: input.elevatorId, deletedAt: null },
       select: {
@@ -50,6 +54,9 @@ export class OperationalEventNotificationService {
     if (targets.owner) orgIds.add(elevator.ownerOrgId);
     if (targets.maintenance && elevator.maintenanceOrgId) orgIds.add(elevator.maintenanceOrgId);
     if (targets.certifier && elevator.certifierOrgId) orgIds.add(elevator.certifierOrgId);
+    for (const orgId of input.extraOrgIds ?? []) {
+      if (orgId) orgIds.add(orgId);
+    }
 
     await Promise.all([...orgIds].map((orgId) => NotificationService.notifyOrgMembers(orgId, payload)));
 

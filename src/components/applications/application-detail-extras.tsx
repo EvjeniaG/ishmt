@@ -1,5 +1,4 @@
-import Link from "next/link";
-import { ArrowUpRight, ChevronDown, History } from "lucide-react";
+import { ChevronDown, History } from "lucide-react";
 import { formatWorkflowHistoryLine } from "@/lib/constants/display-labels";
 import { WorkflowSection } from "@/components/applications/workflow-section";
 import { cn } from "@/lib/utils";
@@ -52,26 +51,6 @@ function HistoryEntryRow({
         <time dateTime={new Date(entry.createdAt).toISOString()}>{formatHistoryTime(entry.createdAt)}</time>
       </dd>
     </div>
-  );
-}
-
-export function ApplicationElevatorCard({
-  elevatorId,
-  registryNumber,
-}: {
-  elevatorId: string;
-  registryNumber: string;
-}) {
-  return (
-    <Link href={`/portal/elevators/${elevatorId}`} className="workflow-link-card group">
-      <div>
-        <p className="text-sm font-semibold text-foreground">Dosja e ashensorit</p>
-        <p className="mt-0.5 font-mono text-xs text-muted-foreground">{registryNumber}</p>
-      </div>
-      <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-gov-primary/10 text-gov-primary transition-transform group-hover:scale-105">
-        <ArrowUpRight className="h-4 w-4" aria-hidden />
-      </span>
-    </Link>
   );
 }
 

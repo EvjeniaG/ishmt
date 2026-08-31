@@ -162,7 +162,8 @@ export function registryFilterCountLabel(filtered: number, total: number) {
 }
 
 function contractFootnoteTone(statusLabel: string): "terminated" | "rejected" | "neutral" {
-  if (statusLabel === "Përfunduar" || statusLabel === "E përfunduar") return "terminated";
+  if (statusLabel === "Të ndërprera" || statusLabel === "Përfunduar" || statusLabel === "E përfunduar")
+    return "terminated";
   if (statusLabel === "Refuzuar") return "rejected";
   return "neutral";
 }

@@ -6,16 +6,31 @@ import {
   type ElevatorDossierTabId,
 } from "@/components/elevators/elevator-dossier-tabs";
 
-export type DossierViewerKind = "owner" | "certifier" | "maintenance" | "ishmt_staff" | "other";
+export type DossierViewerKind =
+  | "owner"
+  | "installer"
+  | "certifier"
+  | "maintenance"
+  | "ishmt_staff"
+  | "other";
 
 export function resolveDossierViewerKind(roleCode: RoleCode): DossierViewerKind {
   if (roleCode === ROLE_CODES.OWNER) return "owner";
+  if (roleCode === ROLE_CODES.INSTALLER) return "installer";
   if (roleCode === ROLE_CODES.CERTIFIER) return "certifier";
   if (roleCode === ROLE_CODES.MAINTENANCE) return "maintenance";
   if (roleCode === ROLE_CODES.DIRECTORATE) return "ishmt_staff";
   if (isIshmtStaffRole(roleCode)) return "ishmt_staff";
   return "other";
 }
+
+const INSTALLER_TABS: ElevatorDossierTabId[] = [
+  "technical",
+  "certificate",
+  "documents",
+  "applications",
+  "history",
+];
 
 const CERTIFIER_TABS: ElevatorDossierTabId[] = [
   "inspections",
@@ -38,6 +53,8 @@ export function dossierTabsForViewer(kind: DossierViewerKind): ElevatorDossierTa
       return [...ELEVATOR_DOSSIER_TABS];
     case "certifier":
       return CERTIFIER_TABS;
+    case "installer":
+      return INSTALLER_TABS;
     case "maintenance":
       return MAINTENANCE_TABS;
     default:
@@ -48,5 +65,6 @@ export function dossierTabsForViewer(kind: DossierViewerKind): ElevatorDossierTa
 export function defaultDossierTab(kind: DossierViewerKind): ElevatorDossierTabId {
   if (kind === "certifier") return "inspections";
   if (kind === "maintenance") return "maintenance";
+  if (kind === "installer") return "technical";
   return "summary";
 }

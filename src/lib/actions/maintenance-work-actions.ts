@@ -2,6 +2,8 @@
 
 import { revalidatePath } from "next/cache";
 import { requireAuth } from "@/lib/permissions/guards";
+import { db } from "@/lib/db";
+import { CertifierInspectionService } from "@/lib/services/certifier-inspection-service";
 import { MaintenanceWorkService } from "@/lib/services/maintenance-work-service";
 
 type ActionResult = { success: true } | { success: false; error: string };
@@ -49,10 +51,24 @@ export async function terminateMaintenanceContractAction(
 ): Promise<ActionResult> {
   try {
     const ctx = await requireAuth();
-    await MaintenanceWorkService.terminateActiveContract(ctx, contractId, reason);
+    const contract = await db.maintenanceContract.findFirst({
+      where: { id: contractId, maintenanceOrgId: ctx.activeOrgId },
+      select: { serviceType: true, elevatorId: true },
+    });
+    if (!contract) throw new Error("Kontrata nuk u gjet.");
+
+    if (contract.serviceType === "PERIODIC_INSPECTION") {
+      await CertifierInspectionService.terminateInspectionContract(ctx, contractId, reason);
+    } else {
+      await MaintenanceWorkService.terminateActiveContract(ctx, contractId, reason);
+    }
+
     revalidatePath("/portal/dashboard");
     revalidatePath("/portal/sherbimi/contracts");
+    revalidatePath("/portal/omi/kontratat-kontrolli");
+    revalidatePath("/portal/omi/kontratat");
     revalidatePath("/portal/elevators");
+    revalidatePath(`/portal/elevators/${contract.elevatorId}`);
     return { success: true };
   } catch (error) {
     return fail(error);

@@ -76,11 +76,7 @@ export function MaintenanceRegistryPanel({
 
       <SectionCard
         title="Kontratat e mirëmbajtjes"
-        subtitle={
-          audience === "maintenance"
-            ? "Pranoni ftesën, pastaj ngarkoni kontratën e nënshkruar. Historiku mbetet i dukshëm për personin përgjegjës dhe IQMT-n."
-            : "Kontratat me kompaninë e mirëmbajtjes. Dokumenti i nënshkruar ngarkohet nga kompania pas pranimit."
-        }
+        subtitle="Kontratat me kompaninë e mirëmbajtjes. Dokumenti i nënshkruar ngarkohet nga kompania pas pranimit."
         meta={
           <span className="portal-badge-neutral tabular-nums">
             {data.contracts.length === 1 ? "1 kontratë" : `${data.contracts.length} kontrata`}

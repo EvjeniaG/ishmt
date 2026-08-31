@@ -162,6 +162,16 @@ export function labelApplicationType(
   return APPLICATION_TYPE_LABELS[type as ApplicationType] ?? String(type);
 }
 
+/** Titull njoftimi kur aplikimi parashtrohet te IQMT (jo emri teknik i enum-it). */
+export function formatSubmittedApplicationNotificationTitle(
+  type: ApplicationType,
+  updateType?: DataUpdateType | string | null,
+): string {
+  const label = labelApplicationType(type, updateType);
+  const lower = label.charAt(0).toLocaleLowerCase("sq") + label.slice(1);
+  return `Aplikim për ${lower}`;
+}
+
 export function formatWorkflowHistoryLine(input: {
   fromStatus?: ApplicationStatus | null;
   toStatus: ApplicationStatus;

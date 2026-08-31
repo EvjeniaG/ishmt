@@ -1,6 +1,7 @@
 import type { Prisma } from "@prisma/client";
 import { ApplicationStatus, ApplicationType } from "@prisma/client";
 import { ROLE_CODES, type RoleCode } from "@/lib/constants/roles";
+import { isIshmtInternalRole } from "@/lib/permissions/ishmt-roles";
 import { db } from "@/lib/db";
 
 const TERMINAL_STATUSES: ApplicationStatus[] = [
@@ -17,6 +18,28 @@ export type ReviewQueueBucket = "needs_action" | "waiting" | "completed" | "acti
 
 export function isTerminalApplicationStatus(status: ApplicationStatus) {
   return TERMINAL_STATUSES.includes(status);
+}
+
+const ISHMT_READONLY_EXCLUDED_STATUSES: ApplicationStatus[] = [
+  ApplicationStatus.DRAFT,
+  ApplicationStatus.PENDING_OWNER_SUBMISSION,
+  ApplicationStatus.CANCELLED,
+];
+
+/** Të gjitha aplikimet e parashtruara te IQMT (të gjitha llojet, historik + aktiv). */
+export function buildIshmtApplicationRegistryWhere(options?: {
+  activeOnly?: boolean;
+}): Prisma.ApplicationWhereInput {
+  const where: Prisma.ApplicationWhereInput = {
+    deletedAt: null,
+    submittedAt: { not: null },
+  };
+
+  if (options?.activeOnly) {
+    where.status = { notIn: TERMINAL_STATUSES };
+  }
+
+  return where;
 }
 
 export async function upsertParticipation(
@@ -94,7 +117,7 @@ export async function addParticipants(
   }
 }
 
-/** Aplikime për regjistrim që nuk janë miratuar/refuzuar ende - deri te vendimi i kryeinspektorit. */
+/** Aplikime regjistrimi (NEW_REGISTRATION) në proces - deri te vendimi final. */
 export function buildRegistrationPipelineWhere(userId?: string): Prisma.ApplicationWhereInput {
   const where: Prisma.ApplicationWhereInput = {
     deletedAt: null,
@@ -110,17 +133,29 @@ export function buildRegistrationPipelineWhere(userId?: string): Prisma.Applicat
   return where;
 }
 
+/** Radha e kryeinspektorit: të gjitha llojet e aplikimeve të parashtruara, deri te vendimi final. */
+export function buildChiefApplicationsQueueWhere(userId?: string): Prisma.ApplicationWhereInput {
+  const where = buildIshmtApplicationRegistryWhere({ activeOnly: true });
+
+  if (userId) {
+    where.participations = { some: { userId, leftAt: null } };
+  }
+
+  return where;
+}
+
 export function buildParticipationQueueWhere(
   userId: string,
   bucket: ReviewQueueBucket,
 ): Prisma.ApplicationWhereInput {
   if (bucket === "active_pipeline") {
-    return buildRegistrationPipelineWhere(userId);
+    return buildIshmtApplicationRegistryWhere({ activeOnly: true });
   }
 
   if (bucket === "completed") {
     return {
-      participations: { some: { userId } },
+      deletedAt: null,
+      submittedAt: { not: null },
       status: { in: TERMINAL_STATUSES },
     };
   }
@@ -164,6 +199,12 @@ export async function hasIshmtApplicationParticipation(
   },
 ): Promise<boolean> {
   if (roleCode === ROLE_CODES.ADMIN) return true;
+
+  if (isIshmtInternalRole(roleCode)) {
+    if (!ISHMT_READONLY_EXCLUDED_STATUSES.includes(application.status)) {
+      return true;
+    }
+  }
 
   const participation = await db.applicationParticipation.findFirst({
     where: { applicationId: application.id, userId },

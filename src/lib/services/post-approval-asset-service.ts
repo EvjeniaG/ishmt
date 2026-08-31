@@ -60,7 +60,8 @@ async function buildCertificateVariables(input: CertificateVarInput): Promise<Re
 
   const serialNumber = elevator.technicalData?.serialNumber ?? data?.serialNumber;
   const manufacturer = elevator.technicalData?.manufacturer ?? data?.manufacturer;
-  const responsibleIdentifier = data?.responsibleEntityIdentifier ?? elevator.ownerOrg.nipt ?? undefined;
+  const responsibleIdentifier =
+    data?.responsibleEntityIdentifier ?? elevator.ownerOrg.nipt ?? undefined;
 
   if (elevator.technicalData?.elevatorType) variables.elevatorType = elevator.technicalData.elevatorType;
   if (manufacturer) variables.manufacturer = manufacturer;

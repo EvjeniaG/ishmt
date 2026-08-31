@@ -28,6 +28,7 @@ import {
   buildInspectionRegistryView,
   buildMaintenanceRegistryView,
 } from "@/lib/elevators/registry-view-models";
+import { isPeriodicInspectionLogWindowOpen } from "@/lib/elevators/periodic-inspection-window";
 import { MaintenanceContractService } from "@/lib/services/maintenance-contract-service";
 import { MaintenanceRegistryPanel } from "@/components/elevators/maintenance-registry-panel";
 import { InspectionRegistryPanel } from "@/components/elevators/inspection-registry-panel";
@@ -196,6 +197,7 @@ export default async function ElevatorDigitalFilePage({
   const isIshmtViewer = viewerKind === "ishmt_staff";
   const isCertifierViewer = viewerKind === "certifier";
   const isMaintenanceViewer = viewerKind === "maintenance";
+  const isInstallerViewer = viewerKind === "installer";
 
   const elevatorDeadlines = isOwnerViewer
     ? await DeadlineService.buildElevatorDeadlines({
@@ -303,22 +305,20 @@ export default async function ElevatorDigitalFilePage({
 
   const elevatorApplications = buildElevatorApplicationsList(elevator);
 
-  const maintenanceContractIds = elevator.maintenanceContracts
-    .filter((c) => c.serviceType === "MAINTENANCE")
-    .map((c) => c.id);
-  const maintenanceTerminationMeta =
-    await MaintenanceContractService.loadTerminationMeta(maintenanceContractIds);
+  const contractIds = elevator.maintenanceContracts.map((c) => c.id);
+  const contractTerminationMeta =
+    await MaintenanceContractService.loadTerminationMeta(contractIds);
 
   const maintenanceRegistry = buildMaintenanceRegistryView({
     maintenanceOrg: elevator.maintenanceOrg,
     maintenanceContracts: elevator.maintenanceContracts,
     maintenanceRecords: elevator.maintenanceRecords,
     maintenanceCompliance: elevator.maintenanceCompliance,
-    terminationMeta: maintenanceTerminationMeta,
+    terminationMeta: contractTerminationMeta,
   });
 
   const dossierTimeline =
-    activeTab === "history" && (isOwnerViewer || isStaffViewer)
+    activeTab === "history" && (isOwnerViewer || isStaffViewer || isInstallerViewer)
       ? await ElevatorTimelineService.buildTimeline(id)
       : [];
 
@@ -329,7 +329,24 @@ export default async function ElevatorDigitalFilePage({
     intervalMonths: getInspectionIntervalMonths(appData?.buildingType ?? null),
     registrationDate: elevator.registrationDate,
     buildingType: appData?.buildingType ?? null,
+    terminationMeta: contractTerminationMeta,
   });
+
+  const latestPeriodicInspection = inspectionRegistry.items[0] ?? null;
+  const periodicInspectionWindow = isPeriodicInspectionLogWindowOpen({
+    lastInspection: latestPeriodicInspection
+      ? {
+          conductedDate: latestPeriodicInspection.conductedDate,
+          result: latestPeriodicInspection.result,
+          nextInspectionDate: inspectionRegistry.nextDue,
+        }
+      : null,
+    registrationDate: elevator.registrationDate,
+    intervalMonths: inspectionRegistry.intervalMonths,
+  });
+
+  const canLogPeriodicInspection =
+    Boolean(certifierActiveInspectionContract) && periodicInspectionWindow.open;
 
   const periodicControlSchedule = buildPeriodicControlSchedule({
     buildingType: appData?.buildingType ?? null,
@@ -534,7 +551,7 @@ export default async function ElevatorDigitalFilePage({
                 elevatorId={id}
                 registryNumber={elevator.registryNumber}
                 pendingContract={certifierPendingContract}
-                canLogPeriodicInspection={Boolean(certifierActiveInspectionContract)}
+                canLogPeriodicInspection={canLogPeriodicInspection}
               />
             )}
             <InspectionRegistryPanel
@@ -549,8 +566,8 @@ export default async function ElevatorDigitalFilePage({
                 <CardHeader>
                   <CardTitle>
                     {canChangeInspectionCompany
-                      ? "Ndrysho organizatën e kontrollit periodik (OM)"
-                      : "Cakto organizatën e kontrollit periodik (OM)"}
+                      ? "Ndrysho organizatën e inspektimit periodik (OM)"
+                      : "Cakto organizatën e inspektimit periodik (OM)"}
                   </CardTitle>
                   {canChangeInspectionCompany && activeInspectionContract ? (
                     <CardDescription>
@@ -580,7 +597,7 @@ export default async function ElevatorDigitalFilePage({
           </div>
         )}
 
-        {activeTab === "history" && (isOwnerViewer || isStaffViewer) && (
+        {activeTab === "history" && (isOwnerViewer || isStaffViewer || isInstallerViewer) && (
           <Card>
             <CardHeader className="space-y-1">
               <CardTitle>Historiku</CardTitle>
@@ -594,7 +611,7 @@ export default async function ElevatorDigitalFilePage({
           </Card>
         )}
 
-        {activeTab === "applications" && (isOwnerViewer || isStaffViewer) && (
+        {activeTab === "applications" && (isOwnerViewer || isStaffViewer || isInstallerViewer) && (
           <ElevatorApplicationsPanel applications={elevatorApplications} />
         )}
 

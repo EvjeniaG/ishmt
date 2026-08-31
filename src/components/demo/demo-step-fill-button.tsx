@@ -29,10 +29,12 @@ export function DemoStepFillButton({
   applicationId,
   step,
   className = "",
+  onOwnershipPrefill,
 }: {
   applicationId: string;
   step: ApplicationDemoStep;
   className?: string;
+  onOwnershipPrefill?: (prefill: { nipt: string; reason: string }) => void;
 }) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
@@ -54,6 +56,15 @@ export function DemoStepFillButton({
 
     if (result.prefilledOrgField && result.prefilledOrgId) {
       applyOrgPrefill(result.prefilledOrgField, result.prefilledOrgId, result.prefilledOrgQuery);
+      setHint("U plotësua. Kontrolloni dhe vazhdoni.");
+      return;
+    }
+
+    if (result.prefilledRecipientNipt && result.prefilledTransferReason) {
+      onOwnershipPrefill?.({
+        nipt: result.prefilledRecipientNipt,
+        reason: result.prefilledTransferReason,
+      });
       setHint("U plotësua. Kontrolloni dhe vazhdoni.");
       return;
     }

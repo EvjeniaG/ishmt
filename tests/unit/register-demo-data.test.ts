@@ -12,22 +12,25 @@ describe("buildRegisterDemoData", () => {
     resetRegisterDemoInstallClaimCursor();
   });
 
-  it("builds unique owner demo fields for administrator without NIPT", () => {
+  it("builds unique owner demo fields for administrator with canonical NID", () => {
     const a = buildRegisterDemoData({ level: "OWNER", ownerBuildingRole: "ADMINISTRATOR" });
     const b = buildRegisterDemoData({ level: "OWNER", ownerBuildingRole: "ADMINISTRATOR" });
 
-    expect(a.personalNumber).toMatch(/^I9\d{7}D$/);
-    expect(a.email).not.toBe(b.email);
+    expect(a.personalNumber).toBe("I90404004D");
+    expect(a.email).toBe("arben.demo@example.al");
     expect(a.password).toBe("Ishmt2026");
     expect(a.nipt).toBe("");
     expect(a.ownerBuildingRole).toBe("ADMINISTRATOR");
+    expect(b.personalNumber).toBe(a.personalNumber);
   });
 
-  it("builds owner demo with NIPT for non-administrator types", () => {
+  it("builds owner demo with canonical NIPT and NID for construction company", () => {
     const data = buildRegisterDemoData({ level: "OWNER", ownerBuildingRole: "CONSTRUCTION_COMPANY" });
 
-    expect(data.nipt).toMatch(/^L\d{7}A$/);
-    expect(data.organizationName).toContain("Kompani Ndërtimi Demo");
+    expect(data.personalNumber).toBe("I90404006F");
+    expect(data.nipt).toBe("L6040406A");
+    expect(data.email).toBe("ndertim.demo@example.al");
+    expect(data.organizationName).toBe("Kompani Ndërtimi Demo");
     expect(data.ownerBuildingRole).toBe("CONSTRUCTION_COMPANY");
   });
 

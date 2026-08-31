@@ -24,6 +24,7 @@ function portalComplianceAlertHref(entityId: string, title?: string | null): str
   if (
     t.includes("inspekt") ||
     t.includes("kontroll periodik") ||
+    t.includes("inspektim periodik") ||
     t.includes(" om") ||
     t.startsWith("om ")
   ) {

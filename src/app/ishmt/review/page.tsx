@@ -5,14 +5,12 @@ import { StandardPageLayout } from "@/components/layout/standard-page-layout";
 import { ApplicationStatusBadge } from "@/components/applications/application-status-badge";
 import { LegalDeadlineBadge } from "@/components/deadlines/deadline-badge";
 import { PortalEmptyState, PortalTableWrap } from "@/components/shared/portal-table";
-import { MetricCard } from "@/components/shared/metric-card";
 import { OfficialTableFooter, RegistryNumber, SectionCard } from "@/components/shared/institutional";
 import { getAuthSession } from "@/lib/auth";
-import { APPLICATION_TYPE_LABELS } from "@/lib/constants/application-labels";
+import { labelApplicationType } from "@/lib/constants/display-labels";
 import { ApplicationService } from "@/lib/services/application-service";
 import { PERMISSIONS } from "@/lib/permissions/codes";
 import { roleHasPermission } from "@/lib/permissions/matrix";
-import { canApproveApplications, canReviewApplications } from "@/lib/permissions/ishmt-roles";
 import type { ReviewQueueBucket } from "@/lib/services/application-participation";
 import { currentPhaseLabel } from "@/lib/services/application-participation";
 
@@ -22,14 +20,8 @@ export default async function ReviewQueuePage({
   searchParams: Promise<{ tab?: string }>;
 }) {
   const { tab } = await searchParams;
-  const queueBucket: ReviewQueueBucket =
-    tab === "needs_action"
-      ? "needs_action"
-      : tab === "waiting"
-        ? "waiting"
-        : tab === "completed"
-          ? "completed"
-          : "active_pipeline";
+  const showHistory = tab === "completed";
+  const queueBucket: ReviewQueueBucket = showHistory ? "completed" : "active_pipeline";
 
   const session = await getAuthSession();
   if (!session?.user) redirect("/auth/login");
@@ -39,85 +31,65 @@ export default async function ReviewQueuePage({
   }
 
   const role = session.user.roleCode;
-  const isApprover = canApproveApplications(role);
-  const isReviewer = canReviewApplications(role);
 
-  const applications = await ApplicationService.listForContext({
-    userId: session.user.id,
-    email: session.user.email ?? "",
-    firstName: session.user.firstName,
-    lastName: session.user.lastName,
-    activeOrgId: session.user.activeOrgId,
-    activeOrgType: session.user.activeOrgType,
-    activeOrgName: session.user.activeOrgName,
-    roleCode: session.user.roleCode,
-    permissions: session.user.permissions,
-  }, { queueBucket });
-
-  const urgentCount = applications.filter(
-    (app) =>
-      app.submittedAt &&
-      ["SUBMITTED", "PENDING_DIRECTOR", "PENDING_SECTOR_HEAD", "PENDING_FIELD_REVIEW", "PENDING_DIRECTOR_REPORT", "PENDING_CHIEF_INSPECTOR"].includes(app.status),
-  ).length;
+  const applications = await ApplicationService.listForContext(
+    {
+      userId: session.user.id,
+      email: session.user.email ?? "",
+      firstName: session.user.firstName,
+      lastName: session.user.lastName,
+      activeOrgId: session.user.activeOrgId,
+      activeOrgType: session.user.activeOrgType,
+      activeOrgName: session.user.activeOrgName,
+      roleCode: session.user.roleCode,
+      permissions: session.user.permissions,
+    },
+    { queueBucket },
+  );
 
   return (
     <AppShell>
       <StandardPageLayout
         eyebrow="IQMT · Shqyrtim administrativ"
         title="Aplikime në shqyrtim"
-        description={
-          isApprover
-            ? "Dosjet e aplikimeve për regjistrim - vendimi final nga kryeinspektori."
-            : isReviewer
-              ? "Dosjet mbeten të dukshme me statusin aktual deri te regjistrimi nga kryeinspektori."
-              : "Pamje e përgjithshme e aplikimeve në proces."
-        }
+        description="Regjistri i aplikimeve të parashtruara te IQMT - në proces dhe historiku."
       >
         <div className="mb-4 flex flex-wrap gap-2">
           {(
             [
-              ["active_pipeline", "Në proces"],
-              ["needs_action", "Kërkon veprimin tim"],
-              ["waiting", "Në hallkën tjetër"],
-              ["completed", "Të mbyllura"],
+              ["active", "Në proces"],
+              ["completed", "Historiku"],
             ] as const
           ).map(([key, label]) => (
             <Link
               key={key}
-              href={`/ishmt/review?tab=${key}`}
+              href={key === "completed" ? "/ishmt/review?tab=completed" : "/ishmt/review"}
               className={`rounded-md border px-3 py-1.5 text-sm ${
-                queueBucket === key ? "border-primary bg-primary/5 font-medium" : "hover:bg-muted"
+                (key === "completed") === showHistory
+                  ? "border-primary bg-primary/5 font-medium"
+                  : "hover:bg-muted"
               }`}
             >
               {label}
             </Link>
           ))}
         </div>
-        <div className="portal-kpi-grid sm:grid-cols-2 lg:grid-cols-3">
-          <MetricCard label="Në radhë" value={applications.length} accent="primary" subtitle="Aplikime aktive" />
-          <MetricCard
-            label="Nën afat procedural"
-            value={urgentCount}
-            accent="warning"
-            subtitle="Monitorim i afatit 10-ditor"
-          />
-          <MetricCard
-            label="Niveli i aksesit"
-            value={isApprover ? "Miratim" : isReviewer ? "Shqyrtim" : "Lexim"}
-            accent="primary"
-            subtitle="Sipas rolit të caktuar"
-          />
-        </div>
 
         <SectionCard
           title="Regjistri i aplikimeve"
-          subtitle="Dosjet aktive deri te vendimi i kryeinspektorit"
+          subtitle={
+            showHistory
+              ? "Të gjitha llojet e aplikimeve të mbyllura ose të vendosura"
+              : "Të gjitha llojet e aplikimeve aktive në proces"
+          }
           meta={
-            <span className="portal-badge-neutral tabular-nums">{applications.length} regjistrime</span>
+            <span className="portal-badge-neutral tabular-nums">{applications.length} aplikime</span>
           }
         >
           {applications.length === 0 ? (
-            <PortalEmptyState>Nuk ka aplikime në radhë për shqyrtim.</PortalEmptyState>
+            <PortalEmptyState>
+              {showHistory ? "Nuk ka aplikime në historik." : "Nuk ka aplikime në proces."}
+            </PortalEmptyState>
           ) : (
             <>
               <PortalTableWrap>
@@ -141,7 +113,7 @@ export default async function ReviewQueuePage({
                       <td>
                         <RegistryNumber>{app.applicationNumber}</RegistryNumber>
                       </td>
-                      <td>{APPLICATION_TYPE_LABELS[app.type] ?? app.type}</td>
+                      <td>{labelApplicationType(app.type, app.data?.updateType)}</td>
                       <td>
                         <p>{app.data?.municipality?.nameSq ?? app.targetElevator?.registryNumber ?? "-"}</p>
                         <p className="text-xs font-normal text-muted-foreground">{app.ownerOrg.name}</p>
@@ -188,7 +160,7 @@ export default async function ReviewQueuePage({
                   ))}
                 </tbody>
               </PortalTableWrap>
-              <OfficialTableFooter total={applications.length} />
+              <OfficialTableFooter total={applications.length} label="aplikime" />
             </>
           )}
         </SectionCard>

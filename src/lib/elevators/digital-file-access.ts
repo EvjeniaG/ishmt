@@ -15,6 +15,7 @@ const CONTRACT_ACCESS_STATUSES: MaintenanceContractStatus[] = [
 
 export type ElevatorDigitalFileAccess =
   | { kind: "owner" }
+  | { kind: "installer" }
   | { kind: "certifier" }
   | { kind: "maintenance" }
   | { kind: "ishmt" }
@@ -25,6 +26,7 @@ export function dossierViewerKindFromAccess(
   roleCode: RoleCode,
 ): DossierViewerKind {
   if (access.kind === "owner") return "owner";
+  if (access.kind === "installer") return "installer";
   if (access.kind === "certifier") return "certifier";
   if (access.kind === "maintenance") return "maintenance";
   if (access.kind === "ishmt") return "ishmt_staff";
@@ -63,6 +65,7 @@ export async function resolveElevatorDigitalFileAccess(
     where: { id: elevatorId, deletedAt: null },
     select: {
       ownerOrgId: true,
+      installerOrgId: true,
       maintenanceOrgId: true,
       certifierOrgId: true,
     },
@@ -70,6 +73,7 @@ export async function resolveElevatorDigitalFileAccess(
   if (!elevator) return { kind: "none" };
 
   if (elevator.ownerOrgId === orgId) return { kind: "owner" };
+  if (elevator.installerOrgId === orgId) return { kind: "installer" };
 
   const contracts = await db.maintenanceContract.findMany({
     where: {

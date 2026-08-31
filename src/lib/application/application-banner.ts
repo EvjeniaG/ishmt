@@ -103,7 +103,7 @@ export function getApplicationBannerContent(input: {
       return { headline: "Dërgoni ftesën te personi përgjegjës i ashensorit i ri", chip: "Hapi 2/5", chipTone: "action" };
     }
     if (input.ownershipAccepted) {
-      return { headline: "Ngarkoni dokumentet dhe parashtrojeni", chip: "Hapi 4/5", chipTone: "action" };
+      return { headline: "Parashtro aplikimin te IQMT", chip: "Hapi 3/4", chipTone: "action" };
     }
     return { headline: "Transferim pronësie", chip: "Në proces", chipTone: "neutral" };
   }

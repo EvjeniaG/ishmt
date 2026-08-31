@@ -49,7 +49,7 @@ const CONTRACT_STATUS_LABELS: Record<string, string> = {
 
 const SERVICE_TYPE_LABELS: Record<string, string> = {
   MAINTENANCE: "Mirëmbajtje",
-  PERIODIC_INSPECTION: "Kontroll periodik",
+  PERIODIC_INSPECTION: "Inspektim periodik",
 };
 
 export type TimelineEvent = {

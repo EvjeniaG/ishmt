@@ -61,8 +61,7 @@ export function resolveApplicationDemoStep(input: {
     case ApplicationType.DATA_UPDATE:
       if (input.updateType === DataUpdateType.OWNERSHIP_TRANSFER) {
         if (input.canInviteRecipient) return "ownership-recipient";
-        if (!input.ownershipAccepted) return null;
-        return "lifecycle-documents";
+        return null;
       }
       if (!input.hasUpdateType) return "update-type";
       if (!input.hasChanges) return "update-fields";

@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import type { InspectionRegistryView } from "@/lib/elevators/registry-view-models";
+import { ServiceContractRowActions } from "@/components/maintenance/service-contract-row-actions";
 import { PortalEmptyState, PortalTableWrap } from "@/components/shared/portal-table";
 import {
   buildYearFilterOptions,
@@ -22,7 +23,7 @@ const STATUS_FILTERS = [
   { value: "all", label: "Të gjitha" },
   { value: "Aktive", label: "Aktive" },
   { value: "Në pritje", label: "Në pritje" },
-  { value: "Përfunduar", label: "Të ndërprera" },
+  { value: "Të ndërprera", label: "Të ndërprera" },
   { value: "Skaduar", label: "Skaduar" },
   { value: "Refuzuar", label: "Refuzuar" },
 ] as const;
@@ -36,10 +37,12 @@ function contractTone(contract: Contract) {
 
 export function InspectionContractsSection({
   contracts,
-  showUploadHint = false,
+  elevatorId,
+  showTerminateAction = false,
 }: {
   contracts: Contract[];
-  showUploadHint?: boolean;
+  elevatorId?: string;
+  showTerminateAction?: boolean;
 }) {
   const [statusFilter, setStatusFilter] = useState("all");
   const [yearFilter, setYearFilter] = useState("all");
@@ -63,12 +66,12 @@ export function InspectionContractsSection({
     });
   }, [contracts, statusFilter, yearFilter]);
 
-  const documentPendingHint = showUploadHint ? "Ngarkoni PDF-in" : "Pa ngarkuar";
+  const documentPendingHint = showTerminateAction ? "Ngarkoni PDF-in" : "Pa ngarkuar";
 
   if (contracts.length === 0) {
     return (
       <PortalEmptyState>
-        Nuk ka kontratë kontrolli periodik. Caktoni OM-n për këtë ashensor.
+        Nuk ka kontratë inspektimi periodik. Caktoni OM-n për këtë ashensor.
       </PortalEmptyState>
     );
   }
@@ -104,6 +107,7 @@ export function InspectionContractsSection({
               <th>Statusi</th>
               <th>Periudha</th>
               <th>Dokumenti</th>
+              {showTerminateAction && elevatorId ? <th className="text-right">Veprime</th> : null}
               <th className="hidden lg:table-cell">Regjistruar</th>
             </tr>
           </thead>
@@ -126,6 +130,7 @@ export function InspectionContractsSection({
                     tone={contractTone(contract)}
                     respondedAt={contract.respondedAt}
                     rejectionReason={contract.rejectionReason}
+                    termination={contract.termination}
                   />
                 </td>
                 <td className="whitespace-nowrap text-sm">
@@ -138,6 +143,19 @@ export function InspectionContractsSection({
                     pendingHint={documentPendingHint}
                   />
                 </td>
+                {showTerminateAction && elevatorId ? (
+                  <td className="text-right">
+                    <ServiceContractRowActions
+                      contractId={contract.id}
+                      elevatorId={elevatorId}
+                      documentId={contract.documentId}
+                      effectiveStatus={contract.isActive && contract.statusLabel === "Aktive" ? "ACTIVE" : "OTHER"}
+                      serviceType="PERIODIC_INSPECTION"
+                      showDossierLink={false}
+                      showDownloadLink={false}
+                    />
+                  </td>
+                ) : null}
                 <td className="hidden text-sm text-muted-foreground lg:table-cell">
                   {fmtDateTimeSq(contract.createdAt)}
                 </td>

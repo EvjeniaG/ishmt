@@ -3,6 +3,12 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ContractResponseButtons } from "@/components/maintenance/contract-response-buttons";
 import { Button } from "@/components/ui/button";
 import { fmtDateSq } from "@/components/elevators/registry-shared";
+import {
+  PERIODIC_INSPECTION_CONTRACT_LABEL,
+  PERIODIC_INSPECTION_LABEL,
+  PERIODIC_INSPECTIONS_LABEL,
+  REGISTER_PERIODIC_INSPECTION_LABEL,
+} from "@/lib/constants/periodic-inspection-labels";
 
 type PendingContract = {
   id: string;
@@ -21,7 +27,7 @@ export function CertifierDossierActions({
   elevatorId: string;
   registryNumber: string;
   pendingContract: PendingContract | null;
-  /** Vetëm OM me kontratë aktive të kontrollit periodik. */
+  /** Vetëm OM me kontratë aktive të inspektimit periodik. */
   canLogPeriodicInspection?: boolean;
 }) {
   return (
@@ -29,7 +35,9 @@ export function CertifierDossierActions({
       {pendingContract && (
         <Card className="border-amber-200 bg-amber-50/40">
           <CardHeader>
-            <CardTitle className="text-base">Kontrata e kontrollit periodik - në pritje të pranimit</CardTitle>
+            <CardTitle className="text-base">
+              {PERIODIC_INSPECTION_CONTRACT_LABEL} - në pritje të pranimit
+            </CardTitle>
             <p className="text-sm text-muted-foreground">
               Personi përgjegjës i ashensorit ju ka caktuar si OM. Ngarkoni kontratën e nënshkruar dhe pranoni ftesën.
             </p>
@@ -56,14 +64,14 @@ export function CertifierDossierActions({
       {canLogPeriodicInspection && (
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Kontroll periodik (OM)</CardTitle>
+            <CardTitle className="text-base">{PERIODIC_INSPECTION_LABEL} (OM)</CardTitle>
             <p className="text-sm text-muted-foreground">
-              Kontrollet periodike regjistrohen vetëm nga OM pas kontratës aktive të kontrollit periodik.
+              {PERIODIC_INSPECTIONS_LABEL} regjistrohen vetëm nga OM pas kontratës aktive të inspektimit periodik.
             </p>
           </CardHeader>
           <CardContent>
             <Button asChild>
-              <Link href="/portal/omi/inspektim-periodik">Regjistro kontrollin periodik →</Link>
+              <Link href="/portal/omi/inspektim-periodik">{REGISTER_PERIODIC_INSPECTION_LABEL} →</Link>
             </Button>
           </CardContent>
         </Card>

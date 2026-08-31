@@ -7,7 +7,7 @@ import { PortalEmptyState, PortalTableWrap } from "@/components/shared/portal-ta
 import { OfficialTableFooter, RegistryNumber, SectionCard } from "@/components/shared/institutional";
 import { WorkflowStatusChip } from "@/components/applications/application-status-badge";
 import { getAuthSession } from "@/lib/auth";
-import { APPLICATION_TYPE_LABELS } from "@/lib/constants/application-labels";
+import { labelApplicationType } from "@/lib/constants/display-labels";
 import { formatDateSq } from "@/lib/format-date";
 import { isFieldInspectorRole } from "@/lib/permissions/ishmt-roles";
 import { FieldInspectorWorkloadService } from "@/lib/services/field-inspector-workload-service";
@@ -90,7 +90,7 @@ export default async function MyApplicationReviewsPage() {
                       <td>
                         <RegistryNumber>{app.applicationNumber}</RegistryNumber>
                       </td>
-                      <td>{APPLICATION_TYPE_LABELS[app.type] ?? app.type}</td>
+                      <td>{labelApplicationType(app.type, app.updateType)}</td>
                       <td>
                         <ApplicationStatusBadge
                           status={app.status}
@@ -157,7 +157,7 @@ export default async function MyApplicationReviewsPage() {
                       <td>
                         <RegistryNumber>{app.applicationNumber}</RegistryNumber>
                       </td>
-                      <td>{APPLICATION_TYPE_LABELS[app.type] ?? app.type}</td>
+                      <td>{labelApplicationType(app.type, app.updateType)}</td>
                       <td>
                         <ApplicationStatusBadge
                           status={app.status}

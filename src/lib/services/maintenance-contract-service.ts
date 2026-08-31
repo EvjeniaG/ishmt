@@ -9,9 +9,10 @@ export type ContractTerminationMeta = {
 
 const TERMINATION_ACTION_LABELS: Record<string, string> = {
   CONTRACT_TERMINATED_BY_PROVIDER: "Kompania e mirëmbajtjes",
+  INSPECTION_CONTRACT_TERMINATED_BY_PROVIDER: "Organizata OM",
   MAINTENANCE_CONTRACT_TERMINATED_BY_OWNER: "Personi përgjegjës i ashensorit",
   INSPECTION_CONTRACT_TERMINATED_BY_OWNER: "Personi përgjegjës i ashensorit",
-  CONTRACT_REJECTED: "Kompania e mirëmbajtjes (refuzim)",
+  CONTRACT_REJECTED: "Kompania e shërbimit (refuzim)",
 };
 
 export const CONTRACT_STATUS_LABELS: Record<MaintenanceContractStatus, string> = {

@@ -2,6 +2,7 @@ import {
   ApplicationFieldReviewAssignmentStatus,
   ApplicationStatus,
   ApplicationType,
+  DataUpdateType,
   FieldInspectionAssignmentStatus,
 } from "@prisma/client";
 import { db } from "@/lib/db";
@@ -16,6 +17,7 @@ export type InspectorDocumentReviewRow = {
   applicationId: string;
   applicationNumber: string;
   type: ApplicationType;
+  updateType: DataUpdateType | null;
   status: ApplicationStatus;
   requiresFieldVerification: boolean;
   reviewStatus: ApplicationFieldReviewAssignmentStatus;
@@ -121,6 +123,7 @@ export class FieldInspectorWorkloadService {
             requiresFieldVerification: true,
             data: {
               select: {
+                updateType: true,
                 buildingAddress: true,
                 municipality: { select: { nameSq: true } },
               },
@@ -138,6 +141,7 @@ export class FieldInspectorWorkloadService {
         applicationId: row.application.id,
         applicationNumber: row.application.applicationNumber,
         type: row.application.type,
+        updateType: row.application.data?.updateType ?? null,
         status: row.application.status,
         requiresFieldVerification: row.application.requiresFieldVerification,
         reviewStatus: row.status,
@@ -170,6 +174,7 @@ export class FieldInspectorWorkloadService {
             requiresFieldVerification: true,
             data: {
               select: {
+                updateType: true,
                 buildingAddress: true,
                 municipality: { select: { nameSq: true } },
               },
@@ -188,6 +193,7 @@ export class FieldInspectorWorkloadService {
         applicationId: row.application.id,
         applicationNumber: row.application.applicationNumber,
         type: row.application.type,
+        updateType: row.application.data?.updateType ?? null,
         status: row.application.status,
         requiresFieldVerification: row.application.requiresFieldVerification,
         reviewStatus: row.status,
@@ -220,6 +226,7 @@ export class FieldInspectorWorkloadService {
             requiresFieldVerification: true,
             data: {
               select: {
+                updateType: true,
                 buildingAddress: true,
                 municipality: { select: { nameSq: true } },
               },
@@ -235,6 +242,7 @@ export class FieldInspectorWorkloadService {
       applicationId: row.application.id,
       applicationNumber: row.application.applicationNumber,
       type: row.application.type,
+      updateType: row.application.data?.updateType ?? null,
       status: row.application.status,
       requiresFieldVerification: row.application.requiresFieldVerification,
       reviewStatus: row.status,
@@ -263,6 +271,7 @@ export class FieldInspectorWorkloadService {
             requiresFieldVerification: true,
             data: {
               select: {
+                updateType: true,
                 buildingAddress: true,
                 municipality: { select: { nameSq: true } },
               },
@@ -279,6 +288,7 @@ export class FieldInspectorWorkloadService {
       applicationId: row.application.id,
       applicationNumber: row.application.applicationNumber,
       type: row.application.type,
+      updateType: row.application.data?.updateType ?? null,
       status: row.application.status,
       requiresFieldVerification: row.application.requiresFieldVerification,
       reviewStatus: row.status,

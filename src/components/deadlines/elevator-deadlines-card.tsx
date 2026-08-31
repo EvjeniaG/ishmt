@@ -5,9 +5,9 @@ import { DeadlineSeverityBadge } from "@/components/deadlines/deadline-badge";
 const CATEGORY_LABELS: Record<UnifiedDeadlineItem["category"], string> = {
   procedure: "Procedurë IQMT",
   inspection: "Inspektim periodik",
-  inspection_contract_missing: "Kontratë kontrolli periodik",
-  inspection_contract_pending: "Kontratë kontrolli periodik",
-  inspection_contract: "Kontratë kontrolli periodik",
+  inspection_contract_missing: "Kontratë inspektimi periodik",
+  inspection_contract_pending: "Kontratë inspektimi periodik",
+  inspection_contract: "Kontratë inspektimi periodik",
   maintenance_contract: "Kontratë mirëmbajtjeje",
   maintenance_report: "Raport mirëmbajtjeje",
   maintenance_missing: "Mirëmbajtje",
@@ -43,7 +43,7 @@ export function ElevatorDeadlinesCard({ items }: { items: UnifiedDeadlineItem[] 
       <div className="border-b border-border px-4 py-3">
         <h3 className="text-sm font-semibold">Afatet dhe detyrimet</h3>
         <p className="text-xs text-muted-foreground">
-          Kontrata OM · mirëmbajtje · kontroll periodik · QR · certifikatë
+          Kontrata OM · mirëmbajtje · inspektim periodik · QR · certifikatë
         </p>
       </div>
       <ul className="divide-y">
