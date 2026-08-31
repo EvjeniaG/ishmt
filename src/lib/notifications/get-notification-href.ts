@@ -57,7 +57,7 @@ export function getNotificationHref(
   if (type === "field_review_assignment") {
     return isIshmt ? `/ishmt/review/${entityId}` : null;
   }
-  if (type === "citizen_report") {
+  if (type === "citizen_report" || type === "citizen_report_assignment") {
     return isIshmt ? `/ishmt/reports/${entityId}` : null;
   }
   if (type === "field_inspection_assignment") {

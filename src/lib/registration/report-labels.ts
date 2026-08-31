@@ -38,3 +38,29 @@ export const REPORT_PRIORITY_CLASS: Record<ReportPriority, string> = {
   HIGH: "bg-gov-warning/15 text-amber-900",
   URGENT: "bg-gov-danger/15 text-gov-danger",
 };
+
+const CITIZEN_REPORT_ACTION_LABELS: Record<string, string> = {
+  ASSIGNED: "Inspektor i caktuar",
+};
+
+export function describeCitizenReportAction(action: string, comment?: string | null): {
+  label: string;
+  detail: string | null;
+} {
+  if (action === "ASSIGNED") {
+    return {
+      label: CITIZEN_REPORT_ACTION_LABELS.ASSIGNED,
+      detail: comment?.trim() || null,
+    };
+  }
+
+  const statusLabel =
+    action in CITIZEN_REPORT_STATUS_LABELS
+      ? CITIZEN_REPORT_STATUS_LABELS[action as CitizenReportStatus]
+      : CITIZEN_REPORT_ACTION_LABELS[action] ?? action;
+
+  return {
+    label: statusLabel,
+    detail: comment?.trim() || null,
+  };
+}

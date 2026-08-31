@@ -19,7 +19,9 @@ import {
   CITIZEN_REPORT_TYPE_LABELS,
   REPORT_PRIORITY_CLASS,
   REPORT_PRIORITY_LABELS,
+  describeCitizenReportAction,
 } from "@/lib/registration/report-labels";
+import { formatDateTimeSq } from "@/lib/format-date";
 import { formatCitizenReportLocationDisplay } from "@/lib/ishmt/citizen-report-location";
 
 export default async function CitizenReportDetailPage({
@@ -31,12 +33,19 @@ export default async function CitizenReportDetailPage({
   const session = await getAuthSession();
   if (!session?.user) redirect("/auth/login");
 
-  if (!roleHasPermission(session.user.roleCode, PERMISSIONS.REPORTS_VIEW)) {
-    redirect("/unauthorized");
-  }
-
   const report = await CitizenReportService.getById(id);
+
+  const canViewReport =
+    roleHasPermission(session.user.roleCode, PERMISSIONS.REPORTS_VIEW) ||
+    (session.user.roleCode === ROLE_CODES.FIELD_INSPECTOR &&
+      report.assignedInspectorId === session.user.id);
+  if (!canViewReport) redirect("/unauthorized");
+
   const canManage = roleHasPermission(session.user.roleCode, PERMISSIONS.REPORTS_MANAGE);
+  const isAssignedInspector =
+    session.user.roleCode === ROLE_CODES.FIELD_INSPECTOR &&
+    report.assignedInspectorId === session.user.id;
+  const canActOnReport = canManage || isAssignedInspector;
   const canAssignInspector =
     canManage &&
     canAssignFieldInspections(session.user.roleCode) &&
@@ -189,32 +198,53 @@ export default async function CitizenReportDetailPage({
               reportId={report.id}
               inspectors={inspectors}
               currentInspectorId={report.assignedInspectorId}
+              currentInspectorName={
+                report.assignedInspector
+                  ? `${report.assignedInspector.firstName} ${report.assignedInspector.lastName}`.trim()
+                  : null
+              }
             />
           </SectionCard>
         )}
 
-        {canManage && (
+        {canActOnReport && (
           <SectionCard title="Veprimet e inspektorit" subtitle="Menaxhimi dhe zgjidhja e raportit" padded>
             <ReportTriageActions
               reportId={report.id}
               status={report.status}
               assignedToMe={assignedToMe}
-              canSelfAssign={canSelfAssign}
+              canSelfAssign={canSelfAssign && canManage}
+              mode={isAssignedInspector && !canManage ? "assigned_inspector" : "staff"}
             />
           </SectionCard>
         )}
 
         {report.actions.length > 0 && (
           <SectionCard title="Historia e veprimeve" subtitle="Gjurmë e plotë e ndryshimeve" padded>
-            <ul className="space-y-2 text-sm">
-              {report.actions.map((action) => (
-                <li key={action.id} className="border-b pb-2 last:border-0">
-                  <span className="font-medium">{action.action}</span> -{" "}
-                  {action.actor.firstName} {action.actor.lastName} ·{" "}
-                  {new Date(action.createdAt).toLocaleString("sq-AL")}
-                  {action.comment && <p className="text-muted-foreground">{action.comment}</p>}
-                </li>
-              ))}
+            <ul className="space-y-3">
+              {report.actions.map((action) => {
+                const { label, detail } = describeCitizenReportAction(
+                  action.action,
+                  action.comment,
+                );
+                return (
+                  <li
+                    key={action.id}
+                    className="rounded-xl border border-border/60 bg-muted/10 px-4 py-3 last:border-b"
+                  >
+                    <div className="flex flex-wrap items-baseline justify-between gap-2">
+                      <p className="font-semibold text-gov-primary">{label}</p>
+                      <time className="text-xs text-muted-foreground">
+                        {formatDateTimeSq(action.createdAt)}
+                      </time>
+                    </div>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      {action.actor.firstName} {action.actor.lastName}
+                    </p>
+                    {detail && <p className="mt-2 text-sm text-foreground/90">{detail}</p>}
+                  </li>
+                );
+              })}
             </ul>
           </SectionCard>
         )}

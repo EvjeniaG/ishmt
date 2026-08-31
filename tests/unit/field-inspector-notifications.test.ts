@@ -8,7 +8,7 @@ import {
 } from "@/lib/notifications/field-inspector-notifications";
 
 describe("field-inspector-notifications", () => {
-  it("filters application and citizen_report notifications for field inspector", () => {
+  it("filters broadcast application and citizen_report notifications for field inspector", () => {
     const where = notificationWhereForRole("user-1", ROLE_CODES.FIELD_INSPECTOR);
 
     expect(where).toEqual({

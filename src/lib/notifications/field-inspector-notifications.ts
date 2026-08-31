@@ -12,8 +12,15 @@ export const ISHMT_CONTRACT_DEADLINE_NOTIFY_EXCLUDED_ROLES = [
   ROLE_CODES.ISHMT_DIRECTOR,
 ] as const;
 
-/** Llojet e entitetit që inspektori terreni nuk duhet të shohë në njoftime. */
+/** Llojet e entitetit që inspektori terreni nuk duhet të shohë në njoftime (broadcast). */
 export const FIELD_INSPECTOR_HIDDEN_ENTITY_TYPES = ["application", "citizen_report"] as const;
+
+/** Njoftimet e drejta për inspektorin (p.sh. caktim raporti) mbeten të dukshme. */
+export const FIELD_INSPECTOR_VISIBLE_ASSIGNMENT_ENTITY_TYPES = [
+  "citizen_report_assignment",
+  "field_inspection_assignment",
+  "field_review_assignment",
+] as const;
 
 /** Njoftimet e kontratave/afateve që u fshihen drejtorit dhe kryeinspektorit. */
 export const ISHMT_LEADERSHIP_HIDDEN_ENTITY_TYPES = ["ishmt_compliance_alert"] as const;

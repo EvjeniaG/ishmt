@@ -16,6 +16,7 @@ import { PERMISSIONS } from "@/lib/permissions/codes";
 import {
   ISHMT_FIELD_INSPECTOR_ROLES,
   canAssignFieldInspections,
+  isFieldInspectorRole,
 } from "@/lib/permissions/ishmt-roles";
 import {
   buildPublicCitizenReportStatus,
@@ -47,6 +48,20 @@ const TYPE_PRIORITY: Record<CitizenReportType, ReportPriority> = {
 };
 
 export class CitizenReportService {
+  private static async assertCanManageReport(ctx: AuthContext, reportId: string) {
+    if (hasPermission(ctx, PERMISSIONS.REPORTS_MANAGE)) return;
+
+    if (isFieldInspectorRole(ctx.roleCode)) {
+      const assigned = await db.citizenReport.findFirst({
+        where: { id: reportId, assignedInspectorId: ctx.userId },
+        select: { id: true },
+      });
+      if (assigned) return;
+    }
+
+    throw new Error("Nuk keni leje të menaxhoni këtë raport.");
+  }
+
   private static async nextReportNumber(tx: Prisma.TransactionClient): Promise<string> {
     const year = new Date().getFullYear();
     const seq = await tx.applicationSequence.upsert({
@@ -350,7 +365,7 @@ export class CitizenReportService {
         userId: inspectorId,
         title: "Raportim qytetari i caktuar",
         body: `Ju është caktuar raporti ${report.reportNumber} për hetim në terren.`,
-        entityType: "citizen_report",
+        entityType: "citizen_report_assignment",
         entityId: report.id,
       });
     }
@@ -364,6 +379,8 @@ export class CitizenReportService {
     status: CitizenReportStatus,
     comment?: string | null,
   ) {
+    await this.assertCanManageReport(ctx, reportId);
+
     const report = await db.citizenReport.findFirst({ where: { id: reportId } });
     if (!report) throw new Error("Raporti nuk u gjet.");
 

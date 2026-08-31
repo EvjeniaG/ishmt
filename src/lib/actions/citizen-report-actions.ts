@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { headers } from "next/headers";
 import { CitizenReportStatus, CitizenReportType } from "@prisma/client";
 import { CitizenReportService } from "@/lib/services/citizen-report-service";
-import { requirePermission } from "@/lib/permissions/guards";
+import { requirePermission, requireAuth } from "@/lib/permissions/guards";
 import { PERMISSIONS } from "@/lib/permissions/codes";
 import { citizenReportSchema, formatCitizenReporterName, parseCitizenReportGps } from "@/lib/validations/citizen-report";
 import { reverseGeocodeCoordinates } from "@/lib/geo/reverse-geocode";
@@ -114,7 +114,7 @@ export async function submitCitizenReportAction(formData: FormData) {
 
 export async function assignReportToSelfAction(reportId: string) {
   try {
-    const ctx = await requirePermission(PERMISSIONS.REPORTS_MANAGE);
+    const ctx = await requireAuth();
     await CitizenReportService.assignToSelf(ctx, reportId);
     revalidatePath("/ishmt/reports");
     revalidatePath(`/ishmt/reports/${reportId}`);
@@ -156,7 +156,7 @@ export async function updateReportStatusAction(formData: FormData) {
   }
 
   try {
-    const ctx = await requirePermission(PERMISSIONS.REPORTS_MANAGE);
+    const ctx = await requireAuth();
     await CitizenReportService.updateStatus(
       ctx,
       reportId,
