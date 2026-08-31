@@ -52,12 +52,7 @@ function ElevatorDocumentRowItem({ doc }: { doc: ElevatorDocumentRow }) {
   const [previewOpen, setPreviewOpen] = useState(false);
   const title = labelDocumentPurpose(doc);
   const sizeLabel = formatFileSize(doc.fileSize);
-  const uploadedAt =
-    typeof doc.uploadedAt === "string"
-      ? doc.uploadedAt
-      : doc.uploadedAt instanceof Date
-        ? doc.uploadedAt.toISOString()
-        : String(doc.uploadedAt);
+  const uploadedAt = doc.uploadedAt;
 
   return (
     <li className="rounded-xl border border-border/70 bg-card transition-colors hover:border-border">

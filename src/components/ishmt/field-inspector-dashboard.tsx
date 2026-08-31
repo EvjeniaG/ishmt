@@ -10,6 +10,7 @@ import {
 } from "@/components/shared/institutional";
 import { PortalEmptyState, PortalTableWrap } from "@/components/shared/portal-table";
 import { APPLICATION_TYPE_LABELS } from "@/lib/constants/application-labels";
+import type { RoleCode } from "@/lib/constants/roles";
 import { formatDateSq } from "@/lib/format-date";
 import type { IshmtAlarm } from "@/lib/ishmt/dashboard-alarms";
 import { groupIshmtAlarmsByPriority } from "@/lib/ishmt/dashboard-alarms";
@@ -192,7 +193,7 @@ function HistoryDocumentReviewsTable({
                 <ApplicationStatusBadge
                   status={row.status}
                   type={row.type}
-                  roleCode={roleCode}
+                  roleCode={roleCode as RoleCode}
                 />
               </td>
               <td className="tabular-nums text-muted-foreground">
@@ -318,7 +319,7 @@ export function FieldInspectorDashboard({
       >
         <HistoryDocumentReviewsTable
           rows={completedDocumentReviews}
-          roleCode={roleCode}
+          roleCode={roleCode as RoleCode}
         />
       </SectionCard>
     </StandardPageLayout>

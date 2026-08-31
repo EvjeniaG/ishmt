@@ -44,6 +44,7 @@ export type DossierField = { label: string; value: string; href?: string };
 export type DossierSection = { id: string; title: string; fields: DossierField[] };
 
 type RegistrationExtended = {
+  elevatorInServiceDate?: string;
   elevatorConditionType?: keyof typeof ELEVATOR_CONDITION_LABELS;
   applicationSubtype?: keyof typeof APPLICATION_SUBTYPE_LABELS;
   existingRegisteredElevatorsCount?: number;

@@ -98,6 +98,7 @@ export function buildRegisterDemoData(input: {
 
 export const REGISTER_DEMO_LEVEL_LABELS: Record<RegisterDemoLevel, string> = {
   OWNER: "Person përgjegjës i ashensorit",
+  COMPANY: "Kompani",
   INSTALLER: "Kompani instaluese",
   CERTIFIER: "Trup c",
   MAINTENANCE: "Kompani mirëmbajtjeje",

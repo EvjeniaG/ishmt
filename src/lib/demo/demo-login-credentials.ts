@@ -51,6 +51,8 @@ export const DEMO_LOGIN_CREDENTIALS: DemoLoginCredential[] = [
   { role: "Drejtoria e Politikave", kind: "staff", identifier: "I90303003C" },
 ];
 
+export const CANONICAL_DEMO_IDENTIFIERS = DEMO_LOGIN_CREDENTIALS.map((cred) => cred.identifier);
+
 export const DEMO_DATASET_SUMMARY = [
   "17 përdorues (2 lloje pronarësh demo, 3 instalues, 3 certifikues, 2 mirëmbajtje, 2 inspektorë, 6 IQMT/MPB)",
   "5 aplikime regjistrimi në status «të dhëna bazë»",

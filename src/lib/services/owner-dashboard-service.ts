@@ -437,13 +437,13 @@ export class OwnerDashboardService {
         title: "Aplikim draft i papërfunduar",
         subtitle: `${app.applicationNumber} · ${app.data?.buildingAddress ?? "-"}`,
         severity: "info",
-        href: applicationHref(app),
+        href: `/portal/applications/${app.id}`,
         actionLabel: "Vazhdo draftin",
       });
     }
 
     for (const app of input.returnedAppsList) {
-      if (!isReturnedToRole(app, ReturnTargetRole.OWNER)) {
+      if (!isReturnedToRole(app as Parameters<typeof isReturnedToRole>[0], ReturnTargetRole.OWNER)) {
         continue;
       }
       actions.push({
@@ -451,7 +451,7 @@ export class OwnerDashboardService {
         title: "Aplikim i kthyer për korrigjim",
         subtitle: `${app.applicationNumber} · ${app.returnReason ?? "Pa arsye"}`,
         severity: "danger",
-        href: applicationHref(app),
+        href: `/portal/applications/${app.id}`,
         actionLabel: "Plotëso korrigjimin",
       });
     }
@@ -462,7 +462,7 @@ export class OwnerDashboardService {
         title: "Gati për parashtrim te IQMT",
         subtitle: `${app.applicationNumber} · ${app.data?.buildingAddress ?? "-"}`,
         severity: "warning",
-        href: applicationHref(app),
+        href: `/portal/applications/${app.id}`,
         actionLabel: "Rishiko final",
       });
     }

@@ -19,6 +19,15 @@ function resolveRegisterInitial(searchLevel?: string): {
   }
 
   if (
+    normalized === "install-om" ||
+    normalized === "install_om" ||
+    normalized === "dual" ||
+    normalized === "installom"
+  ) {
+    return { level: "COMPANY", demoCompanyMode: "installOm" };
+  }
+
+  if (
     normalized === "company" ||
     normalized === "installer" ||
     normalized === "certifier" ||
@@ -27,14 +36,6 @@ function resolveRegisterInitial(searchLevel?: string): {
   ) {
     if (normalized === "certifier" || normalized === "om") {
       return { level: "COMPANY", demoCompanyMode: "om" };
-    }
-    if (
-      normalized === "install-om" ||
-      normalized === "install_om" ||
-      normalized === "dual" ||
-      normalized === "installom"
-    ) {
-      return { level: "COMPANY", demoCompanyMode: "installOm" };
     }
     if (normalized === "maintenance") {
       return { level: "COMPANY", demoCompanyMode: "maintenance" };

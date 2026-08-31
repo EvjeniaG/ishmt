@@ -272,7 +272,7 @@ export class MaintenanceWorkService {
         status: MaintenanceContractStatus.PENDING,
         serviceType: "MAINTENANCE",
       },
-      include: { elevator: { include: { municipality: true } } },
+      include: { elevator: { include: { municipality: true, ownerOrg: { select: { name: true } } } } },
       orderBy: { createdAt: "desc" },
     });
   }

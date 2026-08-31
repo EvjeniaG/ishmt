@@ -28,6 +28,7 @@ type ContractRow = {
   elevatorId: string;
   serviceType: string;
   contractNumber: string | null;
+  status: MaintenanceContractStatus;
   startDate: Date;
   endDate: Date | null;
   rejectionReason: string | null;

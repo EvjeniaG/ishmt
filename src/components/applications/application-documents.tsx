@@ -890,6 +890,13 @@ function GenericDocumentsView({
   currentUserId?: string | null;
   supplementaryPhase?: RegistrationDocPhase;
 }) {
+  const router = useRouter();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [dragOver, setDragOver] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
   if (supplementaryPhase) {
     return (
       <SupplementaryDocumentsSection
@@ -901,13 +908,6 @@ function GenericDocumentsView({
       />
     );
   }
-
-  const router = useRouter();
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [uploading, setUploading] = useState(false);
-  const [dragOver, setDragOver] = useState(false);
-  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   async function uploadFile(file: File) {
     setUploading(true);

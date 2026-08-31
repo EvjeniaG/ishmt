@@ -52,7 +52,7 @@ import { ROLE_CODES } from "@/lib/constants/roles";
 import { OrgType } from "@prisma/client";
 import { OwnershipTransferService } from "@/lib/services/ownership-transfer-service";
 import { APPLICATION_STATUS_LABELS } from "@/lib/workflows/application-workflow";
-import { getApplicationDocumentSpecs, getMissingRequiredApplicationDocuments, getPhaseDocumentChecklist, getUploadedDocumentsChecklistForPhase, getVisibleApplicationDocumentSpecs, hasSupplementaryDocuments, type RegistrationDocPhase } from "@/lib/documents/application-document-checklist";
+import { getApplicationDocumentSpecs, getMissingRequiredApplicationDocuments, getPhaseDocumentChecklist, getUploadedDocumentsChecklistForPhase, getVisibleApplicationDocumentSpecs, hasSupplementaryDocuments, type ApplicationDocumentSpec, type RegistrationDocPhase } from "@/lib/documents/application-document-checklist";
 import { canRoleEditApplicationDocuments } from "@/lib/documents/application-document-editing";
 import { getReturnToRoles, isReturnedToRole, applicationReturnBannerVisible } from "@/lib/workflows/return-targets";
 import { ApplicationReturnBanner } from "@/components/applications/application-workflow-layout";
@@ -239,13 +239,16 @@ export default async function ApplicationDetailPage({
   const installerDocsReadOnly = readOnlyDocsFor(installerDocsUploaded, "installer");
 
   const docsChecklistView = (
-    checklist: typeof documentChecklist,
+    checklist: Array<ApplicationDocumentSpec & { uploaded?: boolean }>,
     supplementaryPhase?: RegistrationDocPhase,
     canUpload = false,
   ) => (
     <ApplicationDocumentChecklistView
       applicationId={id}
-      checklist={checklist}
+      checklist={checklist.map((item) => ({
+        ...item,
+        uploaded: item.uploaded ?? uploadedPurposeSet.has(item.purpose),
+      }))}
       documents={documents}
       currentUserId={session.user.id}
       supplementaryPhase={supplementaryPhase}
@@ -321,7 +324,7 @@ export default async function ApplicationDetailPage({
   }
 
   const embeddedDocsFor = (
-    checklist: typeof documentChecklist,
+    checklist: Array<ApplicationDocumentSpec & { uploaded?: boolean }>,
     slotKey: string,
     docs = documents,
     options?: { showChecklistSummary?: boolean; supplementaryPhase?: RegistrationDocPhase | null },
@@ -332,7 +335,10 @@ export default async function ApplicationDetailPage({
       documents={docs}
       canUpload={canEditDocuments}
       currentUserId={session.user.id}
-      checklist={checklist}
+      checklist={checklist.map((item) => ({
+        ...item,
+        uploaded: item.uploaded ?? uploadedPurposeSet.has(item.purpose),
+      }))}
       embedded
       showChecklistSummary={options?.showChecklistSummary ?? true}
       supplementaryPhase={

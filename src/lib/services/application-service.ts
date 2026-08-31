@@ -1739,7 +1739,10 @@ export class ApplicationService {
     const ext = (data?.registrationExtendedData as Record<string, unknown> | null) ?? {};
     if (!data?.applicationDate) missing.push("data e aplikimit (Aneksi 1)");
     if (!ext.elevatorConditionType) missing.push("lloji i ashensorit (i ri/ekzistues)");
-    const additional = (data?.additionalTechnical as Record<string, unknown> | null) ?? {};
+    const additional =
+      ((data as { additionalTechnical?: unknown } | null | undefined)?.additionalTechnical as
+        | Record<string, unknown>
+        | null) ?? {};
     if (
       !ext.elevatorInServiceDate &&
       !additional.installationDate &&
@@ -1947,7 +1950,7 @@ export class ApplicationService {
           applicationId,
           inspectorId: assignment.inspectorId,
           assignedById: assignAfterReturn?.actorId ?? assignment.assignedById,
-          assignedByRole: assignment.assignedByRole,
+          assignedByRole: assignment.assignedByRole ?? ROLE_CODES.SECTOR_HEAD,
           actorId: assignAfterReturn?.actorId ?? assignment.assignedById,
         });
         await upsertParticipation(tx, {

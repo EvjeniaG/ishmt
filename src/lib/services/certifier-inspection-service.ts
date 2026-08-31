@@ -120,7 +120,7 @@ export class CertifierInspectionService {
         status: MaintenanceContractStatus.PENDING,
         serviceType: "PERIODIC_INSPECTION",
       },
-      include: { elevator: { include: { municipality: true } } },
+      include: { elevator: { include: { municipality: true, ownerOrg: { select: { name: true } } } } },
       orderBy: { createdAt: "desc" },
     });
   }

@@ -6,7 +6,10 @@ export function licensedCompanyFeedbackMessage(
 ): { tone: "error" | "success" | "muted"; text: string } | null {
   if (!status || status.status === "TOO_SHORT") return null;
 
-  const roleLabel = options?.roleLabel ?? status.roleLabel ?? "licencës";
+  const roleLabel =
+    options?.roleLabel ??
+    ("roleLabel" in status ? status.roleLabel : undefined) ??
+    "licencës";
 
   switch (status.status) {
     case "NOT_FOUND":

@@ -246,7 +246,11 @@ export function RegistrationBasicDataForm({
     });
 
     setElevatorInServiceDate(dummy.elevatorInServiceDate);
-    setElevatorCondition(dummy.elevatorConditionType);
+    setElevatorCondition(
+      dummy.elevatorConditionType === "NEW" || dummy.elevatorConditionType === "EXISTING"
+        ? dummy.elevatorConditionType
+        : "",
+    );
     setApplicationSubtype(
       dummy.applicationSubtype === "ADDITIONAL" ? "ADDITIONAL" : "FIRST",
     );

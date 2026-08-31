@@ -1,10 +1,12 @@
 "use client";
 
 import { useMemo } from "react";
-import { useRouter as useNextRouter, type AppRouterInstance } from "next/navigation";
+import { useRouter as useNextRouter } from "next/navigation";
 import { scrollPageToTopAfterUpdate } from "@/lib/navigation/scroll-page-to-top";
 
-type NavigateOptions = Parameters<AppRouterInstance["push"]>[1];
+type NavigateOptions = { scroll?: boolean };
+
+type AppRouterInstance = ReturnType<typeof useNextRouter>;
 
 function shouldScroll(options?: NavigateOptions) {
   return options?.scroll !== false;

@@ -28,7 +28,7 @@ import { getProfilePathForRole } from "@/lib/permissions/nav-paths";
 import {
   buildServiceProviderNav,
   partitionFooterNavItems,
-  type NavGroup,
+  type NavGroup as ServiceProviderNavGroup,
 } from "@/lib/organizations/service-provider-nav";
 import { PERIODIC_INSPECTION_CONTRACTS_LABEL, PERIODIC_INSPECTIONS_LABEL } from "@/lib/constants/periodic-inspection-labels";
 import type { OrgCapabilities } from "@/lib/organizations/org-capabilities";

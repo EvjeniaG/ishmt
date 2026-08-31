@@ -263,6 +263,9 @@ async function seedSystemConfig() {
 async function seedOrganizations(roleIdMap: Map<string, string>) {
   const tirana = await prisma.geoMunicipality.findUnique({ where: { code: "TIA" } });
   const municipalityId = tirana?.id;
+  if (!municipalityId) {
+    throw new Error("Bashkia Tiranë (kodi TIA) nuk u gjet. Ekzekutoni seed geography fillimisht.");
+  }
 
   const ishmtt = await prisma.organization.upsert({
     where: { nipt: "ISHMT-GOV-0001" },
