@@ -15,6 +15,16 @@ export const CITIZEN_REPORT_STATUS_LABELS: Record<CitizenReportStatus, string> =
   DISMISSED: "Refuzuar",
 };
 
+/** Përmbledhje publike për qytetarin (pa detaje operative). */
+export const PUBLIC_CITIZEN_REPORT_STATUS_LABELS: Record<CitizenReportStatus, string> = {
+  SUBMITTED: "I pranuar — pret shqyrtim",
+  TRIAGED: "U lexua — në shqyrtim",
+  ASSIGNED: "U mor në ngarkim",
+  INVESTIGATING: "Në hetim",
+  RESOLVED: "Zgjidhur",
+  DISMISSED: "Mbyllur",
+};
+
 export const REPORT_PRIORITY_LABELS: Record<ReportPriority, string> = {
   LOW: "E ulët",
   NORMAL: "Normale",

@@ -416,6 +416,14 @@ export class IshmtAlarmService {
         href: "/ishmt/director/review",
       },
       {
+        id: "pending-reports",
+        priority: "warning",
+        label: "Raportime publike",
+        hint: "Raportime qytetarësh në pritje të shqyrtimit",
+        count: s.pendingReports,
+        href: "/ishmt/reports",
+      },
+      {
         id: "yellow-compliance",
         priority: "warning",
         label: "Afat ligjor në skadim",
@@ -472,6 +480,14 @@ export class IshmtAlarmService {
         hint: "Dosje me rekomandim refuzimi nga shqyrtimi administrativ",
         count: s.recommendedRejection,
         href: "/ishmt/review",
+      },
+      {
+        id: "pending-reports",
+        priority: "warning",
+        label: "Raportime publike",
+        hint: "Raportime qytetarësh në pritje të shqyrtimit",
+        count: s.pendingReports,
+        href: "/ishmt/reports",
       },
       {
         id: "yellow-compliance",

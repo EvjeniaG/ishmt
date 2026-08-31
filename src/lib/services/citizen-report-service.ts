@@ -17,6 +17,12 @@ import {
   ISHMT_FIELD_INSPECTOR_ROLES,
   canAssignFieldInspections,
 } from "@/lib/permissions/ishmt-roles";
+import {
+  buildPublicCitizenReportStatus,
+  isValidCitizenReportNumber,
+  normalizeCitizenReportNumber,
+  serializePublicCitizenReportStatus,
+} from "@/lib/citizen-reports/public-report-status";
 
 const REPORT_TYPE_SEQUENCE_CODE = "RPT";
 
@@ -120,6 +126,30 @@ export class CitizenReportService {
     );
 
     return report;
+  }
+
+  /** Public lookup by reference number — no reporter PII or internal notes. */
+  static async getPublicStatusByReportNumber(reportNumber: string) {
+    const normalized = normalizeCitizenReportNumber(reportNumber);
+    if (!isValidCitizenReportNumber(normalized)) return null;
+
+    const report = await db.citizenReport.findFirst({
+      where: { reportNumber: normalized },
+      select: {
+        reportNumber: true,
+        type: true,
+        status: true,
+        createdAt: true,
+        resolvedAt: true,
+        actions: {
+          select: { action: true, createdAt: true },
+          orderBy: { createdAt: "asc" },
+        },
+      },
+    });
+
+    if (!report) return null;
+    return serializePublicCitizenReportStatus(buildPublicCitizenReportStatus(report));
   }
 
   static async listForReview(filters?: {

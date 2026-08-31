@@ -10,12 +10,14 @@ import {
   MessageSquareWarning,
   QrCode,
   ScanLine,
+  Search,
   ShieldCheck,
   UserPlus,
   Wrench,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { InstitutionalNotice } from "@/components/shared/institutional";
+import { CitizenReportStatusLookup } from "@/components/public/citizen-report-status-lookup";
 import { CitizenQrLookup } from "@/components/public/citizen-qr-lookup";
 
 const PORTAL_SERVICES = [
@@ -54,7 +56,7 @@ const AUDIENCES = [
   { label: "Stafi IQMT", hint: "Shqyrtim, miratim, mbikëqyrje" },
 ] as const;
 
-export function HomePortalPage() {
+export function HomePortalPage({ initialReportNumber = "" }: { initialReportNumber?: string }) {
   return (
     <div className="portal-canvas flex min-h-full flex-col">
       <header className="relative shrink-0 overflow-hidden border-b border-white/10 bg-gradient-to-br from-gov-header via-gov-primary to-gov-secondary text-white shadow-portal-lg">
@@ -212,6 +214,10 @@ export function HomePortalPage() {
                     <MessageSquareWarning className="mt-0.5 h-4 w-4 shrink-0 text-gov-primary" aria-hidden />
                     <span>Raportim anonim i problemeve të sigurisë ose ashensorëve pa QR</span>
                   </li>
+                  <li className="flex items-start gap-2">
+                    <Search className="mt-0.5 h-4 w-4 shrink-0 text-gov-primary" aria-hidden />
+                    <span>Ndjekje e statusit të raportit tuaj me numrin e referencës</span>
+                  </li>
                 </ul>
               </div>
 
@@ -227,6 +233,21 @@ export function HomePortalPage() {
                     </div>
                   </div>
                   <CitizenQrLookup />
+                </div>
+
+                <div id="raport-status" className="portal-surface scroll-mt-24 p-5 sm:p-6">
+                  <div className="mb-4 flex items-center gap-3">
+                    <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-600/10 text-emerald-800">
+                      <Search className="h-5 w-5" aria-hidden />
+                    </span>
+                    <div>
+                      <h3 className="font-semibold text-gov-primary">Statusi i raportit tënd</h3>
+                      <p className="text-xs text-muted-foreground">
+                        Shiko nëse u lexua, në proces apo u zgjidh
+                      </p>
+                    </div>
+                  </div>
+                  <CitizenReportStatusLookup initialReportNumber={initialReportNumber} />
                 </div>
 
                 <div className="grid gap-3 sm:grid-cols-2">

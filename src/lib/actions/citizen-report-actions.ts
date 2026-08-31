@@ -17,6 +17,36 @@ export async function reverseGeocodePlaceAction(latitude: number, longitude: num
   return reverseGeocodeCoordinates(latitude, longitude);
 }
 
+/** Public lookup by reference number (rate-limited). */
+export async function lookupCitizenReportStatusAction(reportNumber: string) {
+  try {
+    await enforcePublicActionRateLimit("citizen-report-status", 30);
+  } catch (error) {
+    return { success: false as const, error: error instanceof Error ? error.message : "Shumë kërkesa." };
+  }
+
+  const trimmed = reportNumber.trim();
+  if (!trimmed) {
+    return { success: false as const, error: "Shkruani numrin e referencës së raportit." };
+  }
+
+  try {
+    const status = await CitizenReportService.getPublicStatusByReportNumber(trimmed);
+    if (!status) {
+      return {
+        success: false as const,
+        error: "Nuk u gjet raport me këtë numër reference. Kontrolloni shkrimin (p.sh. RPT-2026-000001).",
+      };
+    }
+    return { success: true as const, status };
+  } catch (error) {
+    return {
+      success: false as const,
+      error: error instanceof Error ? error.message : "Kërkesa dështoi",
+    };
+  }
+}
+
 /** Public, unauthenticated submission. */
 export async function submitCitizenReportAction(formData: FormData) {
   try {

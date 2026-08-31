@@ -120,7 +120,14 @@ export function CitizenReportForm({
         </p>
         <p className="mt-3 text-xl font-bold tracking-wide">{reportNumber}</p>
         <p className="mt-4 text-sm text-muted-foreground">
-          IQMT do ta shqyrtojë raportin tuaj. Nuk kërkohet asnjë veprim tjetër.
+          IQMT do ta shqyrtojë raportin tuaj. Mund të ndiqni statusin me numrin e referencës në{" "}
+          <a
+            href={`/?raport=${encodeURIComponent(reportNumber)}#raport-status`}
+            className="font-medium text-gov-primary underline-offset-2 hover:underline"
+          >
+            faqen publique «Shiko si qytetar»
+          </a>
+          .
         </p>
       </div>
     );

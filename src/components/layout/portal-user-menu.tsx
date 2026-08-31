@@ -58,6 +58,7 @@ function menuForRole(roleCode: RoleCode): MenuItem[] {
       return [
         { href: dashboard, label: "Paneli" },
         { href: "/ishmt/director/review", label: "Shqyrtimi i aplikimeve" },
+        { href: "/ishmt/reports", label: "Raportimet e qytetarëve" },
         { href: "/ishmt/search", label: "Regjistri i ashensorëve" },
         { href: "/ishmt/director/map", label: "Harta sipas bashkive" },
         { href: "/ishmt/field-inspections", label: "Cakto inspektim terreni" },
@@ -70,6 +71,7 @@ function menuForRole(roleCode: RoleCode): MenuItem[] {
         { href: profile, label: "Profili" },
         { href: notifications, label: "Njoftimet" },
         { href: "/ishmt/chief/applications", label: "Aplikime" },
+        { href: "/ishmt/reports", label: "Raportimet e qytetarëve" },
         { href: "/ishmt/field-inspections", label: "Cakto inspektim terreni" },
         { href: "/ishmt/search", label: "Regjistri i ashensorëve" },
       ];
