@@ -128,10 +128,7 @@ export function LoginForm() {
     window.location.assign(destination);
   }
 
-  const identifierLabel =
-    registeredCredentials?.accountType === "company"
-      ? "NIPT (emri i përdoruesit)"
-      : "Numri Personal (emri i përdoruesit)";
+  const identifierLabel = "NID/NIPT";
 
   return (
     <Card className={`mx-auto w-full ${showDemoCredentials ? "max-w-2xl" : "max-w-md"}`}>
